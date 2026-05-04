@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 const inputClass =
@@ -21,12 +20,6 @@ const nepaliMonths = [
   'Chaitra'
 ];
 
-const bsYears = Array.from({ length: 91 }, (_item, index) => 2000 + index);
-const bsDays = Array.from({ length: 32 }, (_item, index) => index + 1);
-const bsYearOptions = bsYears.map((year) => ({ label: String(year), value: year }));
-const bsMonthOptions = nepaliMonths.map((month, index) => ({ label: month, value: index + 1 }));
-const bsDayOptions = bsDays.map((day) => ({ label: String(day), value: day }));
-
 function formatAdDisplay(value) {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
@@ -44,9 +37,9 @@ function formatTimeDisplay(value) {
 }
 
 function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
-  const [openDropdown, setOpenDropdown] = useState(null);
   const dateType = formData.dateType || 'AD';
   const bsDate = formData.bsDate || { year: 2053, month: 12, day: 19 };
+  const selectedBsMonth = nepaliMonths[Number(bsDate.month) - 1];
 
   function handleDateTypeChange(nextDateType) {
     onChange({
@@ -58,12 +51,15 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
   }
 
   function handleBsDateChange(field, rawValue) {
+    const maxLength = field === 'year' ? 4 : 2;
+    const value = rawValue.replace(/\D/g, '').slice(0, maxLength);
+
     onChange({
       target: {
         name: 'bsDate',
         value: {
           ...bsDate,
-          [field]: Number(rawValue)
+          [field]: value
         }
       }
     });
@@ -156,42 +152,33 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
             <div className="space-y-2">
               <span className={labelClass}>Nepali Date (BS)</span>
               <div className="grid gap-3 sm:grid-cols-[1fr_1.25fr_1fr]">
-                <CustomDropdown
-                  id="bs-year"
+                <TypedBsInput
                   label="BS Year"
-                  value={Number(bsDate.year)}
-                  options={bsYearOptions}
-                  isOpen={openDropdown === 'bs-year'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'bs-year' ? null : 'bs-year')}
-                  onSelect={(value) => {
-                    handleBsDateChange('year', value);
-                    setOpenDropdown(null);
-                  }}
+                  value={bsDate.year}
+                  placeholder="2053"
+                  maxLength={4}
+                  onChange={(value) => handleBsDateChange('year', value)}
                 />
-                <CustomDropdown
-                  id="bs-month"
+                <TypedBsInput
                   label="BS Month"
-                  value={Number(bsDate.month)}
-                  options={bsMonthOptions}
-                  isOpen={openDropdown === 'bs-month'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'bs-month' ? null : 'bs-month')}
-                  onSelect={(value) => {
-                    handleBsDateChange('month', value);
-                    setOpenDropdown(null);
-                  }}
+                  value={bsDate.month}
+                  placeholder="12"
+                  maxLength={2}
+                  helper={selectedBsMonth || '1-12'}
+                  onChange={(value) => handleBsDateChange('month', value)}
                 />
-                <CustomDropdown
-                  id="bs-day"
+                <TypedBsInput
                   label="BS Day"
-                  value={Number(bsDate.day)}
-                  options={bsDayOptions}
-                  isOpen={openDropdown === 'bs-day'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'bs-day' ? null : 'bs-day')}
-                  onSelect={(value) => {
-                    handleBsDateChange('day', value);
-                    setOpenDropdown(null);
-                  }}
+                  value={bsDate.day}
+                  placeholder="19"
+                  maxLength={2}
+                  onChange={(value) => handleBsDateChange('day', value)}
                 />
+              </div>
+              <div className="rounded-2xl border border-gold-300/10 bg-black/25 px-4 py-3 text-xs leading-5 text-ivory-100/52">
+                Type BS date as numbers. Month guide: 1 Baisakh, 2 Jestha, 3 Ashadh,
+                4 Shrawan, 5 Bhadra, 6 Ashwin, 7 Kartik, 8 Mangsir, 9 Poush,
+                10 Magh, 11 Falgun, 12 Chaitra.
               </div>
               <p className={helperClass}>
                 Use your Nepali birth date. GrahaPath will convert it to English date before
@@ -247,58 +234,25 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
   );
 }
 
-function CustomDropdown({ id, label, value, options, isOpen, onToggle, onSelect }) {
-  const selectedOption = options.find((option) => option.value === value) || options[0];
-
+function TypedBsInput({ label, value, placeholder, maxLength, helper, onChange }) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        aria-controls={`${id}-options`}
-        onClick={onToggle}
-        className="flex w-full items-center justify-between rounded-2xl border border-gold-400/20 bg-black/45 px-4 py-3 text-left text-sm text-ivory-100 outline-none transition hover:border-gold-300/55 hover:bg-black/60 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20"
-      >
-        <span>
-          <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-200/50">
-            {label}
-          </span>
-          <span className="mt-1 block text-sm text-ivory-100">{selectedOption.label}</span>
-        </span>
-        <span className={`text-gold-300 transition ${isOpen ? 'rotate-180' : ''}`}>⌄</span>
-      </button>
-
-      {isOpen && (
-        <motion.div
-          id={`${id}-options`}
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.16 }}
-          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-64 overflow-y-auto rounded-2xl border border-gold-300/18 bg-[#0f0e0b]/95 p-2 shadow-[0_18px_42px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-        >
-          <div className="grid gap-1">
-            {options.map((option) => {
-              const isSelected = option.value === value;
-
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onSelect(option.value)}
-                  className={`rounded-xl px-3 py-2 text-left text-sm transition ${
-                    isSelected
-                      ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
-                      : 'text-ivory-100/72 hover:bg-gold-300/8 hover:text-gold-100'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
+    <label className="rounded-2xl border border-gold-400/15 bg-black/35 px-4 py-3 transition focus-within:border-gold-300/60 focus-within:ring-2 focus-within:ring-gold-400/15">
+      <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-200/50">
+        {label}
+      </span>
+      <input
+        className="mt-1 w-full bg-transparent text-sm text-ivory-100 outline-none placeholder:text-ivory-100/28"
+        inputMode="numeric"
+        value={value || ''}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        required
+      />
+      {helper && (
+        <span className="mt-1 block text-[11px] text-gold-200/55">{helper}</span>
       )}
-    </div>
+    </label>
   );
 }
 
