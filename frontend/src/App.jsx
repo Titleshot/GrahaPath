@@ -101,13 +101,13 @@ export default function App() {
       const payload = {
         name: formData.name,
         dateType: formData.dateType,
-        date: formData.dateType === 'AD' ? normalizeAdDate(formData.date) : '',
+        date: formData.dateType === 'AD' ? normalizeAdDate(formData.dateDisplay || '') : '',
         bsDate: {
           year: Number(formData.bsDate.year),
           month: Number(formData.bsDate.month),
           day: Number(formData.bsDate.day),
         },
-        time: normalizeBirthTime(formData.time),
+        time: normalizeBirthTime(formData.timeDisplay || ''),
         place: formData.place,
       };
 
