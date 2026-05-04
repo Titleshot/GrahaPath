@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { getRashiParts } from '../data/vedicNames';
 
 const HOUSE_LABEL_RADIUS = 128;
 const PLANET_RADIUS = 96;
@@ -28,6 +29,7 @@ function planetPosition(house, index, total) {
 
 export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) {
   const planets = chart?.planets || [];
+  const ascendantParts = getRashiParts(chart.ascendant);
 
   return (
     <motion.div
@@ -90,13 +92,16 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
             );
           })}
 
-          <text x={CENTER} y="138" textAnchor="middle" className="fill-gold-300 text-[8px] uppercase tracking-widest">
+          <text x={CENTER} y="132" textAnchor="middle" className="fill-gold-300 text-[8px] uppercase tracking-widest">
             Lagna
           </text>
-          <text x={CENTER} y="153" textAnchor="middle" className="fill-cream text-[14px] font-semibold">
+          <text x={CENTER} y="148" textAnchor="middle" className="fill-cream text-[13px] font-semibold">
             {chart.ascendant}
           </text>
-          <text x={CENTER} y="168" textAnchor="middle" className="fill-gold-100 text-[8px]">
+          <text x={CENTER} y="162" textAnchor="middle" className="fill-gold-100 text-[7px]">
+            {ascendantParts.vedic} / {ascendantParts.devanagari}
+          </text>
+          <text x={CENTER} y="174" textAnchor="middle" className="fill-gold-100 text-[7px]" opacity="0.8">
             {chart.ascendantDegree} deg
           </text>
 

@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { getNakshatraDisplay, getRashiDisplay } from '../data/vedicNames';
 
 const SECTION_ORDER = [
   'Personality Core',
@@ -61,9 +62,9 @@ function buildPersonalityCore(chart) {
 
   return {
     title: 'Personality Core',
-    signal: `Ascendant ${chart.ascendant} · Solar sign ${chart.sunSign}`,
+    signal: `Ascendant ${getRashiDisplay(chart.ascendant)} · Sun sign ${getRashiDisplay(chart.sunSign)}`,
     body: `You may notice a soft contrast between how you meet the world through ${chart.ascendant} and how your confidence moves through ${sunPlanet?.sign || chart.sunSign}. This pattern often shows up as ${coreStrengths || 'quiet self-trust'}, with growth coming from not letting ${coreTension || 'inner pressure'} define your choices.`,
-    highlights: [sun?.strength, sun?.challenge].filter(Boolean)
+    highlights: [sun?.strength, sun?.challenge].filter(Boolean).slice(0, 2)
   };
 }
 
@@ -75,9 +76,9 @@ function buildEmotionalPattern(chart) {
 
   return {
     title: 'Emotional Pattern',
-    signal: `Moon sign ${chart.moonSign}${moonPlanet ? ` · House ${moonPlanet.house}` : ''}`,
+    signal: `Moon sign ${getRashiDisplay(chart.moonSign)}${moonPlanet ? ` · Nakshatra ${getNakshatraDisplay(moonPlanet.nakshatra)}` : ''}`,
     body: `There may be phases where your emotions need space, honesty, and a wider meaning before they settle. This can make you deeply responsive, but when stretched it may show up as ${emotionalEdge || 'restlessness or sensitivity'}; the medicine is returning to ${emotionalGift || 'emotional clarity'}.`,
-    highlights: [moon?.strength, moon?.challenge].filter(Boolean)
+    highlights: [moon?.strength, moon?.challenge].filter(Boolean).slice(0, 2)
   };
 }
 
@@ -89,12 +90,12 @@ function buildLifeDirection(chart) {
   return {
     title: 'Life Direction',
     signal: directionalPlanet
-      ? `${directionalPlanet.name} · House ${directionalPlanet.house} · ${directionalPlanet.sign}`
+      ? `${directionalPlanet.name} · House ${directionalPlanet.house} · ${getRashiDisplay(directionalPlanet.sign)}`
       : `${chart.ayanamsa} ${chart.houseSystem}`,
     body: directionalPlanet
       ? `This pattern often suggests that your path becomes clearer through lived effort, not instant certainty. You may notice progress opening when you trust ${insight?.strength || 'your strongest placement'} while staying patient with ${insight?.challenge || 'the parts of life that take time to mature'}.`
       : 'This pattern often suggests that direction becomes clearer when you follow the strongest repeated signals in the chart rather than forcing a fixed identity too early.',
-    highlights: [insight?.strength, insight?.challenge].filter(Boolean)
+    highlights: [insight?.strength, insight?.challenge].filter(Boolean).slice(0, 2)
   };
 }
 
@@ -106,7 +107,7 @@ function buildStrengths(chart) {
     title: 'Strengths',
     signal: uniqueValues(strengths).join(' · '),
     body: `Your strongest signals point toward ${joinHuman(strengths) || 'steady inner capacity'}. At times, these gifts may become most visible after moving through ${joinHuman(challenges) || 'pressure'}, which can make your growth feel earned rather than accidental.`,
-    highlights: uniqueValues(strengths).slice(0, 4)
+    highlights: uniqueValues(strengths).slice(0, 3)
   };
 }
 
@@ -118,7 +119,7 @@ function buildInternalChallenges(chart) {
     title: 'Internal Challenges',
     signal: uniqueValues(challenges).join(' · '),
     body: `You may notice recurring pressure around ${joinHuman(challenges) || 'old emotional patterns'}. This does not define you; it points to where ${joinHuman(strengths) || 'patience and self-trust'} can become stronger when you respond with awareness instead of self-judgment.`,
-    highlights: uniqueValues(challenges).slice(0, 4)
+    highlights: uniqueValues(challenges).slice(0, 3)
   };
 }
 

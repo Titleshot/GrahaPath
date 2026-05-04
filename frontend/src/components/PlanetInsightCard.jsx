@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { getNakshatraDisplay, getRashiDisplay } from '../data/vedicNames';
 
 export default function PlanetInsightCard({ planet, onClose }) {
   return (
@@ -29,9 +30,18 @@ export default function PlanetInsightCard({ planet, onClose }) {
               <span>{planet.symbol}</span>
               {planet.name}
             </h2>
-            <p className="mt-2 text-sm text-white/65">
-              {planet.sign} - House {planet.house} - {planet.nakshatra}
-            </p>
+            <div className="mt-3 grid gap-1 text-sm text-white/65">
+              <p>
+                <span className="text-gold-200/65">Sign:</span> {getRashiDisplay(planet.sign)}
+              </p>
+              <p>
+                <span className="text-gold-200/65">House:</span> House {planet.house}
+              </p>
+              <p>
+                <span className="text-gold-200/65">Nakshatra:</span>{' '}
+                {getNakshatraDisplay(planet.nakshatra)}
+              </p>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 text-sm text-white/75">

@@ -5,6 +5,7 @@ import KundaliWheel from './components/KundaliWheel';
 import LifePatternReport from './components/LifePatternReport';
 import LoadingSequence from './components/LoadingSequence';
 import PlanetInsightCard from './components/PlanetInsightCard';
+import { getNakshatraDisplay, getRashiDisplay } from './data/vedicNames';
 
 const API_URL = '/api/generate-chart';
 
@@ -49,6 +50,47 @@ function normalizeBirthTime(displayTime) {
   const normalizedHour = meridiem.toUpperCase() === 'PM' ? (hour % 12) + 12 : hour % 12;
 
   return `${String(normalizedHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function formatAdDateLong(date) {
+  if (!date) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function formatBsDateLong(date) {
+  if (!date) {
+    return '';
+  }
+
+  const [year, month, day] = date.split('-');
+  const monthNames = [
+    'Baisakh',
+    'Jestha',
+    'Ashadh',
+    'Shrawan',
+    'Bhadra',
+    'Ashwin',
+    'Kartik',
+    'Mangsir',
+    'Poush',
+    'Magh',
+    'Falgun',
+    'Chaitra'
+  ];
+
+  return `${year} ${monthNames[Number(month) - 1] || month} ${day}`;
+}
+
+function moonNakshatra(chart) {
+  return chart?.planets?.find((planet) => planet.name === 'Moon')?.nakshatra;
 }
 
 export default function App() {
@@ -202,13 +244,24 @@ export default function App() {
                       <h2 className="mt-2 font-serif text-2xl text-gold">{chart.name}</h2>
                       <div className="mt-2 grid gap-1 text-sm text-ivory/60">
                         <p>{chart.place} · {chart.localDateTime} · {chart.ayanamsa} Sidereal</p>
-                        <p>Birth Date (AD): {chart.birthDateAD}</p>
-                        {chart.birthDateBS && <p>Birth Date (BS): {chart.birthDateBS}</p>}
+                        <p>
+                          Birth Date: AD {formatAdDateLong(chart.birthDateAD)}
+                          {chart.birthDateBS && ` · BS ${formatBsDateLong(chart.birthDateBS)}`}
+                        </p>
                       </div>
-                      <div className="mt-3 grid gap-2 text-xs text-ivory/55 sm:grid-cols-2">
-                        <span>Birth Date (AD): {chart.birthDateAD}</span>
-                        {chart.birthDateBS && <span>Birth Date (BS): {chart.birthDateBS}</span>}
+                      <div className="mt-4 grid gap-2 text-xs text-ivory/62 sm:grid-cols-2">
+                        <ChartFact label="Lagna" value={getRashiDisplay(chart.ascendant)} />
+                        <ChartFact label="Moon Rashi" value={getRashiDisplay(chart.moonSign)} />
+                        <ChartFact label="Sun Rashi" value={getRashiDisplay(chart.sunSign)} />
+                        <ChartFact
+                          label="Moon Nakshatra"
+                          value={getNakshatraDisplay(moonNakshatra(chart))}
+                        />
                       </div>
+                      <p className="mt-3 text-xs leading-5 text-gold-100/55">
+                        Traditional names are shown for cultural clarity; calculations use the same
+                        backend planetary data.
+                      </p>
                     </div>
 
                     <KundaliWheel
@@ -308,5 +361,16 @@ export default function App() {
         </section>
       </div>
     </main>
+  );
+}
+
+function ChartFact({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-gold-300/10 bg-black/20 px-3 py-2">
+      <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-300/55">
+        {label}
+      </span>
+      <span className="mt-1 block text-cream/78">{value}</span>
+    </div>
   );
 }
