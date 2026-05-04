@@ -44,7 +44,8 @@ export default function App() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      const data = responseText ? JSON.parse(responseText) : {};
 
       if (!response.ok) {
         throw new Error(data.details?.[0] || data.message || data.error || 'Chart generation failed.');

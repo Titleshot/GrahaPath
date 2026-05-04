@@ -8,6 +8,11 @@ export default defineConfig({
     port: 5173,
     allowedHosts: ['.trycloudflare.com', '.loca.lt'],
     proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
       '/generate-chart': {
         target: 'http://localhost:3000',
         changeOrigin: true
