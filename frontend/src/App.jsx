@@ -2,17 +2,11 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BirthDetailsForm from './components/BirthDetailsForm';
 import KundaliWheel from './components/KundaliWheel';
+import LifePatternReport from './components/LifePatternReport';
 import LoadingSequence from './components/LoadingSequence';
 import PlanetInsightCard from './components/PlanetInsightCard';
 
 const API_URL = '/api/generate-chart';
-
-function topPreviewLines(chart) {
-  return (chart?.lifePatternPreview || chart?.interpretations || [])
-    .map((insight) => (typeof insight === 'string' ? insight : insight?.reportLine))
-    .filter(Boolean)
-    .slice(0, 3)
-}
 
 export default function App() {
   const [formData, setFormData] = useState({
@@ -25,8 +19,6 @@ export default function App() {
   const [selectedPlanet, setSelectedPlanet] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const previewLines = useMemo(() => topPreviewLines(chart), [chart]);
 
   function handleFormChange(event) {
     const { name, value } = event.target;
@@ -125,24 +117,7 @@ export default function App() {
                       onSelectPlanet={setSelectedPlanet}
                     />
 
-                    <section className="rounded-3xl border border-gold/15 bg-white/[0.04] p-5">
-                      <p className="text-xs uppercase tracking-[0.35em] text-gold/60">
-                        Life Pattern Preview
-                      </p>
-                      <div className="mt-4 grid gap-3">
-                        {previewLines.map((line, index) => (
-                          <motion.p
-                            key={line}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.08 }}
-                            className="rounded-2xl border border-gold/10 bg-black/25 p-4 text-sm leading-6 text-ivory/75"
-                          >
-                            {line}
-                          </motion.p>
-                        ))}
-                      </div>
-                    </section>
+                    <LifePatternReport chart={chart} />
                   </div>
 
                   <PlanetInsightCard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
