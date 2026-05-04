@@ -274,7 +274,7 @@ function CustomDropdown({ id, label, value, options, isOpen, onToggle, onSelect 
           initial={{ opacity: 0, y: -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.16 }}
-          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-64 overflow-y-auto rounded-2xl border border-gold-300/25 bg-[#11100d]/95 p-2 shadow-gold backdrop-blur-xl"
+          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-64 overflow-y-auto rounded-2xl border border-gold-300/18 bg-[#0f0e0b]/95 p-2 shadow-[0_18px_42px_rgba(0,0,0,0.45)] backdrop-blur-xl"
         >
           <div className="grid gap-1">
             {options.map((option) => {
@@ -287,8 +287,8 @@ function CustomDropdown({ id, label, value, options, isOpen, onToggle, onSelect 
                   onClick={() => onSelect(option.value)}
                   className={`rounded-xl px-3 py-2 text-left text-sm transition ${
                     isSelected
-                      ? 'bg-gold-gradient text-black shadow-glow'
-                      : 'text-ivory-100/75 hover:bg-gold-300/10 hover:text-gold-100'
+                      ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
+                      : 'text-ivory-100/72 hover:bg-gold-300/8 hover:text-gold-100'
                   }`}
                 >
                   {option.label}
