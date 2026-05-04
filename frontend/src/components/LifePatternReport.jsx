@@ -54,6 +54,16 @@ function strongestInterpretations(chart, limit = 3) {
     .slice(0, limit);
 }
 
+function buildKeyInsight(chart) {
+  const { interpretation: sun } = planetSignal(chart, 'Sun');
+  const { interpretation: moon } = planetSignal(chart, 'Moon');
+  const { interpretation: saturn } = planetSignal(chart, 'Saturn');
+  const strengths = joinHuman([sun?.strength, moon?.strength]);
+  const pressure = joinHuman([moon?.challenge, saturn?.challenge]);
+
+  return `You may appear guided by ${strengths || 'quiet intelligence and inner resolve'}, yet internally you can take time to process pressure around ${pressure || 'emotion and responsibility'}. This often creates a pattern of seeming composed while privately working through more than people realize.`;
+}
+
 function buildPersonalityCore(chart) {
   const { planet: sunPlanet, interpretation: sun } = planetSignal(chart, 'Sun');
   const { interpretation: moon } = planetSignal(chart, 'Moon');
@@ -93,8 +103,8 @@ function buildLifeDirection(chart) {
       ? `${directionalPlanet.name} · House ${directionalPlanet.house} · ${getRashiDisplay(directionalPlanet.sign)}`
       : `${chart.ayanamsa} ${chart.houseSystem}`,
     body: directionalPlanet
-      ? `This pattern often suggests that your path becomes clearer through lived effort, not instant certainty. You may notice progress opening when you trust ${insight?.strength || 'your strongest placement'} while staying patient with ${insight?.challenge || 'the parts of life that take time to mature'}.`
-      : 'This pattern often suggests that direction becomes clearer when you follow the strongest repeated signals in the chart rather than forcing a fixed identity too early.',
+      ? `At times, your path may become clearer through lived effort rather than instant certainty. You may notice progress opening when you trust ${insight?.strength || 'your strongest placement'} while staying patient with ${insight?.challenge || 'the parts of life that take time to mature'}.`
+      : 'There is a tendency for direction to become clearer when you follow the strongest repeated signals in the chart rather than forcing a fixed identity too early.',
     highlights: [insight?.strength, insight?.challenge].filter(Boolean).slice(0, 2)
   };
 }
@@ -107,7 +117,7 @@ function buildStrengths(chart) {
     title: 'Strengths',
     signal: uniqueValues(strengths).join(' · '),
     body: `Your strongest signals point toward ${joinHuman(strengths) || 'steady inner capacity'}. At times, these gifts may become most visible after moving through ${joinHuman(challenges) || 'pressure'}, which can make your growth feel earned rather than accidental.`,
-    highlights: uniqueValues(strengths).slice(0, 3)
+    highlights: uniqueValues(strengths).slice(0, 2)
   };
 }
 
@@ -119,7 +129,7 @@ function buildInternalChallenges(chart) {
     title: 'Internal Challenges',
     signal: uniqueValues(challenges).join(' · '),
     body: `You may notice recurring pressure around ${joinHuman(challenges) || 'old emotional patterns'}. This does not define you; it points to where ${joinHuman(strengths) || 'patience and self-trust'} can become stronger when you respond with awareness instead of self-judgment.`,
-    highlights: uniqueValues(challenges).slice(0, 3)
+    highlights: uniqueValues(challenges).slice(0, 2)
   };
 }
 
@@ -141,6 +151,7 @@ function buildReportSections(chart) {
 
 export default function LifePatternReport({ chart }) {
   const sections = buildReportSections(chart);
+  const keyInsight = chart ? buildKeyInsight(chart) : '';
 
   if (!chart) {
     return null;
@@ -167,12 +178,24 @@ export default function LifePatternReport({ chart }) {
       </div>
 
       <div className="grid gap-4">
+        <motion.article
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="rounded-3xl border border-gold-300/25 bg-gold-300/8 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        >
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-300/75">
+            This is what defines you
+          </p>
+          <p className="mt-3 text-base leading-7 text-cream/85">{keyInsight}</p>
+        </motion.article>
+
         {sections.map((section, index) => (
           <motion.article
             key={section.title}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.08, duration: 0.35 }}
+            transition={{ delay: (index + 1) * 0.08, duration: 0.35 }}
             className="rounded-3xl border border-gold-300/15 bg-black/25 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

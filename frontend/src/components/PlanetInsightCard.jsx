@@ -30,13 +30,9 @@ export default function PlanetInsightCard({ planet, onClose }) {
               <span>{planet.symbol}</span>
               {planet.name}
             </h2>
-            <div className="mt-3 grid gap-1 text-sm text-white/65">
-              <p>
-                <span className="text-gold-200/65">Sign:</span> {getRashiDisplay(planet.sign)}
-              </p>
-              <p>
-                <span className="text-gold-200/65">House:</span> House {planet.house}
-              </p>
+            <div className="mt-3 grid gap-1.5 text-sm text-white/65">
+              <p className="text-gold-100/85">{getRashiDisplay(planet.sign)}</p>
+              <p>House {planet.house}</p>
               <p>
                 <span className="text-gold-200/65">Nakshatra:</span>{' '}
                 {getNakshatraDisplay(planet.nakshatra)}

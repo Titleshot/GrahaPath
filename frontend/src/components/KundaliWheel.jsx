@@ -153,7 +153,7 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
       </div>
 
       <p className="mt-4 text-center text-xs text-cream/50">
-        Click a planet glyph to reveal its interpretation. Planet placement is based only on backend house data.
+        Tap a planet to explore your personal insight. Placements come directly from your calculated chart.
       </p>
     </motion.div>
   );

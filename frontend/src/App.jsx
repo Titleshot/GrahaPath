@@ -89,6 +89,18 @@ function formatBsDateLong(date) {
   return `${year} ${monthNames[Number(month) - 1] || month} ${day}`;
 }
 
+function ChartBirthDate({ chart }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-gold-300/10 bg-black/20 p-3">
+      <p className="text-[10px] uppercase tracking-[0.28em] text-gold-300/55">Birth Date</p>
+      <div className="mt-2 grid gap-1 text-sm text-ivory/68">
+        <p>AD: {formatAdDateLong(chart.birthDateAD)}</p>
+        {chart.birthDateBS && <p>BS: {formatBsDateLong(chart.birthDateBS)}</p>}
+      </div>
+    </div>
+  );
+}
+
 function moonNakshatra(chart) {
   return chart?.planets?.find((planet) => planet.name === 'Moon')?.nakshatra;
 }
@@ -244,11 +256,8 @@ export default function App() {
                       <h2 className="mt-2 font-serif text-2xl text-gold">{chart.name}</h2>
                       <div className="mt-2 grid gap-1 text-sm text-ivory/60">
                         <p>{chart.place} · {chart.localDateTime} · {chart.ayanamsa} Sidereal</p>
-                        <p>
-                          Birth Date: AD {formatAdDateLong(chart.birthDateAD)}
-                          {chart.birthDateBS && ` · BS ${formatBsDateLong(chart.birthDateBS)}`}
-                        </p>
                       </div>
+                      <ChartBirthDate chart={chart} />
                       <div className="mt-4 grid gap-2 text-xs text-ivory/62 sm:grid-cols-2">
                         <ChartFact label="Lagna" value={getRashiDisplay(chart.ascendant)} />
                         <ChartFact label="Moon Rashi" value={getRashiDisplay(chart.moonSign)} />
@@ -347,6 +356,24 @@ export default function App() {
                     <p className="mt-6 text-xs uppercase tracking-[0.28em] text-gold-200/70">
                       Clickable chart. Explainable insights. No guesswork.
                     </p>
+
+                    <div className="mx-auto mt-6 max-w-md rounded-3xl border border-gold/15 bg-black/30 p-5 text-left">
+                      <p className="text-xs uppercase tracking-[0.28em] text-gold-300/65">
+                        Why this is accurate
+                      </p>
+                      <div className="mt-3 grid gap-2 text-sm text-ivory/70">
+                        {[
+                          'Based on exact birth time',
+                          'Uses astronomical planetary positions',
+                          'Not generic horoscope'
+                        ].map((line) => (
+                          <p key={line}>
+                            <span className="mr-2 text-gold-300">✓</span>
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
 
                     {error && (
                       <p className="mx-auto mt-5 max-w-md rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">

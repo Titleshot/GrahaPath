@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 const inputClass =
@@ -44,9 +45,9 @@ function formatSelectedTime(timeParts) {
 }
 
 function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
+  const [isMonthOpen, setIsMonthOpen] = useState(false);
   const dateType = formData.dateType || 'AD';
   const bsDate = formData.bsDate || { year: 2053, month: 12, day: 19 };
-  const selectedBsMonth = nepaliMonths[Number(bsDate.month) - 1];
   const timeParts = formData.timeParts || { hour: '', minute: '', meridiem: 'AM' };
 
   function handleDateTypeChange(nextDateType) {
@@ -191,11 +192,22 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
                 <TypedBsInput
                   label="BS Month"
                   value={bsDate.month}
-                  placeholder="12"
-                  maxLength={2}
-                  helper={selectedBsMonth || '1-12'}
+                  placeholder="Month"
+                  displayValue={nepaliMonths[Number(bsDate.month) - 1] || ''}
+                  readOnly
+                  onClick={() => setIsMonthOpen((current) => !current)}
                   onChange={(value) => handleBsDateChange('month', value)}
-                />
+                >
+                  {isMonthOpen && (
+                    <MonthMenu
+                      selectedMonth={Number(bsDate.month)}
+                      onSelect={(month) => {
+                        handleBsDateChange('month', String(month));
+                        setIsMonthOpen(false);
+                      }}
+                    />
+                  )}
+                </TypedBsInput>
                 <TypedBsInput
                   label="BS Day"
                   value={bsDate.day}
@@ -204,14 +216,8 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
                   onChange={(value) => handleBsDateChange('day', value)}
                 />
               </div>
-              <div className="rounded-2xl border border-gold-300/10 bg-black/25 px-4 py-3 text-xs leading-5 text-ivory-100/52">
-                Type BS date as numbers. Month guide: 1 Baisakh, 2 Jestha, 3 Ashadh,
-                4 Shrawan, 5 Bhadra, 6 Ashwin, 7 Kartik, 8 Mangsir, 9 Poush,
-                10 Magh, 11 Falgun, 12 Chaitra.
-              </div>
               <p className={helperClass}>
-                Use your Nepali birth date. GrahaPath will convert it to English date before
-                calculation.
+                We automatically convert Nepali date to calculation format.
               </p>
             </div>
           )}
@@ -349,16 +355,57 @@ function TimeColumn({ label, value, options, onSelect }) {
   );
 }
 
-function TypedBsInput({ label, value, placeholder, maxLength, helper, onChange }) {
+function MonthMenu({ selectedMonth, onSelect }) {
   return (
-    <label className="rounded-2xl border border-gold-400/15 bg-black/35 px-4 py-3 transition focus-within:border-gold-300/60 focus-within:ring-2 focus-within:ring-gold-400/15">
+    <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-40 rounded-2xl border border-gold-300/15 bg-[#0f0e0b]/95 p-2 shadow-[0_18px_42px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="grid max-h-56 gap-1 overflow-y-auto pr-1">
+        {nepaliMonths.map((month, index) => {
+          const value = index + 1;
+          const isSelected = selectedMonth === value;
+
+          return (
+            <button
+              key={month}
+              type="button"
+              onClick={() => onSelect(value)}
+              className={`rounded-xl px-3 py-2 text-left text-sm transition ${
+                isSelected
+                  ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
+                  : 'text-ivory-100/72 hover:bg-gold-300/8 hover:text-gold-100'
+              }`}
+            >
+              {month}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TypedBsInput({
+  label,
+  value,
+  placeholder,
+  maxLength,
+  helper,
+  displayValue,
+  readOnly = false,
+  onClick,
+  onChange,
+  children
+}) {
+  return (
+    <label className="relative rounded-2xl border border-gold-400/15 bg-black/35 px-4 py-3 transition focus-within:border-gold-300/60 focus-within:ring-2 focus-within:ring-gold-400/15">
       <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-200/50">
         {label}
       </span>
       <input
         className="mt-1 w-full bg-transparent text-sm text-ivory-100 outline-none placeholder:text-ivory-100/28"
         inputMode="numeric"
-        value={value || ''}
+        value={displayValue || value || ''}
+        readOnly={readOnly}
+        onClick={onClick}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
@@ -367,6 +414,7 @@ function TypedBsInput({ label, value, placeholder, maxLength, helper, onChange }
       {helper && (
         <span className="mt-1 block text-[11px] text-gold-200/55">{helper}</span>
       )}
+      {children}
     </label>
   );
 }
