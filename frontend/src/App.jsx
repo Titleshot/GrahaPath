@@ -8,10 +8,59 @@ import PlanetInsightCard from './components/PlanetInsightCard';
 
 const API_URL = '/api/generate-chart';
 
+function normalizeAdDate(displayDate) {
+  const match = /^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})$/.exec(displayDate.trim());
+
+  if (!match) {
+    throw new Error('Enter date as DD / MM / YYYY.');
+  }
+
+  const [, day, month, year] = match;
+  const isoDate = `${year}-${month}-${day}`;
+  const parsedDate = new Date(`${isoDate}T00:00:00Z`);
+
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    parsedDate.getUTCFullYear() !== Number(year) ||
+    parsedDate.getUTCMonth() + 1 !== Number(month) ||
+    parsedDate.getUTCDate() !== Number(day)
+  ) {
+    throw new Error('Enter a valid English birth date.');
+  }
+
+  return isoDate;
+}
+
+function normalizeBirthTime(displayTime) {
+  const match = /^(\d{1,2})\s*:\s*(\d{2})\s*(AM|PM)$/i.exec(displayTime.trim());
+
+  if (!match) {
+    throw new Error('Enter time as HH : MM AM/PM.');
+  }
+
+  const [, rawHour, rawMinute, meridiem] = match;
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+    throw new Error('Enter a valid birth time.');
+  }
+
+  const normalizedHour = meridiem.toUpperCase() === 'PM' ? (hour % 12) + 12 : hour % 12;
+
+  return `${String(normalizedHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
 export default function App() {
   const [formData, setFormData] = useState({
     name: '',
+    dateType: 'AD',
     date: '',
+    bsDate: {
+      year: '2053',
+      month: '12',
+      day: '19',
+    },
     time: '',
     place: '',
   });
@@ -22,6 +71,19 @@ export default function App() {
 
   function handleFormChange(event) {
     const { name, value } = event.target;
+
+    if (name.startsWith('bsDate.')) {
+      const field = name.split('.')[1];
+      setFormData((current) => ({
+        ...current,
+        bsDate: {
+          ...current.bsDate,
+          [field]: value,
+        },
+      }));
+      return;
+    }
+
     setFormData((current) => ({
       ...current,
       [name]: value,
@@ -36,12 +98,25 @@ export default function App() {
     setSelectedPlanet(null);
 
     try {
+      const payload = {
+        name: formData.name,
+        dateType: formData.dateType,
+        date: formData.dateType === 'AD' ? normalizeAdDate(formData.date) : '',
+        bsDate: {
+          year: Number(formData.bsDate.year),
+          month: Number(formData.bsDate.month),
+          day: Number(formData.bsDate.day),
+        },
+        time: normalizeBirthTime(formData.time),
+        place: formData.place,
+      };
+
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const responseText = await response.text();
@@ -107,9 +182,15 @@ export default function App() {
                         Calculated Chart
                       </p>
                       <h2 className="mt-2 font-serif text-2xl text-gold">{chart.name}</h2>
-                      <p className="mt-1 text-sm text-ivory/60">
-                        {chart.place} · {chart.localDateTime} · {chart.ayanamsa} Sidereal
-                      </p>
+                      <div className="mt-2 grid gap-1 text-sm text-ivory/60">
+                        <p>{chart.place} · {chart.localDateTime} · {chart.ayanamsa} Sidereal</p>
+                        <p>Birth Date (AD): {chart.birthDateAD}</p>
+                        {chart.birthDateBS && <p>Birth Date (BS): {chart.birthDateBS}</p>}
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-ivory/55 sm:grid-cols-2">
+                        <span>Birth Date (AD): {chart.birthDateAD}</span>
+                        {chart.birthDateBS && <span>Birth Date (BS): {chart.birthDateBS}</span>}
+                      </div>
                     </div>
 
                     <KundaliWheel

@@ -2,6 +2,9 @@ const { DateTime } = require('luxon');
 const { geocodePlace } = require('../services/geocodeService');
 const { getTimezoneForCoordinates } = require('../services/timezoneService');
 const { generateBirthChart } = require('../services/astrologyService');
+const { convertBsToAd, formatBsDate } = require('../services/dateConversionService');
+
+const VALID_DATE_TYPES = new Set(['AD', 'BS']);
 
 function validateChartRequest(body) {
   const errors = [];
@@ -14,8 +17,26 @@ function validateChartRequest(body) {
     errors.push('name is required and must be a string.');
   }
 
-  if (!body.date || typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
-    errors.push('date is required in YYYY-MM-DD format.');
+  const dateType = body.dateType || 'AD';
+
+  if (!VALID_DATE_TYPES.has(dateType)) {
+    errors.push('dateType must be either AD or BS.');
+  }
+
+  if (dateType === 'AD' && (!body.date || typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date))) {
+    errors.push('date is required in YYYY-MM-DD format for AD input.');
+  }
+
+  if (dateType === 'BS') {
+    if (!body.bsDate || typeof body.bsDate !== 'object') {
+      errors.push('bsDate is required when dateType is BS.');
+    } else {
+      const { year, month, day } = body.bsDate;
+
+      if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+        errors.push('bsDate.year, bsDate.month, and bsDate.day must be numbers.');
+      }
+    }
   }
 
   if (!body.time || typeof body.time !== 'string' || !/^\d{2}:\d{2}$/.test(body.time)) {
@@ -48,11 +69,23 @@ async function buildChartFromRequest(body, options = {}) {
     throw error;
   }
 
-  const { name, date, time, place } = body;
+  const { name, time, place } = body;
+  const dateType = body.dateType || 'AD';
+  let birthDateAD = body.date;
+  let birthDateBS = null;
+  let calculatedFrom = 'AD Gregorian date';
+
+  if (dateType === 'BS') {
+    const convertedDate = convertBsToAd(body.bsDate.year, body.bsDate.month, body.bsDate.day);
+    birthDateAD = convertedDate.adDate;
+    birthDateBS = convertedDate.bsDate;
+    calculatedFrom = 'AD Gregorian date after BS conversion';
+  }
+
   const location = await geocodePlace(place.trim());
   const timezone = getTimezoneForCoordinates(location.latitude, location.longitude);
 
-  const localDateTime = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm', {
+  const localDateTime = DateTime.fromFormat(`${birthDateAD} ${time}`, 'yyyy-MM-dd HH:mm', {
     zone: timezone,
     setZone: true
   });
@@ -72,6 +105,13 @@ async function buildChartFromRequest(body, options = {}) {
     timezone,
     localDateTime,
     utcDateTime: localDateTime.toUTC(),
+    dateMetadata: {
+      inputDateType: dateType,
+      birthDateAD,
+      birthDateBS: dateType === 'BS' ? birthDateBS : null,
+      calculatedFrom,
+      originalBsDate: dateType === 'BS' ? formatBsDate(body.bsDate.year, body.bsDate.month, body.bsDate.day) : null
+    },
     includeDebug: options.includeDebug === true
   });
 }

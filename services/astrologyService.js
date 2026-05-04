@@ -267,6 +267,7 @@ async function generateBirthChart({
   timezone,
   localDateTime,
   utcDateTime,
+  dateMetadata,
   includeDebug = false
 }) {
   // Lahiri is the required Vedic ayanamsa. Swiss Ephemeris subtracts it when
@@ -303,6 +304,7 @@ async function generateBirthChart({
       longitude: location.longitude
     },
     timezone,
+    ...dateMetadata,
     localDateTime: localDateTime.toISO(),
     utcDateTime: utcDateTime.toISO(),
     ascendant: signFromLongitude(ascendantLongitude),
