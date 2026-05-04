@@ -23,34 +23,60 @@ function planetsInHouses(chart, houses) {
   return (chart?.planets || []).filter((planet) => houses.includes(planet.house));
 }
 
-function sentenceFromReportLine(reportLine) {
-  if (!reportLine) {
-    return '';
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function joinHuman(values) {
+  const cleanValues = uniqueValues(values);
+
+  if (cleanValues.length <= 1) {
+    return cleanValues[0] || '';
   }
 
-  return reportLine.replace(/\.$/, '');
+  return `${cleanValues.slice(0, -1).join(', ')} and ${cleanValues.at(-1)}`;
+}
+
+function planetSignal(chart, planetName) {
+  const planet = planetByName(chart, planetName);
+
+  return {
+    planet,
+    interpretation: planet?.interpretation || interpretationFor(chart, planetName)
+  };
+}
+
+function strongestInterpretations(chart, limit = 3) {
+  return (chart?.planets || [])
+    .map((planet) => planet.interpretation)
+    .filter(Boolean)
+    .slice(0, limit);
 }
 
 function buildPersonalityCore(chart) {
-  const sun = interpretationFor(chart, 'Sun');
-  const sunPlanet = planetByName(chart, 'Sun');
+  const { planet: sunPlanet, interpretation: sun } = planetSignal(chart, 'Sun');
+  const { interpretation: moon } = planetSignal(chart, 'Moon');
+  const coreStrengths = joinHuman([sun?.strength, moon?.strength]);
+  const coreTension = joinHuman([sun?.challenge, moon?.challenge]);
 
   return {
     title: 'Personality Core',
-    signal: `Ascendant ${chart.ascendant} · Sun in ${chart.sunSign}`,
-    body: `With ${chart.ascendant} rising and the Sun placed in ${sunPlanet?.sign || chart.sunSign}, you may notice that your outer presence and inner confidence work through ${sun?.theme || 'your solar pattern'}. ${sentenceFromReportLine(sun?.reportLine)}.`,
+    signal: `Ascendant ${chart.ascendant} · Solar sign ${chart.sunSign}`,
+    body: `You may notice a soft contrast between how you meet the world through ${chart.ascendant} and how your confidence moves through ${sunPlanet?.sign || chart.sunSign}. This pattern often shows up as ${coreStrengths || 'quiet self-trust'}, with growth coming from not letting ${coreTension || 'inner pressure'} define your choices.`,
     highlights: [sun?.strength, sun?.challenge].filter(Boolean)
   };
 }
 
 function buildEmotionalPattern(chart) {
-  const moon = interpretationFor(chart, 'Moon');
-  const moonPlanet = planetByName(chart, 'Moon');
+  const { planet: moonPlanet, interpretation: moon } = planetSignal(chart, 'Moon');
+  const { interpretation: venus } = planetSignal(chart, 'Venus');
+  const emotionalGift = joinHuman([moon?.strength, venus?.strength]);
+  const emotionalEdge = joinHuman([moon?.challenge, venus?.challenge]);
 
   return {
     title: 'Emotional Pattern',
-    signal: `Moon in ${chart.moonSign}${moonPlanet ? ` · House ${moonPlanet.house}` : ''}`,
-    body: `Your Moon pattern often suggests an emotional life shaped by ${moon?.psychological || 'the Moon placement shown in this chart'}. There may be phases where ${moon?.challenge || 'inner sensitivity'} becomes the doorway to stronger ${moon?.strength || 'emotional awareness'}.`,
+    signal: `Moon sign ${chart.moonSign}${moonPlanet ? ` · House ${moonPlanet.house}` : ''}`,
+    body: `There may be phases where your emotions need space, honesty, and a wider meaning before they settle. This can make you deeply responsive, but when stretched it may show up as ${emotionalEdge || 'restlessness or sensitivity'}; the medicine is returning to ${emotionalGift || 'emotional clarity'}.`,
     highlights: [moon?.strength, moon?.challenge].filter(Boolean)
   };
 }
@@ -66,39 +92,33 @@ function buildLifeDirection(chart) {
       ? `${directionalPlanet.name} · House ${directionalPlanet.house} · ${directionalPlanet.sign}`
       : `${chart.ayanamsa} ${chart.houseSystem}`,
     body: directionalPlanet
-      ? `This pattern often suggests that your direction develops through ${insight?.theme || directionalPlanet.name}. ${sentenceFromReportLine(insight?.reportLine)}. You may notice the path becoming clearer when you lean into ${insight?.strength || 'the placement strength'} without forcing certainty too early.`
-      : 'This pattern often suggests that direction becomes clearer through the strongest planet placements returned in this chart.',
+      ? `This pattern often suggests that your path becomes clearer through lived effort, not instant certainty. You may notice progress opening when you trust ${insight?.strength || 'your strongest placement'} while staying patient with ${insight?.challenge || 'the parts of life that take time to mature'}.`
+      : 'This pattern often suggests that direction becomes clearer when you follow the strongest repeated signals in the chart rather than forcing a fixed identity too early.',
     highlights: [insight?.strength, insight?.challenge].filter(Boolean)
   };
 }
 
 function buildStrengths(chart) {
-  const strengths = (chart.interpretations || [])
-    .map((interpretation) => interpretation.strength)
-    .filter(Boolean)
-    .slice(0, 4);
-  const preview = chart.lifePatternPreview?.[0];
+  const strengths = strongestInterpretations(chart, 5).map((interpretation) => interpretation.strength);
+  const challenges = strongestInterpretations(chart, 3).map((interpretation) => interpretation.challenge);
 
   return {
     title: 'Strengths',
-    signal: strengths.join(' · '),
-    body: `Your strongest available signals point toward ${strengths.join(', ')}. ${preview ? sentenceFromReportLine(preview) : 'These qualities may become more visible when you work with the chart placements consciously.'}.`,
-    highlights: strengths
+    signal: uniqueValues(strengths).join(' · '),
+    body: `Your strongest signals point toward ${joinHuman(strengths) || 'steady inner capacity'}. At times, these gifts may become most visible after moving through ${joinHuman(challenges) || 'pressure'}, which can make your growth feel earned rather than accidental.`,
+    highlights: uniqueValues(strengths).slice(0, 4)
   };
 }
 
 function buildInternalChallenges(chart) {
-  const challenges = (chart.interpretations || [])
-    .map((interpretation) => interpretation.challenge)
-    .filter(Boolean)
-    .slice(0, 4);
-  const saturn = interpretationFor(chart, 'Saturn');
+  const challenges = strongestInterpretations(chart, 5).map((interpretation) => interpretation.challenge);
+  const strengths = strongestInterpretations(chart, 4).map((interpretation) => interpretation.strength);
 
   return {
     title: 'Internal Challenges',
-    signal: challenges.join(' · '),
-    body: `The chart does not describe a fixed fate, but it does show growth edges. You may notice recurring pressure around ${challenges.join(', ')}. ${saturn?.reportLine ? sentenceFromReportLine(saturn.reportLine) : 'This pattern may ask for patience, emotional honesty, and repeated effort'}.`,
-    highlights: challenges
+    signal: uniqueValues(challenges).join(' · '),
+    body: `You may notice recurring pressure around ${joinHuman(challenges) || 'old emotional patterns'}. This does not define you; it points to where ${joinHuman(strengths) || 'patience and self-trust'} can become stronger when you respond with awareness instead of self-judgment.`,
+    highlights: uniqueValues(challenges).slice(0, 4)
   };
 }
 
