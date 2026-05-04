@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check controllers/chartController.js && node --check routes/chartRoutes.js && node --check services/geocodeService.js && node --check services/timezoneService.js && node --check services/astrologyService.js"
+    "check": "node --check server.js && node --check controllers/chartController.js && node --check routes/chartRoutes.js && node --check services/geocodeService.js && node --check services/timezoneService.js && node --check services/astrologyService.js && node --check services/interpretationService.js"
   },
   "keywords": [
     "vedic-astrology",
