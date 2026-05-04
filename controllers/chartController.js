@@ -37,63 +37,100 @@ function validateChartRequest(body) {
   return errors;
 }
 
+async function buildChartFromRequest(body, options = {}) {
+  const validationErrors = validateChartRequest(body);
+
+  if (validationErrors.length > 0) {
+    const error = new Error('Invalid chart request.');
+    error.code = 'INVALID_CHART_REQUEST';
+    error.statusCode = 400;
+    error.details = validationErrors;
+    throw error;
+  }
+
+  const { name, date, time, place } = body;
+  const location = await geocodePlace(place.trim());
+  const timezone = getTimezoneForCoordinates(location.latitude, location.longitude);
+
+  const localDateTime = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm', {
+    zone: timezone,
+    setZone: true
+  });
+
+  if (!localDateTime.isValid) {
+    const error = new Error('Invalid birth date or time.');
+    error.code = 'INVALID_BIRTH_DATETIME';
+    error.statusCode = 400;
+    error.details = [localDateTime.invalidExplanation || localDateTime.invalidReason];
+    throw error;
+  }
+
+  return generateBirthChart({
+    name: name.trim(),
+    place: place.trim(),
+    location,
+    timezone,
+    localDateTime,
+    utcDateTime: localDateTime.toUTC(),
+    includeDebug: options.includeDebug === true
+  });
+}
+
+function handleChartError(error, res, next) {
+  if (error.code === 'INVALID_CHART_REQUEST' || error.code === 'INVALID_BIRTH_DATETIME') {
+    return res.status(error.statusCode).json({
+      error: error.message,
+      details: error.details
+    });
+  }
+
+  if (error.code === 'GEOCODE_NOT_FOUND' || error.code === 'GEOCODE_PROVIDER_FAILED') {
+    return res.status(error.code === 'GEOCODE_NOT_FOUND' ? 404 : 422).json({
+      error: 'Place could not be geocoded.',
+      details: [error.message]
+    });
+  }
+
+  if (error.code === 'TIMEZONE_LOOKUP_FAILED' || error.code === 'ASTROLOGY_CALCULATION_FAILED') {
+    return res.status(422).json({
+      error: 'Chart could not be generated.',
+      details: [error.message]
+    });
+  }
+
+  return next(error);
+}
+
 async function generateChart(req, res, next) {
   try {
-    const validationErrors = validateChartRequest(req.body);
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({
-        error: 'Invalid chart request.',
-        details: validationErrors
-      });
-    }
-
-    const { name, date, time, place } = req.body;
-    const location = await geocodePlace(place.trim());
-    const timezone = getTimezoneForCoordinates(location.latitude, location.longitude);
-
-    const localDateTime = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm', {
-      zone: timezone,
-      setZone: true
-    });
-
-    if (!localDateTime.isValid) {
-      return res.status(400).json({
-        error: 'Invalid birth date or time.',
-        details: [localDateTime.invalidExplanation || localDateTime.invalidReason]
-      });
-    }
-
-    const utcDateTime = localDateTime.toUTC();
-    const chart = await generateBirthChart({
-      name: name.trim(),
-      place: place.trim(),
-      location,
-      timezone,
-      localDateTime,
-      utcDateTime
-    });
+    const chart = await buildChartFromRequest(req.body);
 
     return res.json(chart);
   } catch (error) {
-    if (error.code === 'GEOCODE_NOT_FOUND' || error.code === 'GEOCODE_PROVIDER_FAILED') {
-      return res.status(error.code === 'GEOCODE_NOT_FOUND' ? 404 : 422).json({
-        error: 'Place could not be geocoded.',
-        details: [error.message]
-      });
-    }
+    return handleChartError(error, res, next);
+  }
+}
 
-    if (error.code === 'TIMEZONE_LOOKUP_FAILED' || error.code === 'ASTROLOGY_CALCULATION_FAILED') {
-      return res.status(422).json({
-        error: 'Chart could not be generated.',
-        details: [error.message]
-      });
-    }
+async function debugChart(req, res, next) {
+  try {
+    const chart = await buildChartFromRequest(req.body, { includeDebug: true });
 
-    return next(error);
+    return res.json({
+      name: chart.name,
+      place: chart.place,
+      timezone: chart.timezone,
+      localDateTime: chart.localDateTime,
+      utcDateTime: chart.utcDateTime,
+      julianDay: chart.julianDay,
+      calculationNotes: chart.calculationNotes,
+      debugPlanets: chart.debug.planets
+    });
+  } catch (error) {
+    return handleChartError(error, res, next);
   }
 }
 
 module.exports = {
+  debugChart,
   generateChart
 };

@@ -57,10 +57,19 @@ const PLANETS = [
 ];
 
 const SIDEREAL_FLAGS = swe.SEFLG_SWIEPH | swe.SEFLG_SIDEREAL | swe.SEFLG_SPEED;
+const TROPICAL_FLAGS = swe.SEFLG_SWIEPH | swe.SEFLG_SPEED;
 const HOUSE_SYSTEM_PLACIDUS = 'P';
 const FULL_CIRCLE_DEGREES = 360;
 const SIGN_DEGREES = 30;
 const NAKSHATRA_DEGREES = FULL_CIRCLE_DEGREES / 27;
+const NODE_TYPE = 'True Node';
+const CALCULATION_NOTES = {
+  ephemeris: 'Swiss Ephemeris',
+  zodiac: 'Sidereal',
+  ayanamsa: 'Lahiri',
+  houseSystem: 'Whole Sign',
+  nodeType: NODE_TYPE
+};
 
 if (process.env.SWISSEPH_EPHE_PATH) {
   swe.swe_set_ephe_path(process.env.SWISSEPH_EPHE_PATH);
@@ -160,17 +169,23 @@ function callSwissEphemeris(methodName, ...args) {
 }
 
 async function calculatePlanet(julianDay, planet) {
-  const result = await callSwissEphemeris('swe_calc_ut', julianDay, planet.body, SIDEREAL_FLAGS);
+  const [tropicalResult, siderealResult] = await Promise.all([
+    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, TROPICAL_FLAGS),
+    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, SIDEREAL_FLAGS)
+  ]);
 
-  if (result.error) {
-    throw new AstrologyCalculationError(`Swiss Ephemeris failed for ${planet.name}: ${result.error}`);
+  if (tropicalResult.error || siderealResult.error) {
+    throw new AstrologyCalculationError(
+      `Swiss Ephemeris failed for ${planet.name}: ${tropicalResult.error || siderealResult.error}`
+    );
   }
 
   return {
     name: planet.name,
     symbol: planet.symbol,
-    longitude: normalizeDegree(result.longitude),
-    speed: result.longitudeSpeed
+    tropicalLongitude: normalizeDegree(tropicalResult.longitude),
+    longitude: normalizeDegree(siderealResult.longitude),
+    speed: siderealResult.longitudeSpeed
   };
 }
 
@@ -214,6 +229,7 @@ function calculateKetu(rahu) {
   return {
     name: 'Ketu',
     symbol: '☋',
+    tropicalLongitude: normalizeDegree(rahu.tropicalLongitude + 180),
     longitude: normalizeDegree(rahu.longitude + 180),
     speed: rahu.speed
   };
@@ -231,7 +247,27 @@ function formatPlanet(rawPlanet, ascendantLongitude) {
   };
 }
 
-async function generateBirthChart({ name, place, location, timezone, localDateTime, utcDateTime }) {
+function formatDebugPlanet(rawPlanet, ayanamsa) {
+  return {
+    name: rawPlanet.name,
+    symbol: rawPlanet.symbol,
+    tropicalLongitude: round(rawPlanet.tropicalLongitude, 6),
+    lahiriAyanamsa: round(ayanamsa, 6),
+    siderealLongitude: round(rawPlanet.longitude, 6),
+    sign: signFromLongitude(rawPlanet.longitude),
+    nakshatra: nakshatraFromLongitude(rawPlanet.longitude)
+  };
+}
+
+async function generateBirthChart({
+  name,
+  place,
+  location,
+  timezone,
+  localDateTime,
+  utcDateTime,
+  includeDebug = false
+}) {
   // Lahiri is the required Vedic ayanamsa. Swiss Ephemeris subtracts it when
   // SEFLG_SIDEREAL is used, so planet longitudes below are sidereal positions.
   swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
@@ -243,14 +279,12 @@ async function generateBirthChart({ name, place, location, timezone, localDateTi
 
   const rawPlanets = await Promise.all(PLANETS.map((planet) => calculatePlanet(julianDay, planet)));
   const rahu = rawPlanets.find((planet) => planet.name === 'Rahu');
-  const allPlanets = [...rawPlanets, calculateKetu(rahu)].map((planet) =>
-    formatPlanet(planet, ascendantLongitude)
-  );
+  const rawPlanetsWithKetu = [...rawPlanets, calculateKetu(rahu)];
+  const allPlanets = rawPlanetsWithKetu.map((planet) => formatPlanet(planet, ascendantLongitude));
 
   const moon = allPlanets.find((planet) => planet.name === 'Moon');
   const sun = allPlanets.find((planet) => planet.name === 'Sun');
-
-  return {
+  const chart = {
     name,
     place,
     location: {
@@ -269,10 +303,20 @@ async function generateBirthChart({ name, place, location, timezone, localDateTi
     ayanamsa: 'Lahiri',
     ayanamsaDegree: round(ayanamsa, 6),
     houseSystem: 'Whole Sign',
+    nodeType: NODE_TYPE,
+    calculationNotes: CALCULATION_NOTES,
     planets: allPlanets,
     houseCusps: wholeSignCusps(ascendantLongitude),
     julianDay: round(julianDay, 6)
   };
+
+  if (includeDebug) {
+    chart.debug = {
+      planets: rawPlanetsWithKetu.map((planet) => formatDebugPlanet(planet, ayanamsa))
+    };
+  }
+
+  return chart;
 }
 
 module.exports = {
