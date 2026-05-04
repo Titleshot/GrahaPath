@@ -5,7 +5,7 @@ import KundaliWheel from './components/KundaliWheel';
 import LoadingSequence from './components/LoadingSequence';
 import PlanetInsightCard from './components/PlanetInsightCard';
 
-const API_URL = 'http://localhost:3000/generate-chart';
+const API_URL = '/api/generate-chart';
 
 function topPreviewLines(chart) {
   return (chart?.lifePatternPreview || chart?.interpretations || [])
