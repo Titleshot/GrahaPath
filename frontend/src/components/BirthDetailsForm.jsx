@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 const inputClass =
@@ -22,6 +23,9 @@ const nepaliMonths = [
 
 const bsYears = Array.from({ length: 91 }, (_item, index) => 2000 + index);
 const bsDays = Array.from({ length: 32 }, (_item, index) => index + 1);
+const bsYearOptions = bsYears.map((year) => ({ label: String(year), value: year }));
+const bsMonthOptions = nepaliMonths.map((month, index) => ({ label: month, value: index + 1 }));
+const bsDayOptions = bsDays.map((day) => ({ label: String(day), value: day }));
 
 function formatAdDisplay(value) {
   const digits = value.replace(/\D/g, '').slice(0, 8);
@@ -40,6 +44,7 @@ function formatTimeDisplay(value) {
 }
 
 function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
+  const [openDropdown, setOpenDropdown] = useState(null);
   const dateType = formData.dateType || 'AD';
   const bsDate = formData.bsDate || { year: 2053, month: 12, day: 19 };
 
@@ -151,42 +156,42 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
             <div className="space-y-2">
               <span className={labelClass}>Nepali Date (BS)</span>
               <div className="grid gap-3 sm:grid-cols-[1fr_1.25fr_1fr]">
-                <select
-                  className={inputClass}
-                  value={bsDate.year}
-                  onChange={(event) => handleBsDateChange('year', event.target.value)}
-                  required
-                >
-                  {bsYears.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className={inputClass}
-                  value={bsDate.month}
-                  onChange={(event) => handleBsDateChange('month', event.target.value)}
-                  required
-                >
-                  {nepaliMonths.map((month, index) => (
-                    <option key={month} value={index + 1}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className={inputClass}
-                  value={bsDate.day}
-                  onChange={(event) => handleBsDateChange('day', event.target.value)}
-                  required
-                >
-                  {bsDays.map((day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
+                <CustomDropdown
+                  id="bs-year"
+                  label="BS Year"
+                  value={Number(bsDate.year)}
+                  options={bsYearOptions}
+                  isOpen={openDropdown === 'bs-year'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'bs-year' ? null : 'bs-year')}
+                  onSelect={(value) => {
+                    handleBsDateChange('year', value);
+                    setOpenDropdown(null);
+                  }}
+                />
+                <CustomDropdown
+                  id="bs-month"
+                  label="BS Month"
+                  value={Number(bsDate.month)}
+                  options={bsMonthOptions}
+                  isOpen={openDropdown === 'bs-month'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'bs-month' ? null : 'bs-month')}
+                  onSelect={(value) => {
+                    handleBsDateChange('month', value);
+                    setOpenDropdown(null);
+                  }}
+                />
+                <CustomDropdown
+                  id="bs-day"
+                  label="BS Day"
+                  value={Number(bsDate.day)}
+                  options={bsDayOptions}
+                  isOpen={openDropdown === 'bs-day'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'bs-day' ? null : 'bs-day')}
+                  onSelect={(value) => {
+                    handleBsDateChange('day', value);
+                    setOpenDropdown(null);
+                  }}
+                />
               </div>
               <p className={helperClass}>
                 Use your Nepali birth date. GrahaPath will convert it to English date before
@@ -239,6 +244,61 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
         {isLoading ? 'Calculating...' : 'Calculate My Chart'}
       </motion.button>
     </motion.form>
+  );
+}
+
+function CustomDropdown({ id, label, value, options, isOpen, onToggle, onSelect }) {
+  const selectedOption = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={`${id}-options`}
+        onClick={onToggle}
+        className="flex w-full items-center justify-between rounded-2xl border border-gold-400/20 bg-black/45 px-4 py-3 text-left text-sm text-ivory-100 outline-none transition hover:border-gold-300/55 hover:bg-black/60 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20"
+      >
+        <span>
+          <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-200/50">
+            {label}
+          </span>
+          <span className="mt-1 block text-sm text-ivory-100">{selectedOption.label}</span>
+        </span>
+        <span className={`text-gold-300 transition ${isOpen ? 'rotate-180' : ''}`}>⌄</span>
+      </button>
+
+      {isOpen && (
+        <motion.div
+          id={`${id}-options`}
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.16 }}
+          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-64 overflow-y-auto rounded-2xl border border-gold-300/25 bg-[#11100d]/95 p-2 shadow-gold backdrop-blur-xl"
+        >
+          <div className="grid gap-1">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onSelect(option.value)}
+                  className={`rounded-xl px-3 py-2 text-left text-sm transition ${
+                    isSelected
+                      ? 'bg-gold-gradient text-black shadow-glow'
+                      : 'text-ivory-100/75 hover:bg-gold-300/10 hover:text-gold-100'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+    </div>
   );
 }
 
