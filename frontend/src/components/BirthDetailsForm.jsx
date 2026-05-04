@@ -224,14 +224,6 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
               timeParts={timeParts}
               onChange={handleTimePartChange}
             />
-            <input
-              className="sr-only"
-              value={formData.timeDisplay || ''}
-              onChange={handleTimeChange}
-              required
-              tabIndex={-1}
-              aria-hidden="true"
-            />
             <p className={helperClass}>
               Enter exact birth time. Even a few minutes can affect Lagna and house placements.
             </p>
@@ -268,8 +260,24 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
 }
 
 function TimePicker({ timeParts, onChange }) {
+  function setNoon() {
+    onChange('hour', '12');
+    onChange('minute', '00');
+    onChange('meridiem', 'PM');
+  }
+
   return (
     <div className="rounded-3xl border border-gold-400/12 bg-black/25 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/50">Select Time</p>
+        <button
+          type="button"
+          onClick={setNoon}
+          className="rounded-full border border-gold-300/20 bg-gold-300/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-100/80 transition hover:border-gold-300/40 hover:bg-gold-300/14"
+        >
+          Set 12:00 PM
+        </button>
+      </div>
       <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
         <TimeColumn
           label="Hour"
