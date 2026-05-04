@@ -1,0 +1,16 @@
+{
+  "name": "grahapath",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GrahaPath API",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev:api": "node backend/server.js",
+    "dev:web": "npm run dev --prefix frontend",
+    "check": "node --check backend/server.js && node --check backend/controllers/chartController.js && node --check backend/services/phaseReportService.js && node --check backend/services/remedyService.js && npm run check --prefix frontend"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
