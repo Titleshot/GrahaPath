@@ -20,6 +20,9 @@ const nepaliMonths = [
   'Chaitra'
 ];
 
+const hourOptions = Array.from({ length: 12 }, (_item, index) => String(index + 1).padStart(2, '0'));
+const minuteOptions = Array.from({ length: 60 }, (_item, index) => String(index).padStart(2, '0'));
+
 function formatAdDisplay(value) {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
@@ -36,10 +39,15 @@ function formatTimeDisplay(value) {
   return `${timeParts.join(' : ')}${meridiem ? ` ${meridiem}` : ''}`;
 }
 
+function formatSelectedTime(timeParts) {
+  return `${timeParts.hour || 'HH'} : ${timeParts.minute || 'MM'} ${timeParts.meridiem || 'AM/PM'}`;
+}
+
 function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
   const dateType = formData.dateType || 'AD';
   const bsDate = formData.bsDate || { year: 2053, month: 12, day: 19 };
   const selectedBsMonth = nepaliMonths[Number(bsDate.month) - 1];
+  const timeParts = formData.timeParts || { hour: '', minute: '', meridiem: 'AM' };
 
   function handleDateTypeChange(nextDateType) {
     onChange({
@@ -79,6 +87,27 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
       target: {
         name: 'timeDisplay',
         value: formatTimeDisplay(event.target.value)
+      }
+    });
+  }
+
+  function handleTimePartChange(field, value) {
+    const nextTimeParts = {
+      ...timeParts,
+      [field]: value
+    };
+
+    onChange({
+      target: {
+        name: 'timeParts',
+        value: nextTimeParts
+      }
+    });
+
+    onChange({
+      target: {
+        name: 'timeDisplay',
+        value: formatSelectedTime(nextTimeParts)
       }
     });
   }
@@ -189,15 +218,19 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
         </div>
 
         <div className="grid gap-4">
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className={labelClass}>Birth Time</span>
+            <TimePicker
+              timeParts={timeParts}
+              onChange={handleTimePartChange}
+            />
             <input
-              className={inputClass}
-              name="timeDisplay"
+              className="sr-only"
               value={formData.timeDisplay || ''}
               onChange={handleTimeChange}
-              placeholder="HH : MM AM/PM"
               required
+              tabIndex={-1}
+              aria-hidden="true"
             />
             <p className={helperClass}>
               Enter exact birth time. Even a few minutes can affect Lagna and house placements.
@@ -205,7 +238,7 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
             <p className="text-xs leading-5 text-gold-200/55">
               Even a 5-10 minute difference can affect your chart accuracy.
             </p>
-          </label>
+          </div>
         </div>
 
         <label className="space-y-2">
@@ -231,6 +264,80 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
         {isLoading ? 'Calculating...' : 'Calculate My Chart'}
       </motion.button>
     </motion.form>
+  );
+}
+
+function TimePicker({ timeParts, onChange }) {
+  return (
+    <div className="rounded-3xl border border-gold-400/12 bg-black/25 p-3">
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
+        <TimeColumn
+          label="Hour"
+          value={timeParts.hour}
+          options={hourOptions}
+          onSelect={(value) => onChange('hour', value)}
+        />
+        <TimeColumn
+          label="Minute"
+          value={timeParts.minute}
+          options={minuteOptions}
+          onSelect={(value) => onChange('minute', value)}
+        />
+        <div className="grid gap-2">
+          {['AM', 'PM'].map((meridiem) => {
+            const isSelected = timeParts.meridiem === meridiem;
+
+            return (
+              <button
+                key={meridiem}
+                type="button"
+                onClick={() => onChange('meridiem', meridiem)}
+                className={`rounded-2xl border px-4 py-3 text-xs font-semibold tracking-[0.18em] transition ${
+                  isSelected
+                    ? 'border-gold-300/40 bg-gold-300/18 text-gold-100'
+                    : 'border-gold-400/12 bg-black/35 text-ivory-100/55 hover:border-gold-300/35 hover:text-gold-100'
+                }`}
+              >
+                {meridiem}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="mt-3 rounded-2xl border border-gold-300/10 bg-black/25 px-4 py-2 text-center text-sm text-gold-100/85">
+        Selected time: {formatSelectedTime(timeParts)}
+      </p>
+    </div>
+  );
+}
+
+function TimeColumn({ label, value, options, onSelect }) {
+  return (
+    <div className="rounded-2xl border border-gold-400/12 bg-black/35 p-2">
+      <p className="px-2 pb-2 text-[10px] uppercase tracking-[0.22em] text-gold-200/50">{label}</p>
+      <div className="max-h-32 overflow-y-auto pr-1">
+        <div className="grid gap-1">
+          {options.map((option) => {
+            const isSelected = value === option;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onSelect(option)}
+                className={`rounded-xl px-2 py-2 text-sm transition ${
+                  isSelected
+                    ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
+                    : 'text-ivory-100/65 hover:bg-gold-300/8 hover:text-gold-100'
+                }`}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 

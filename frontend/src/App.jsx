@@ -61,7 +61,11 @@ export default function App() {
       month: '12',
       day: '19',
     },
-    time: '',
+    timeParts: {
+      hour: '04',
+      minute: '30',
+      meridiem: 'AM',
+    },
     place: '',
   });
   const [chart, setChart] = useState(null);
@@ -78,6 +82,18 @@ export default function App() {
         ...current,
         bsDate: {
           ...current.bsDate,
+          [field]: value,
+        },
+      }));
+      return;
+    }
+
+    if (name.startsWith('timeParts.')) {
+      const field = name.split('.')[1];
+      setFormData((current) => ({
+        ...current,
+        timeParts: {
+          ...current.timeParts,
           [field]: value,
         },
       }));
@@ -107,7 +123,9 @@ export default function App() {
           month: Number(formData.bsDate.month),
           day: Number(formData.bsDate.day),
         },
-        time: normalizeBirthTime(formData.timeDisplay || ''),
+        time: normalizeBirthTime(
+          `${formData.timeParts.hour} : ${formData.timeParts.minute} ${formData.timeParts.meridiem}`
+        ),
         place: formData.place,
       };
 
