@@ -1,5 +1,8 @@
 const swe = require('swisseph');
 const { interpretChartPlanets } = require('./interpretationService');
+const { getLifePhaseValidation } = require('./lifePhaseService');
+const { buildPaywallPreview } = require('./paywallService');
+const { generateRemedies } = require('./remedyService');
 
 const ZODIAC_SIGNS = [
   'Aries',
@@ -292,6 +295,9 @@ async function generateBirthChart({
     .filter((interpretation) => interpretation.reportLine)
     .slice(0, 3)
     .map((interpretation) => interpretation.reportLine);
+  const lifePhaseValidation = getLifePhaseValidation();
+  const paywallPreview = buildPaywallPreview();
+  const remedies = generateRemedies({ planets: interpretedPlanets });
 
   const moon = interpretedPlanets.find((planet) => planet.name === 'Moon');
   const sun = interpretedPlanets.find((planet) => planet.name === 'Sun');
@@ -320,6 +326,11 @@ async function generateBirthChart({
     planets: interpretedPlanets,
     interpretations,
     lifePatternPreview,
+    lifePhases: lifePhaseValidation.phases,
+    lifePhaseTransition: lifePhaseValidation.transition,
+    paywallPreview,
+    remedies,
+    remedyPreview: remedies,
     houseCusps: wholeSignCusps(ascendantLongitude),
     julianDay: round(julianDay, 6)
   };

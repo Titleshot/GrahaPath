@@ -3,11 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import BirthDetailsForm from './components/BirthDetailsForm';
 import KundaliWheel from './components/KundaliWheel';
 import LifePatternReport from './components/LifePatternReport';
+import LifePhaseValidation from './components/LifePhaseValidation';
 import LoadingSequence from './components/LoadingSequence';
 import PlanetInsightCard from './components/PlanetInsightCard';
+import RemedyPreview from './components/RemedyPreview';
+import UnlockPreview from './components/UnlockPreview';
 import { getNakshatraDisplay, getRashiDisplay } from './data/vedicNames';
 
 const API_URL = '/api/generate-chart';
+const VALIDATE_PHASES_URL = '/api/validate-life-phases';
 
 function normalizeAdDate(displayDate) {
   const match = /^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})$/.exec(displayDate.trim());
@@ -124,7 +128,10 @@ export default function App() {
   });
   const [chart, setChart] = useState(null);
   const [selectedPlanet, setSelectedPlanet] = useState(null);
+  const [phaseResponses, setPhaseResponses] = useState({});
+  const [phaseValidation, setPhaseValidation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidatingPhases, setIsValidatingPhases] = useState(false);
   const [error, setError] = useState('');
 
   function handleFormChange(event) {
@@ -166,6 +173,8 @@ export default function App() {
     setError('');
     setChart(null);
     setSelectedPlanet(null);
+    setPhaseResponses({});
+    setPhaseValidation(null);
 
     try {
       const payload = {
@@ -204,6 +213,51 @@ export default function App() {
       setError(requestError.message);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handlePhaseResponse(phaseId, response) {
+    const nextResponses = {
+      ...phaseResponses,
+      [phaseId]: response,
+    };
+
+    setPhaseResponses(nextResponses);
+
+    if (!chart?.lifePhases?.length) {
+      return;
+    }
+
+    const answeredAllPhases = chart.lifePhases.every((phase) => nextResponses[phase.id]);
+
+    if (!answeredAllPhases) {
+      return;
+    }
+
+    setIsValidatingPhases(true);
+
+    try {
+      const response = await fetch(VALIDATE_PHASES_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          responses: nextResponses,
+        }),
+      });
+      const responseText = await response.text();
+      const data = responseText ? JSON.parse(responseText) : {};
+
+      if (!response.ok) {
+        throw new Error(data.details?.[0] || data.message || data.error || 'Could not validate responses.');
+      }
+
+      setPhaseValidation(data);
+    } catch (validationError) {
+      setError(validationError.message);
+    } finally {
+      setIsValidatingPhases(false);
     }
   }
 
@@ -280,9 +334,20 @@ export default function App() {
                     />
 
                     <LifePatternReport chart={chart} />
+                    <LifePhaseValidation
+                      phases={chart.lifePhases}
+                      responses={phaseResponses}
+                      result={phaseValidation}
+                      isValidating={isValidatingPhases}
+                      onSelect={handlePhaseResponse}
+                    />
                   </div>
 
-                  <PlanetInsightCard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
+                  <div className="space-y-5">
+                    <PlanetInsightCard planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
+                    <UnlockPreview paywall={chart.paywallPreview} validation={phaseValidation} />
+                    <RemedyPreview remedies={chart.remedies} />
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div

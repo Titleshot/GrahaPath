@@ -3,6 +3,7 @@ const { geocodePlace } = require('../services/geocodeService');
 const { getTimezoneForCoordinates } = require('../services/timezoneService');
 const { generateBirthChart } = require('../services/astrologyService');
 const { convertBsToAd, formatBsDate } = require('../services/dateConversionService');
+const { scorePhaseResponses } = require('../services/lifePhaseService');
 
 const VALID_DATE_TYPES = new Set(['AD', 'BS']);
 
@@ -170,7 +171,25 @@ async function debugChart(req, res, next) {
   }
 }
 
+function validateLifePhases(req, res) {
+  try {
+    const responses = req.body?.responses || {};
+    const responseList = Array.isArray(responses)
+      ? responses
+      : Object.entries(responses).map(([phaseId, value]) => ({ phaseId, value }));
+    const result = scorePhaseResponses(responseList);
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({
+      error: 'Invalid phase validation request.',
+      details: [error.message]
+    });
+  }
+}
+
 module.exports = {
   debugChart,
-  generateChart
+  generateChart,
+  validateLifePhases
 };
