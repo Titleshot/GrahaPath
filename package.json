@@ -1,0 +1,27 @@
+{
+  "name": "grahapath-backend",
+  "version": "1.0.0",
+  "description": "Backend core for GrahaPath Vedic astrology birth chart calculations.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check controllers/chartController.js && node --check routes/chartRoutes.js && node --check services/geocodeService.js && node --check services/timezoneService.js && node --check services/astrologyService.js"
+  },
+  "keywords": [
+    "vedic-astrology",
+    "swiss-ephemeris",
+    "birth-chart",
+    "kundali"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "axios": "latest",
+    "express": "latest",
+    "luxon": "latest",
+    "swisseph": "latest",
+    "tz-lookup": "latest"
+  }
+}
