@@ -21,6 +21,7 @@
     "axios": "latest",
     "express": "latest",
     "luxon": "latest",
+    "node": "^18.20.8",
     "swisseph": "latest",
     "tz-lookup": "latest"
   }
