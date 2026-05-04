@@ -76,8 +76,8 @@ async function generateChart(req, res, next) {
 
     return res.json(chart);
   } catch (error) {
-    if (error.code === 'GEOCODE_NOT_FOUND') {
-      return res.status(404).json({
+    if (error.code === 'GEOCODE_NOT_FOUND' || error.code === 'GEOCODE_PROVIDER_FAILED') {
+      return res.status(error.code === 'GEOCODE_NOT_FOUND' ? 404 : 422).json({
         error: 'Place could not be geocoded.',
         details: [error.message]
       });

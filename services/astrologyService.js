@@ -62,6 +62,10 @@ const FULL_CIRCLE_DEGREES = 360;
 const SIGN_DEGREES = 30;
 const NAKSHATRA_DEGREES = FULL_CIRCLE_DEGREES / 27;
 
+if (process.env.SWISSEPH_EPHE_PATH) {
+  swe.swe_set_ephe_path(process.env.SWISSEPH_EPHE_PATH);
+}
+
 class AstrologyCalculationError extends Error {
   constructor(message) {
     super(message);
@@ -233,7 +237,7 @@ async function generateBirthChart({ name, place, location, timezone, localDateTi
   swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
 
   const julianDay = toJulianDay(utcDateTime);
-  const ayanamsa = await callSwissEphemeris('swe_get_ayanamsa_ut', julianDay);
+  const ayanamsa = swe.swe_get_ayanamsa_ut(julianDay);
   const houses = await calculateHouseCusps(julianDay, location.latitude, location.longitude);
   const ascendantLongitude = normalizeDegree(houses.ascendantTropical - ayanamsa);
 

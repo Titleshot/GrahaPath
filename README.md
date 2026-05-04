@@ -39,6 +39,9 @@ npm install
 npm start
 ```
 
+Set `SWISSEPH_EPHE_PATH=/path/to/ephe` when deploying with downloaded Swiss
+Ephemeris data files.
+
 Optional syntax check:
 
 ```bash
