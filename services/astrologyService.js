@@ -1,4 +1,5 @@
 const swe = require('swisseph');
+const { interpretChartPlanets } = require('./interpretationService');
 
 const ZODIAC_SIGNS = [
   'Aries',
@@ -281,9 +282,18 @@ async function generateBirthChart({
   const rahu = rawPlanets.find((planet) => planet.name === 'Rahu');
   const rawPlanetsWithKetu = [...rawPlanets, calculateKetu(rahu)];
   const allPlanets = rawPlanetsWithKetu.map((planet) => formatPlanet(planet, ascendantLongitude));
+  const interpretations = interpretChartPlanets(allPlanets);
+  const interpretedPlanets = allPlanets.map((planet, index) => ({
+    ...planet,
+    interpretation: interpretations[index]
+  }));
+  const lifePatternPreview = interpretations
+    .filter((interpretation) => interpretation.reportLine)
+    .slice(0, 3)
+    .map((interpretation) => interpretation.reportLine);
 
-  const moon = allPlanets.find((planet) => planet.name === 'Moon');
-  const sun = allPlanets.find((planet) => planet.name === 'Sun');
+  const moon = interpretedPlanets.find((planet) => planet.name === 'Moon');
+  const sun = interpretedPlanets.find((planet) => planet.name === 'Sun');
   const chart = {
     name,
     place,
@@ -305,7 +315,9 @@ async function generateBirthChart({
     houseSystem: 'Whole Sign',
     nodeType: NODE_TYPE,
     calculationNotes: CALCULATION_NOTES,
-    planets: allPlanets,
+    planets: interpretedPlanets,
+    interpretations,
+    lifePatternPreview,
     houseCusps: wholeSignCusps(ascendantLongitude),
     julianDay: round(julianDay, 6)
   };

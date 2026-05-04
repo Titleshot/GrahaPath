@@ -19,6 +19,7 @@
   "private": true,
   "dependencies": {
     "axios": "latest",
+    "cors": "^2.8.6",
     "express": "latest",
     "luxon": "latest",
     "node": "^18.20.8",
