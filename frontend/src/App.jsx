@@ -129,21 +129,75 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex h-full min-h-[520px] items-center justify-center rounded-[1.5rem] border border-dashed border-gold/20 bg-black/20 p-8 text-center"
+                  className="relative flex h-full min-h-[520px] items-center justify-center overflow-hidden rounded-[1.5rem] border border-dashed border-gold/20 bg-black/20 p-8 text-center"
                 >
-                  <div className="max-w-md">
+                  <svg
+                    viewBox="0 0 300 300"
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-1/2 top-1/2 h-[430px] w-[430px] -translate-x-1/2 -translate-y-1/2 opacity-[0.09] blur-[1px]"
+                  >
+                    <circle cx="150" cy="150" r="132" fill="none" stroke="#d9a441" strokeWidth="1.2" />
+                    <circle cx="150" cy="150" r="82" fill="none" stroke="#d9a441" strokeWidth="0.7" />
+                    <circle cx="150" cy="150" r="34" fill="none" stroke="#d9a441" strokeWidth="0.6" />
+                    {Array.from({ length: 12 }, (_item, index) => {
+                      const angle = (index * 30 - 90) * (Math.PI / 180);
+                      const inner = {
+                        x: 150 + 28 * Math.cos(angle),
+                        y: 150 + 28 * Math.sin(angle)
+                      };
+                      const outer = {
+                        x: 150 + 132 * Math.cos(angle),
+                        y: 150 + 132 * Math.sin(angle)
+                      };
+
+                      return (
+                        <line
+                          key={index}
+                          x1={inner.x}
+                          y1={inner.y}
+                          x2={outer.x}
+                          y2={outer.y}
+                          stroke="#d9a441"
+                          strokeWidth="0.65"
+                        />
+                      );
+                    })}
+                  </svg>
+
+                  <div className="relative z-10 max-w-xl">
                     <p className="text-xs uppercase tracking-[0.45em] text-gold/60">
                       Awaiting Birth Details
                     </p>
-                    <h2 className="mt-4 font-serif text-3xl text-gold">
-                      Your chart wheel will appear here
+                    <h2 className="mt-4 font-serif text-3xl text-gold sm:text-4xl">
+                      Your Kundali. Calculated, Not Assumed.
                     </h2>
-                    <p className="mt-4 text-sm leading-6 text-ivory/60">
-                      Submit verified birth data to calculate the kundali and unlock clickable
-                      planetary interpretations.
+                    <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-ivory/65">
+                      Enter your birth details to generate your personalized chart using precise
+                      planetary calculations aligned with Vedic principles.
                     </p>
+
+                    <div className="mx-auto mt-6 grid max-w-md gap-3 text-left text-sm text-ivory/72">
+                      {[
+                        'Based on real astronomical data',
+                        'Uses Lahiri Ayanamsa',
+                        'Every insight is linked to your planetary placements'
+                      ].map((line) => (
+                        <div
+                          key={line}
+                          className="rounded-2xl border border-gold/10 bg-black/25 px-4 py-3"
+                        >
+                          <span className="mr-2 text-gold-300">✓</span>
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="mt-6 text-xs uppercase tracking-[0.28em] text-gold-200/70">
+                      Clickable chart. Explainable insights. No guesswork.
+                    </p>
+
                     {error && (
-                      <p className="mt-5 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
+                      <p className="mx-auto mt-5 max-w-md rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
                         {error}
                       </p>
                     )}

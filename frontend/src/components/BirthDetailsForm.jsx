@@ -16,8 +16,8 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
         <p className="text-xs uppercase tracking-[0.35em] text-gold-300/80">Birth Details</p>
         <h2 className="mt-3 font-serif text-3xl text-ivory-50">Generate your Kundali</h2>
         <p className="mt-3 text-sm leading-6 text-ivory-100/60">
-          Enter precise birth details. GrahaPath will use the backend chart engine and return only
-          calculated placements and interpretations.
+          Enter your exact birth details. GrahaPath calculates your planetary placements first,
+          then connects each insight to your chart.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
         disabled={isLoading}
         className="mt-6 w-full rounded-2xl border border-gold-300/50 bg-gold-gradient px-5 py-4 text-sm font-semibold uppercase tracking-[0.25em] text-black shadow-glow transition disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? 'Calculating...' : 'Reveal Chart'}
+        {isLoading ? 'Calculating...' : 'Calculate My Chart'}
       </motion.button>
     </motion.form>
   );
