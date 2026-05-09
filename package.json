@@ -3,10 +3,18 @@
   "version": "1.0.0",
   "description": "Backend core for GrahaPath Vedic astrology birth chart calculations.",
   "main": "server.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check controllers/chartController.js && node --check routes/chartRoutes.js && node --check services/dateConversionService.js && node --check services/geocodeService.js && node --check services/timezoneService.js && node --check services/astrologyService.js && node --check services/interpretationService.js && node --check services/lifePhaseService.js && node --check services/paywallService.js && node --check services/remedyService.js"
+    "check": "node scripts/syntax-check.js",
+    "regression:nightly": "node scripts/nightly-regression.js",
+    "regression:ashtakavarga": "node scripts/ashtakavarga-regression.js",
+    "feedback:weekly": "node scripts/feedback-weekly-summary.js",
+    "feedback:tuning": "node scripts/feedback-tuning-recommendations.js",
+    "validate:brain-numeric": "node scripts/validate-brain-numeric.js"
   },
   "keywords": [
     "vedic-astrology",
@@ -18,12 +26,15 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.105.3",
     "axios": "latest",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "latest",
     "luxon": "latest",
     "nepali-date-converter": "^3.4.0",
-    "node": "^18.20.8",
+    "nodemailer": "^8.0.7",
     "swisseph": "latest",
     "tz-lookup": "latest"
   }

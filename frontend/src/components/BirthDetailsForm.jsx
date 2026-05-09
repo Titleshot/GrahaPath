@@ -1,28 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { withApiBase } from '../lib/apiBase';
 
 const inputClass =
   'w-full rounded-2xl border border-gold-400/20 bg-black/40 px-4 py-3 text-sm text-ivory-100 outline-none transition placeholder:text-ivory-100/30 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20';
 const helperClass = 'text-xs leading-5 text-ivory-100/45';
 const labelClass = 'text-xs uppercase tracking-[0.22em] text-ivory-100/50';
 
-const nepaliMonths = [
-  'Baisakh',
-  'Jestha',
-  'Ashadh',
-  'Shrawan',
-  'Bhadra',
-  'Ashwin',
-  'Kartik',
-  'Mangsir',
-  'Poush',
-  'Magh',
-  'Falgun',
-  'Chaitra'
-];
-
 const hourOptions = Array.from({ length: 12 }, (_item, index) => String(index + 1).padStart(2, '0'));
 const minuteOptions = Array.from({ length: 60 }, (_item, index) => String(index).padStart(2, '0'));
+const PLACE_SUGGEST_URL = withApiBase('/api/place-suggestions');
+
+const LIFE_EVENT_TYPES = [
+  ['career', 'Career'],
+  ['job', 'Job'],
+  ['marriage', 'Marriage'],
+  ['relationship', 'Relationship'],
+  ['breakup', 'Breakup'],
+  ['health', 'Health'],
+  ['relocation', 'Relocation'],
+  ['education', 'Education'],
+  ['travel', 'Travel'],
+  ['finance', 'Finance'],
+  ['loss', 'Loss'],
+  ['child', 'Child / family'],
+  ['family', 'Family'],
+  ['accident', 'Accident / crisis'],
+  ['other', 'Other']
+];
+
+const IMPACT_OPTIONS = [
+  ['', 'Auto'],
+  ['major', 'Major'],
+  ['high', 'High'],
+  ['standard', 'Standard'],
+  ['minor', 'Minor'],
+  ['micro', 'Micro']
+];
+
+const GREG_MONTHS = [
+  [1, 'Jan'],
+  [2, 'Feb'],
+  [3, 'Mar'],
+  [4, 'Apr'],
+  [5, 'May'],
+  [6, 'Jun'],
+  [7, 'Jul'],
+  [8, 'Aug'],
+  [9, 'Sep'],
+  [10, 'Oct'],
+  [11, 'Nov'],
+  [12, 'Dec']
+];
 
 function formatAdDisplay(value) {
   const digits = value.replace(/\D/g, '').slice(0, 8);
@@ -44,35 +73,42 @@ function formatSelectedTime(timeParts) {
   return `${timeParts.hour || 'HH'} : ${timeParts.minute || 'MM'} ${timeParts.meridiem || 'AM/PM'}`;
 }
 
-function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
-  const [isMonthOpen, setIsMonthOpen] = useState(false);
-  const dateType = formData.dateType || 'AD';
-  const bsDate = formData.bsDate || { year: 2053, month: 12, day: 19 };
+function BirthDetailsForm({
+  formData,
+  onChange,
+  onSubmit,
+  isLoading,
+  onLocationSelect,
+  onLifeEventsToggle,
+  onLifeEventAdd,
+  onLifeEventRemove,
+  onLifeEventFieldChange,
+  demoUsed,
+  onRestorePremium
+}) {
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [isPlaceFocused, setIsPlaceFocused] = useState(false);
+  const placeAbortRef = useRef(null);
+  const placeCacheRef = useRef(new Map());
   const timeParts = formData.timeParts || { hour: '', minute: '', meridiem: 'AM' };
+  const selectedLocation = formData.location || null;
+  const lifeEvents = formData.lifeEvents || [];
+  const lifeEventsExpanded = Boolean(formData.lifeEventsExpanded);
+  // V1: intentionally hide “Significant life events” to reduce onboarding friction.
+  const showLifeEvents = false;
 
-  function handleDateTypeChange(nextDateType) {
-    onChange({
-      target: {
-        name: 'dateType',
-        value: nextDateType
-      }
-    });
-  }
+  const showSuggestions = isPlaceFocused && placeSuggestions.length > 0;
 
-  function handleBsDateChange(field, rawValue) {
-    const maxLength = field === 'year' ? 4 : 2;
-    const value = rawValue.replace(/\D/g, '').slice(0, maxLength);
-
-    onChange({
-      target: {
-        name: 'bsDate',
-        value: {
-          ...bsDate,
-          [field]: value
-        }
-      }
-    });
-  }
+  const placeHelperText = useMemo(() => {
+    if (selectedLocation?.displayName) {
+      return `Selected: ${selectedLocation.displayName} (${selectedLocation.latitude.toFixed(4)}, ${selectedLocation.longitude.toFixed(4)})`;
+    }
+    if (isSearchingPlaces) {
+      return 'Searching places...';
+    }
+    return 'Select an exact place from suggestions for best chart accuracy.';
+  }, [isSearchingPlaces, selectedLocation]);
 
   function handleAdDateChange(event) {
     onChange({
@@ -113,24 +149,112 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
     });
   }
 
+  useEffect(() => {
+    const place = (formData.place || '').trim();
+    if (place.length < 3) {
+      setPlaceSuggestions([]);
+      setIsSearchingPlaces(false);
+      if (placeAbortRef.current) {
+        placeAbortRef.current.abort();
+      }
+      return undefined;
+    }
+
+    const timeout = setTimeout(async () => {
+      const cacheKey = place.toLowerCase();
+      if (placeCacheRef.current.has(cacheKey)) {
+        const cached = placeCacheRef.current.get(cacheKey) || [];
+        // Do not trust cached empty arrays forever; they can come from transient failures.
+        if (cached.length > 0) {
+          setPlaceSuggestions(cached);
+          setIsSearchingPlaces(false);
+          return;
+        }
+      }
+      if (placeCacheRef.current.has(cacheKey)) {
+        placeCacheRef.current.delete(cacheKey);
+      }
+      if (placeAbortRef.current) {
+        placeAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      placeAbortRef.current = controller;
+      setIsSearchingPlaces(true);
+      try {
+        const response = await fetch(`${PLACE_SUGGEST_URL}?q=${encodeURIComponent(place)}`, {
+          signal: controller.signal
+        });
+        let payload;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          payload = [];
+        }
+        if (!response.ok) {
+          setPlaceSuggestions([]);
+          return;
+        }
+        const suggestions = payload.suggestions || [];
+        if (suggestions.length > 0) {
+          placeCacheRef.current.set(cacheKey, suggestions);
+        }
+        setPlaceSuggestions(suggestions);
+        setIsSearchingPlaces(false);
+      } catch (_error) {
+        setPlaceSuggestions([]);
+      } finally {
+        setIsSearchingPlaces(false);
+      }
+    }, 220);
+
+    return () => clearTimeout(timeout);
+  }, [formData.place]);
+
+  function handlePlaceChange(event) {
+    setIsPlaceFocused(true);
+    onChange(event);
+    onChange({
+      target: {
+        name: 'location',
+        value: null
+      }
+    });
+  }
+
+  function chooseSuggestion(suggestion) {
+    onChange({
+      target: {
+        name: 'place',
+        value: suggestion.displayName
+      }
+    });
+    onLocationSelect({
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+      displayName: suggestion.displayName
+    });
+    setPlaceSuggestions([]);
+    setIsPlaceFocused(false);
+  }
+
   return (
     <motion.form
       onSubmit={onSubmit}
-      className="glass-panel rounded-[2rem] p-6 shadow-glow md:p-8"
+      className="glass-panel relative z-50 isolate overflow-visible rounded-[2rem] p-4 shadow-glow sm:p-5 md:p-8"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: 'easeOut' }}
     >
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-[0.35em] text-gold-300/80">Birth Details</p>
-        <h2 className="mt-3 font-serif text-3xl text-ivory-50">Enter Your Birth Details</h2>
+        <p className="text-xs uppercase tracking-[0.22em] text-gold-300/80 sm:tracking-[0.35em]">Birth Details</p>
+        <h2 className="mt-3 font-serif text-2xl text-ivory-50 sm:text-3xl">Enter Your Birth Details</h2>
         <p className="mt-3 text-sm leading-6 text-ivory-100/60">
           GrahaPath calculates your planetary placements from your exact birth date, time, and
           place.
         </p>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-4 overflow-visible">
         <label className="space-y-2">
           <span className={labelClass}>Name</span>
           <input
@@ -143,85 +267,19 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
           />
         </label>
 
-        <div className="space-y-3 rounded-3xl border border-gold-400/10 bg-black/20 p-4">
-          <div className="grid gap-2 rounded-2xl border border-gold-400/15 bg-black/30 p-1 sm:grid-cols-2">
-            {['AD', 'BS'].map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => handleDateTypeChange(option)}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                  dateType === option
-                    ? 'bg-gold-gradient text-black shadow-glow'
-                    : 'text-ivory-100/55 hover:bg-white/5 hover:text-gold-200'
-                }`}
-              >
-                {option === 'AD' ? 'English Date (AD)' : 'Nepali Date (BS)'}
-              </button>
-            ))}
-          </div>
-
-          {dateType === 'AD' ? (
-            <label className="space-y-2">
-              <span className={labelClass}>Date</span>
-              <input
-                className={inputClass}
-                name="dateDisplay"
-                inputMode="numeric"
-                value={formData.dateDisplay || ''}
-                onChange={handleAdDateChange}
-                placeholder="DD / MM / YYYY"
-                required
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className={helperClass}>DD / MM / YYYY</p>
-                <p className={helperClass}>Use your English birth date.</p>
-              </div>
-            </label>
-          ) : (
-            <div className="space-y-2">
-              <span className={labelClass}>Nepali Date (BS)</span>
-              <div className="grid gap-3 sm:grid-cols-[1fr_1.25fr_1fr]">
-                <TypedBsInput
-                  label="BS Year"
-                  value={bsDate.year}
-                  placeholder="2053"
-                  maxLength={4}
-                  onChange={(value) => handleBsDateChange('year', value)}
-                />
-                <TypedBsInput
-                  label="BS Month"
-                  value={bsDate.month}
-                  placeholder="Month"
-                  displayValue={nepaliMonths[Number(bsDate.month) - 1] || ''}
-                  readOnly
-                  onClick={() => setIsMonthOpen((current) => !current)}
-                  onChange={(value) => handleBsDateChange('month', value)}
-                >
-                  {isMonthOpen && (
-                    <MonthMenu
-                      selectedMonth={Number(bsDate.month)}
-                      onSelect={(month) => {
-                        handleBsDateChange('month', String(month));
-                        setIsMonthOpen(false);
-                      }}
-                    />
-                  )}
-                </TypedBsInput>
-                <TypedBsInput
-                  label="BS Day"
-                  value={bsDate.day}
-                  placeholder="19"
-                  maxLength={2}
-                  onChange={(value) => handleBsDateChange('day', value)}
-                />
-              </div>
-              <p className={helperClass}>
-                We automatically convert Nepali date to calculation format.
-              </p>
-            </div>
-          )}
-        </div>
+        <label className="space-y-2">
+          <span className={labelClass}>Birth Date</span>
+          <input
+            className={inputClass}
+            name="dateDisplay"
+            inputMode="numeric"
+            value={formData.dateDisplay || ''}
+            onChange={handleAdDateChange}
+            placeholder="DD / MM / YYYY"
+            required
+          />
+          <p className={helperClass}>Use your English birth date.</p>
+        </label>
 
         <div className="grid gap-4">
           <div className="space-y-2">
@@ -230,151 +288,262 @@ function BirthDetailsForm({ formData, onChange, onSubmit, isLoading }) {
               timeParts={timeParts}
               onChange={handleTimePartChange}
             />
-            <p className={helperClass}>
-              Enter exact birth time. Even a few minutes can affect Lagna and house placements.
-            </p>
-            <p className="text-xs leading-5 text-gold-200/55">
-              Even a 5-10 minute difference can affect your chart accuracy.
-            </p>
+            <p className={helperClass}>Exact birth time is crucial for accurate Lagna and house placements.</p>
           </div>
         </div>
 
-        <label className="space-y-2">
+        <label className="relative z-[120] block space-y-2 overflow-visible">
           <span className={labelClass}>Birth Place</span>
-          <input
-            className={inputClass}
-            name="place"
-            value={formData.place}
-            onChange={onChange}
-            placeholder="City, Country"
-            required
-          />
-          <p className={helperClass}>Timezone is automatically calculated from your birth place.</p>
+          <div className="relative">
+            <input
+              className={inputClass}
+              name="place"
+              value={formData.place}
+              onChange={handlePlaceChange}
+              onFocus={() => setIsPlaceFocused(true)}
+              onBlur={() => {
+                setTimeout(() => setIsPlaceFocused(false), 120);
+              }}
+              placeholder="City, Country"
+              required
+              autoComplete="off"
+            />
+            {showSuggestions && (
+              <ul className="absolute left-0 top-full z-[9999] isolate mt-1.5 w-full max-h-60 overflow-y-auto rounded-2xl border border-gold-400/35 bg-slate-900 p-2 shadow-2xl">
+                {placeSuggestions.map((suggestion) => (
+                  <li key={`${suggestion.displayName}-${suggestion.latitude}-${suggestion.longitude}`}>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        chooseSuggestion(suggestion);
+                      }}
+                      className="mb-1 w-full rounded-xl border border-transparent px-3 py-2 text-left text-xs text-ivory-100/80 transition last:mb-0 hover:border-gold-300/25 hover:bg-gold-300/10 hover:text-gold-100"
+                    >
+                      {suggestion.displayName}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <p className={helperClass}>{placeHelperText}</p>
+          <p className="text-xs leading-5 text-gold-200/55">
+            Timezone is auto-calculated from selected coordinates.
+          </p>
         </label>
+
+        {showLifeEvents && (
+          <div className="rounded-3xl border border-gold-400/12 bg-black/20 p-4">
+            <button
+              type="button"
+              onClick={onLifeEventsToggle}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
+              <span className={labelClass}>Significant life events (optional)</span>
+              <span className="text-gold-200/70">{lifeEventsExpanded ? '−' : '+'}</span>
+            </button>
+            <p className={`mt-2 text-xs leading-relaxed text-ivory-100/50 ${lifeEventsExpanded ? '' : 'line-clamp-2'}`}>
+              Add milestones as an exact day or approximate month/year. We match them to Vimshottari windows and
+              transits for rectification testing and a verification readout. Leave empty for chart-only.
+            </p>
+            {lifeEventsExpanded && (
+              <div className="mt-4 space-y-3">
+                {lifeEvents.length === 0 && (
+                  <p className="text-xs text-ivory-100/45">No events yet — add one if you want rectification testing.</p>
+                )}
+                {lifeEvents.map((evt, index) => (
+                  <div
+                    key={`life-${index}`}
+                    className="grid gap-2 rounded-2xl border border-gold-400/12 bg-black/30 p-3 sm:grid-cols-2"
+                  >
+                    <label className="space-y-1 sm:col-span-2">
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">When (precision)</span>
+                      <select
+                        className={inputClass}
+                        value={evt.datePrecision === 'monthYear' ? 'monthYear' : 'exact'}
+                        onChange={(e) => onLifeEventFieldChange(index, 'datePrecision', e.target.value)}
+                      >
+                        <option value="exact">Exact calendar day</option>
+                        <option value="monthYear">Approximate month &amp; year</option>
+                      </select>
+                    </label>
+                    {evt.datePrecision === 'monthYear' ? (
+                      <>
+                        <label className="space-y-1">
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Year (AD)</span>
+                          <input
+                            className={inputClass}
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="e.g. 2019"
+                            value={evt.approxYear ?? ''}
+                            onChange={(e) => onLifeEventFieldChange(index, 'approxYear', e.target.value)}
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Month</span>
+                          <select
+                            className={inputClass}
+                            value={evt.approxMonth != null && evt.approxMonth !== '' ? String(evt.approxMonth) : ''}
+                            onChange={(e) => onLifeEventFieldChange(index, 'approxMonth', e.target.value)}
+                          >
+                            <option value="">—</option>
+                            {GREG_MONTHS.map(([num, label]) => (
+                              <option key={num} value={String(num)}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </>
+                    ) : (
+                      <label className="space-y-1 sm:col-span-2">
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Date</span>
+                        <input
+                          className={inputClass}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="YYYY-MM-DD"
+                          value={evt.date || ''}
+                          onChange={(e) => onLifeEventFieldChange(index, 'date', e.target.value)}
+                        />
+                      </label>
+                    )}
+                    <label className="space-y-1 sm:col-span-2">
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Type</span>
+                      <select
+                        className={inputClass}
+                        value={evt.type || 'other'}
+                        onChange={(e) => onLifeEventFieldChange(index, 'type', e.target.value)}
+                      >
+                        {LIFE_EVENT_TYPES.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1 sm:col-span-2">
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Note (optional)</span>
+                      <input
+                        className={inputClass}
+                        type="text"
+                        placeholder="e.g. promotion, wedding weekend trip"
+                        value={evt.note || ''}
+                        onChange={(e) => onLifeEventFieldChange(index, 'note', e.target.value)}
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-gold-200/45">Impact</span>
+                      <select
+                        className={inputClass}
+                        value={evt.impact || ''}
+                        onChange={(e) => onLifeEventFieldChange(index, 'impact', e.target.value)}
+                      >
+                        {IMPACT_OPTIONS.map(([value, label]) => (
+                          <option key={value || 'auto'} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex items-end justify-end sm:col-span-1">
+                      <button
+                        type="button"
+                        onClick={() => onLifeEventRemove(index)}
+                        className="rounded-xl border border-red-400/25 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-200/90 hover:bg-red-500/10"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={onLifeEventAdd}
+                    disabled={lifeEvents.length >= 8}
+                    className="rounded-xl border border-gold-300/30 bg-gold-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-gold-100 transition hover:border-gold-300/50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Add event
+                  </button>
+                  <span className="self-center text-[11px] text-ivory-100/40">
+                    Max 8 · exact rows send YYYY-MM-DD; approximate sends YYYY-MM
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <motion.button
         whileHover={{ scale: isLoading ? 1 : 1.02 }}
         whileTap={{ scale: isLoading ? 1 : 0.98 }}
         disabled={isLoading}
-        className="mt-6 w-full rounded-2xl border border-gold-300/50 bg-gold-gradient px-5 py-4 text-sm font-semibold uppercase tracking-[0.25em] text-black shadow-glow transition disabled:cursor-not-allowed disabled:opacity-60"
+        className="relative z-0 mt-6 w-full rounded-2xl border border-gold-300/50 bg-gold-gradient px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-black shadow-glow transition sm:tracking-[0.25em] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? 'Calculating...' : 'Calculate My Chart'}
       </motion.button>
+      
+      {/* Restore Premium Access - always visible */}
+      <div className="mt-6 rounded-2xl border border-gold/20 bg-black/30 p-4 text-center">
+        <p className="text-sm text-gold/80 mb-2">
+          {demoUsed ? 'Already unlocked GrahaPath?' : 'Have premium access?'}
+        </p>
+        <button
+          type="button"
+          onClick={onRestorePremium}
+          className="mt-2 rounded-full border border-gold/30 bg-black/30 px-4 py-2 text-sm font-medium text-gold transition hover:border-gold/40 hover:bg-black/50"
+        >
+          Restore Premium Access
+        </button>
+      </div>
     </motion.form>
   );
 }
 
 function TimePicker({ timeParts, onChange }) {
-  function setNoon() {
-    onChange('hour', '12');
-    onChange('minute', '00');
-    onChange('meridiem', 'PM');
-  }
-
   return (
-    <div className="rounded-3xl border border-gold-400/12 bg-black/25 p-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-200/50">Select Time</p>
-        <button
-          type="button"
-          onClick={setNoon}
-          className="rounded-full border border-gold-300/20 bg-gold-300/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-100/80 transition hover:border-gold-300/40 hover:bg-gold-300/14"
-        >
-          Set 12:00 PM
-        </button>
-      </div>
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
-        <TimeColumn
-          label="Hour"
-          value={timeParts.hour}
+    <div className="grid w-full gap-2 sm:flex sm:items-center sm:gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:flex-1 sm:items-center sm:gap-3">
+        <TimeDropdown
+          label="Birth hour"
+          value={timeParts.hour || '04'}
           options={hourOptions}
-          onSelect={(value) => onChange('hour', value)}
+          kind="hour"
+          onChange={(val) => onChange('hour', val)}
+          className="flex-1"
         />
-        <TimeColumn
-          label="Minute"
-          value={timeParts.minute}
+
+        <span className="text-center text-base font-semibold text-gold-200/70">:</span>
+
+        <TimeDropdown
+          label="Birth minute"
+          value={timeParts.minute || '30'}
           options={minuteOptions}
-          onSelect={(value) => onChange('minute', value)}
+          kind="minute"
+          onChange={(val) => onChange('minute', val)}
+          className="flex-1"
         />
-        <div className="grid gap-2">
-          {['AM', 'PM'].map((meridiem) => {
-            const isSelected = timeParts.meridiem === meridiem;
-
-            return (
-              <button
-                key={meridiem}
-                type="button"
-                onClick={() => onChange('meridiem', meridiem)}
-                className={`rounded-2xl border px-4 py-3 text-xs font-semibold tracking-[0.18em] transition ${
-                  isSelected
-                    ? 'border-gold-300/40 bg-gold-300/18 text-gold-100'
-                    : 'border-gold-400/12 bg-black/35 text-ivory-100/55 hover:border-gold-300/35 hover:text-gold-100'
-                }`}
-              >
-                {meridiem}
-              </button>
-            );
-          })}
-        </div>
       </div>
-      <p className="mt-3 rounded-2xl border border-gold-300/10 bg-black/25 px-4 py-2 text-center text-sm text-gold-100/85">
-        Selected time: {formatSelectedTime(timeParts)}
-      </p>
-    </div>
-  );
-}
 
-function TimeColumn({ label, value, options, onSelect }) {
-  return (
-    <div className="rounded-2xl border border-gold-400/12 bg-black/35 p-2">
-      <p className="px-2 pb-2 text-[10px] uppercase tracking-[0.22em] text-gold-200/50">{label}</p>
-      <div className="max-h-32 overflow-y-auto pr-1">
-        <div className="grid gap-1">
-          {options.map((option) => {
-            const isSelected = value === option;
-
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onSelect(option)}
-                className={`rounded-xl px-2 py-2 text-sm transition ${
-                  isSelected
-                    ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
-                    : 'text-ivory-100/65 hover:bg-gold-300/8 hover:text-gold-100'
-                }`}
-              >
-                {option}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MonthMenu({ selectedMonth, onSelect }) {
-  return (
-    <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-40 rounded-2xl border border-gold-300/15 bg-[#0f0e0b]/95 p-2 shadow-[0_18px_42px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-      <div className="grid max-h-56 gap-1 overflow-y-auto pr-1">
-        {nepaliMonths.map((month, index) => {
-          const value = index + 1;
-          const isSelected = selectedMonth === value;
-
+      <div className="inline-flex h-11 w-full overflow-hidden rounded-xl border border-gold-400/35 bg-[#020409] shadow-[0_0_18px_rgba(0,0,0,0.88)] sm:w-auto sm:flex-1">
+        {['AM', 'PM'].map((meridiem) => {
+          const isSelected = (timeParts.meridiem || 'AM') === meridiem;
           return (
             <button
-              key={month}
+              key={meridiem}
               type="button"
-              onClick={() => onSelect(value)}
-              className={`rounded-xl px-3 py-2 text-left text-sm transition ${
+              onClick={() => onChange('meridiem', meridiem)}
+              className={`flex-1 px-2 text-xs font-semibold tracking-[0.12em] transition ${
                 isSelected
-                  ? 'border border-gold-300/35 bg-gold-300/18 text-gold-100'
-                  : 'text-ivory-100/72 hover:bg-gold-300/8 hover:text-gold-100'
+                  ? 'bg-gold-300/20 text-gold-100'
+                  : 'text-ivory-100/60 hover:bg-gold-300/10 hover:text-gold-100'
               }`}
             >
-              {month}
+              {meridiem}
             </button>
           );
         })}
@@ -383,39 +552,120 @@ function MonthMenu({ selectedMonth, onSelect }) {
   );
 }
 
-function TypedBsInput({
-  label,
-  value,
-  placeholder,
-  maxLength,
-  helper,
-  displayValue,
-  readOnly = false,
-  onClick,
-  onChange,
-  children
-}) {
+function TimeDropdown({ label, value, options, onChange, kind, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const [inputValue, setInputValue] = useState(value);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function handleOutsideClick(event) {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    function handleEscape(event) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  function toggle() {
+    setOpen((current) => !current);
+  }
+
+  function handleSelect(option) {
+    onChange(option);
+    setOpen(false);
+  }
+
+  function clampValue(raw) {
+    if (!raw) return '';
+    let num = Number(raw);
+    if (Number.isNaN(num)) return '';
+    if (kind === 'hour') {
+      if (num < 1) num = 1;
+      if (num > 12) num = 12;
+    } else if (kind === 'minute') {
+      if (num < 0) num = 0;
+      if (num > 59) num = 59;
+    }
+    return String(num).padStart(2, '0');
+  }
+
+  function handleInputChange(event) {
+    const raw = event.target.value.replace(/\D/g, '').slice(0, 2);
+    setInputValue(raw);
+  }
+
+  function handleInputBlur() {
+    const normalized = clampValue(inputValue);
+    if (!normalized) {
+      setInputValue(value);
+      return;
+    }
+    if (normalized !== value) {
+      onChange(normalized);
+    }
+    setInputValue(normalized);
+  }
+
   return (
-    <label className="relative rounded-2xl border border-gold-400/15 bg-black/35 px-4 py-3 transition focus-within:border-gold-300/60 focus-within:ring-2 focus-within:ring-gold-400/15">
-      <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-200/50">
-        {label}
-      </span>
-      <input
-        className="mt-1 w-full bg-transparent text-sm text-ivory-100 outline-none placeholder:text-ivory-100/28"
-        inputMode="numeric"
-        value={displayValue || value || ''}
-        readOnly={readOnly}
-        onClick={onClick}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        required
-      />
-      {helper && (
-        <span className="mt-1 block text-[11px] text-gold-200/55">{helper}</span>
+    <div ref={rootRef} className={`relative z-[300] min-w-[72px] sm:min-w-[76px] ${className}`}>
+      <div className="flex h-11 w-full items-center justify-between rounded-xl border border-gold-400/35 bg-[#020409] px-2 text-sm text-ivory-100 shadow-[0_0_18px_rgba(0,0,0,0.88)] outline-none transition focus-within:border-gold-300/70 focus-within:ring-2 focus-within:ring-gold-400/25">
+        <input
+          aria-label={label}
+          type="text"
+          inputMode="numeric"
+          value={inputValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          className="w-full bg-transparent font-mono text-sm text-ivory-100 outline-none placeholder:text-ivory-100/40"
+          placeholder={value}
+        />
+        <button
+          type="button"
+          onClick={toggle}
+          className="ml-1 px-1 text-[10px] text-gold-200/70 hover:text-gold-100"
+          aria-label={`${label} options`}
+        >
+          ▾
+        </button>
+      </div>
+      {open && (
+        <div className="absolute z-[1200] mt-2 w-full rounded-2xl border border-gold-400/45 bg-black shadow-[0_24px_56px_rgba(0,0,0,0.98)]">
+          <ul className="max-h-52 overflow-y-auto py-1 text-sm text-ivory-100">
+            {options.map((option) => {
+              const active = option === value;
+              return (
+                <li key={option}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(option)}
+                    className={`flex w-full items-center px-3 py-1.5 text-left transition ${
+                      active
+                        ? 'bg-amber-500/20 text-amber-100'
+                        : 'text-ivory-100/90 hover:bg-amber-400/15 hover:text-amber-50'
+                    }`}
+                  >
+                    <span className="font-mono">{option}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
-      {children}
-    </label>
+    </div>
   );
 }
 
