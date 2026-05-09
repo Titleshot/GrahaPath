@@ -2,13 +2,29 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const chartRoutes = require('./routes/chartRoutes');
-const chatRoutes = require('./routes/chatRoutes');
-const feedbackRoutes = require('./routes/feedbackRoutes');
-const securityRoutes = require('./routes/securityRoutes');
-const premiumRoutes = require('./routes/premiumRoutes');
-const { probeGeminiReadiness, getGeminiRuntimeStats } = require('./services/grahapathGeminiService');
-const { getChatReliabilityStats } = require('./services/chatReliabilityService');
+function safeRequire(modulePath, fallbackFactory) {
+  try {
+    return require(modulePath);
+  } catch (error) {
+    console.warn(`[GrahaPath] Optional module unavailable: ${modulePath} (${error?.code || 'error'})`);
+    return fallbackFactory();
+  }
+}
+
+const chartRoutes = safeRequire('./routes/chartRoutes', () => express.Router());
+const chatRoutes = safeRequire('./routes/chatRoutes', () => express.Router());
+const feedbackRoutes = safeRequire('./routes/feedbackRoutes', () => express.Router());
+const securityRoutes = safeRequire('./routes/securityRoutes', () => express.Router());
+const premiumRoutes = safeRequire('./routes/premiumRoutes', () => express.Router());
+const geminiRuntime = safeRequire('./services/grahapathGeminiService', () => ({
+  probeGeminiReadiness: async () => ({ ok: false, reason: 'module_unavailable' }),
+  getGeminiRuntimeStats: () => ({ available: false })
+}));
+const chatReliabilityRuntime = safeRequire('./services/chatReliabilityService', () => ({
+  getChatReliabilityStats: () => ({ available: false })
+}));
+const { probeGeminiReadiness, getGeminiRuntimeStats } = geminiRuntime;
+const { getChatReliabilityStats } = chatReliabilityRuntime;
 
 if (!process.env.GUARDRAIL_PRESET) {
   process.env.GUARDRAIL_PRESET = 'strict';
