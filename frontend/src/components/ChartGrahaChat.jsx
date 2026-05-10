@@ -104,7 +104,11 @@ export default function ChartGrahaChat({
   const [insightPulse, setInsightPulse] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [premiumDemoUnlocked, setPremiumDemoUnlocked] = useState(false);
+  const [challengeState, setChallengeState] = useState(null);
+  const [challengeToken, setChallengeToken] = useState('');
   const bottomRef = useRef(null);
+  const turnstileContainerRef = useRef(null);
+  const turnstileWidgetIdRef = useRef(null);
   const suggestedPrompts = useMemo(() => {
     if (forceUnlocked && !teaserMode) return DAILY_FOCUS_PROMPTS;
     return buildContextualPrompts(chart, messages);
@@ -122,6 +126,55 @@ export default function ChartGrahaChat({
     const id = setTimeout(() => setInsightPulse(false), 450);
     return () => clearTimeout(id);
   }, [insightPulse]);
+
+  useEffect(() => {
+    if (!challengeState?.required || challengeState.provider !== 'turnstile' || !challengeState.siteKey) return;
+    let cancelled = false;
+
+    function renderWidget() {
+      if (cancelled) return;
+      if (!window.turnstile || !turnstileContainerRef.current) return;
+      if (turnstileWidgetIdRef.current != null) return;
+      turnstileWidgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
+        sitekey: challengeState.siteKey,
+        theme: 'dark',
+        callback: (token) => {
+          setChallengeToken(String(token || ''));
+        },
+        'expired-callback': () => {
+          setChallengeToken('');
+        },
+        'error-callback': () => {
+          setChallengeToken('');
+        }
+      });
+    }
+
+    if (window.turnstile) {
+      renderWidget();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    const existing = Array.from(document.querySelectorAll('script')).find((s) => s.src === src);
+    const onLoad = () => renderWidget();
+    if (existing) {
+      existing.addEventListener('load', onLoad);
+    } else {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.defer = true;
+      script.addEventListener('load', onLoad);
+      document.head.appendChild(script);
+    }
+    return () => {
+      cancelled = true;
+      if (existing) existing.removeEventListener('load', onLoad);
+    };
+  }, [challengeState]);
 
   const chartKey = chart?.utcDateTime || chart?.localDateTime || '';
 
@@ -248,7 +301,8 @@ export default function ChartGrahaChat({
         headers: {
           'Content-Type': 'application/json',
           'x-gp-client-fp': getClientFingerprint(),
-          'x-gp-demo-premium': forceUnlocked || premiumDemoUnlocked ? 'true' : 'false'
+          'x-gp-demo-premium': forceUnlocked || premiumDemoUnlocked ? 'true' : 'false',
+          ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {})
         },
         body: JSON.stringify({
           chart,
@@ -256,12 +310,31 @@ export default function ChartGrahaChat({
           userPlan,
           premiumEmail: premiumEmail || undefined,
           conversationHistory: historyForApi,
-          surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message'
+          surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
+          challengeToken: challengeToken || undefined
         })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (data?.error === 'ChallengeRequired') {
+          setChallengeState({
+            required: true,
+            provider: String(data?.challenge?.provider || 'none'),
+            siteKey: String(data?.challenge?.siteKey || '').trim(),
+            reasons: Array.isArray(data?.challenge?.reasons) ? data.challenge.reasons : []
+          });
+        }
         throw new Error(data.message || `Chat failed (${res.status})`);
+      }
+      setChallengeState(null);
+      setChallengeToken('');
+      if (window.turnstile && turnstileWidgetIdRef.current != null) {
+        try {
+          window.turnstile.remove(turnstileWidgetIdRef.current);
+        } catch {
+          // ignore widget cleanup failures
+        }
+        turnstileWidgetIdRef.current = null;
       }
       const reply = typeof data.answer === 'string' ? data.answer.trim() : '';
       setMessages((prev) => [...prev, { role: 'assistant', content: prettifyAssistantText(reply || '…') }]);
@@ -370,7 +443,30 @@ export default function ChartGrahaChat({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className="mt-5 flex flex-col gap-3">
+      <form onSubmit={handleSend} className="mt-5 flex min-w-0 flex-col gap-3">
+        {challengeState?.required ? (
+          <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3 text-xs text-amber-100">
+            <p className="font-semibold">Quick security check required</p>
+            <p className="mt-1">
+              Please complete this one-time check to continue chatting.
+              {Array.isArray(challengeState.reasons) && challengeState.reasons.length > 0
+                ? ` (${challengeState.reasons.join(', ')})`
+                : ''}
+            </p>
+            {challengeState.provider === 'turnstile' && challengeState.siteKey ? (
+              <div className="mt-2">
+                <div ref={turnstileContainerRef} />
+                <p className="mt-1 text-[11px] text-amber-100/80">
+                  {challengeToken ? 'Verified. You can send your message now.' : 'Waiting for verification...'}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-amber-100/80">
+                Challenge provider is not configured fully on server.
+              </p>
+            )}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {suggestedPrompts.map((prompt) => (
             <button
@@ -385,7 +481,7 @@ export default function ChartGrahaChat({
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={input}
@@ -397,8 +493,14 @@ export default function ChartGrahaChat({
           />
           <button
             type="submit"
-            disabled={sending || greetingLoading || !input.trim() || (teaserMode && !forceUnlocked && insightsLeft <= 0)}
-            className="min-h-[48px] rounded-2xl border border-amber-400/45 bg-gradient-to-r from-amber-900/45 to-violet-900/40 px-6 py-2 text-sm font-medium text-gold transition hover:border-gold/60 disabled:opacity-40"
+            disabled={
+              sending ||
+              greetingLoading ||
+              !input.trim() ||
+              (teaserMode && !forceUnlocked && insightsLeft <= 0) ||
+              Boolean(challengeState?.required && challengeState.provider === 'turnstile' && !challengeToken)
+            }
+            className="min-h-[48px] rounded-2xl border border-amber-400/45 bg-gradient-to-r from-amber-900/45 to-violet-900/40 px-6 py-2 text-sm font-medium text-gold transition hover:border-gold/60 disabled:opacity-40 sm:w-auto"
           >
             Send
           </button>

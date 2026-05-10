@@ -487,17 +487,17 @@ function BirthDetailsForm({
         {isLoading ? 'Calculating...' : 'Calculate My Chart'}
       </motion.button>
       
-      {/* Restore Premium Access - always visible */}
+      {/* Unlock access helper - always visible */}
       <div className="mt-6 rounded-2xl border border-gold/20 bg-black/30 p-4 text-center">
         <p className="text-sm text-gold/80 mb-2">
-          {demoUsed ? 'Already unlocked GrahaPath?' : 'Have premium access?'}
+          {demoUsed ? 'Already paid and unlocked before?' : 'Already paid before?'}
         </p>
         <button
           type="button"
           onClick={onRestorePremium}
           className="mt-2 rounded-full border border-gold/30 bg-black/30 px-4 py-2 text-sm font-medium text-gold transition hover:border-gold/40 hover:bg-black/50"
         >
-          Restore Premium Access
+          Unlock my access
         </button>
       </div>
     </motion.form>

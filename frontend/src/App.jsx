@@ -5,10 +5,12 @@ import LoadingSequence from './components/LoadingSequence';
 import DemoExperience from './components/DemoExperience';
 import PaidUnlockedExperience from './components/PaidUnlockedExperience';
 import PaymentPreviewModal from './components/PaymentPreviewModal';
+import PaymentSuccessPage from './components/PaymentSuccessPage';
 import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
 import { getClientFingerprint } from './lib/clientFingerprint';
 import { API_BASE, withApiBase } from './lib/apiBase';
+import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { 
   generateChartFingerprint, 
   hasChartUsedDemo, 
@@ -20,6 +22,7 @@ import {
 const API_URL = withApiBase('/api/generate-chart');
 const PREMIUM_CHECKOUT_URL = withApiBase('/api/premium/checkout-session');
 const PREMIUM_RESTORE_URL = withApiBase('/api/premium/restore');
+const KOFI_PENDING_KEY = 'grahapath:kofi-pending';
 
 /** Vercel/static hosts have no `/api` proxy unless you set API base URL at build time. */
 const showProdApiMisconfig =
@@ -113,6 +116,14 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    trackPageView(routePath || '/');
+  }, [routePath]);
+
   const navigateTo = (path) => {
     if (typeof window === 'undefined') return;
     const next = path || '/';
@@ -181,6 +192,8 @@ export default function App() {
   const [premiumStatus, setPremiumStatus] = useState('');
   const [premiumStatusTone, setPremiumStatusTone] = useState('success');
   const [checkoutRetryMode, setCheckoutRetryMode] = useState(false);
+  const [pendingKofiRestore, setPendingKofiRestore] = useState(null);
+  const [isAutoRestoringKofi, setIsAutoRestoringKofi] = useState(false);
   const resultsRef = useRef(null);
 
   useEffect(() => {
@@ -394,6 +407,11 @@ export default function App() {
       }
 
       setChart(data);
+      trackEvent('chart_generated', {
+        date_type: String(formData.dateType || 'AD').toLowerCase(),
+        has_location: Boolean(formData.location),
+        has_life_events: Array.isArray(payload.lifeEvents) && payload.lifeEvents.length > 0
+      });
     } catch (requestError) {
       const raw = typeof requestError?.message === 'string' ? requestError.message : String(requestError || '');
       const netHint =
@@ -493,6 +511,19 @@ export default function App() {
     return String(value || '').trim().toLowerCase();
   }
 
+  function savePendingKofiRestore(nextPending) {
+    setPendingKofiRestore(nextPending || null);
+    try {
+      if (nextPending) {
+        window.localStorage.setItem(KOFI_PENDING_KEY, JSON.stringify(nextPending));
+      } else {
+        window.localStorage.removeItem(KOFI_PENDING_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+
   function applyPremiumRestoreResult(data, fallbackEmail) {
     const plan = data?.premium?.plan === 'quick' ? 'quick' : 'full';
     setSelectedTier(plan);
@@ -513,6 +544,87 @@ export default function App() {
     }
     return 'Premium restored. Your access is active—generate your chart to view unlocked insights.';
   }
+
+  async function restorePremiumNow(email, { quiet = false } = {}) {
+    const normalizedEmail = sanitizeEmail(email);
+    if (!normalizedEmail) {
+      throw new Error('Email is required to restore premium.');
+    }
+    const response = await fetch(PREMIUM_RESTORE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        chartFingerprint: chartFingerprint || null
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.message || 'No premium access found for this email.');
+    }
+    const message = applyPremiumRestoreResult(data, normalizedEmail);
+    const plan = data?.premium?.plan === 'quick' ? 'quick' : 'full';
+    trackEvent('unlock_success', {
+      method: 'restore',
+      plan,
+      source: quiet ? 'background' : 'manual',
+      has_chart: Boolean(data?.chart && typeof data.chart === 'object')
+    });
+    savePendingKofiRestore(null);
+    if (!quiet) {
+      setPremiumStatusTone('success');
+      setPremiumStatus(`Premium unlocked for ${normalizedEmail}. ${message}`);
+      window.setTimeout(() => setPremiumStatus(''), 7000);
+    }
+    return { message, plan };
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(KOFI_PENDING_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const email = sanitizeEmail(parsed?.email);
+      if (!email) return;
+      const plan = parsed?.plan === 'quick' ? 'quick' : 'full';
+      setPendingKofiRestore({
+        email,
+        plan,
+        startedAt: Number(parsed?.startedAt) || Date.now()
+      });
+    } catch {
+      // ignore malformed localStorage payload
+    }
+  }, []);
+
+  useEffect(() => {
+    if (routePath === '/payment-success') return;
+    if (!pendingKofiRestore?.email) return;
+    if (paidUnlocked) return;
+    if (isAutoRestoringKofi) return;
+
+    const onFocus = async () => {
+      if (isAutoRestoringKofi) return;
+      setIsAutoRestoringKofi(true);
+      setPremiumStatusTone('success');
+      setPremiumStatus('Checking your payment and unlocking premium...');
+      try {
+        await restorePremiumNow(pendingKofiRestore.email, { quiet: false });
+      } catch (error) {
+        setPremiumStatusTone('warning');
+        setPremiumStatus(
+          error?.message ||
+            'Payment may still be processing. Click "Unlock my access" once more in a few seconds.'
+        );
+      } finally {
+        setIsAutoRestoringKofi(false);
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [routePath, pendingKofiRestore, paidUnlocked, isAutoRestoringKofi, chartFingerprint]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -545,7 +657,7 @@ export default function App() {
         if (cancelled) return;
         setPremiumStatus(
           restoreError?.message ||
-            'Payment received. Please use Restore Premium Access once if auto-restore did not complete.'
+            'Payment received. Please click "Unlock my access" once if auto-unlock did not complete.'
         );
       } finally {
         if (cancelled) return;
@@ -599,6 +711,15 @@ export default function App() {
   if (routePath === '/about') {
     return <AboutPage onBack={handleBack} onNavigate={navigateTo} />;
   }
+  if (routePath === '/payment-success') {
+    return (
+      <PaymentSuccessPage
+        onNavigate={navigateTo}
+        restorePremiumNow={restorePremiumNow}
+        savePendingKofiRestore={savePendingKofiRestore}
+      />
+    );
+  }
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
@@ -649,7 +770,7 @@ export default function App() {
                 onClick={() => setShowPaymentPreview(true)}
                 className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
               >
-                Restore Premium Access
+                Unlock my access
               </button>
             </div>
           </div>
@@ -663,18 +784,45 @@ export default function App() {
             }`}
           >
             <p>{premiumStatus}</p>
-            {premiumStatusTone === 'warning' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutRetryMode(true);
-                  setShowPaymentPreview(true);
-                }}
-                className="rounded-full border border-amber-300/55 bg-amber-300/10 px-4 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/20"
-              >
-                Try checkout again
-              </button>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {pendingKofiRestore?.email && !paidUnlocked ? (
+                <button
+                  type="button"
+                  disabled={isAutoRestoringKofi}
+                  onClick={async () => {
+                    setPremiumStatusTone('success');
+                    setIsAutoRestoringKofi(true);
+                    setPremiumStatus('Checking your payment and unlocking premium...');
+                    try {
+                      await restorePremiumNow(pendingKofiRestore.email, { quiet: false });
+                    } catch (error) {
+                      setPremiumStatusTone('warning');
+                      setPremiumStatus(
+                        error?.message ||
+                          'Payment may still be processing. Please wait a few seconds and try again.'
+                      );
+                    } finally {
+                      setIsAutoRestoringKofi(false);
+                    }
+                  }}
+                  className="rounded-full border border-emerald-300/55 bg-emerald-300/10 px-4 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/20 disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {isAutoRestoringKofi ? 'Unlocking...' : `Unlock my access for ${pendingKofiRestore.email}`}
+                </button>
+              ) : null}
+              {premiumStatusTone === 'warning' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckoutRetryMode(true);
+                    setShowPaymentPreview(true);
+                  }}
+                  className="rounded-full border border-amber-300/55 bg-amber-300/10 px-4 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/20"
+                >
+                  Try checkout again
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -686,7 +834,7 @@ export default function App() {
           }`}
         >
           <div
-            className={`relative z-50 overflow-visible ${
+            className={`relative z-50 min-w-0 overflow-visible ${
               hasMeaningfulRightPanel ? '' : 'mx-auto w-full max-w-[900px]'
             }`}
           >
@@ -708,7 +856,7 @@ export default function App() {
           {hasMeaningfulRightPanel ? (
             <div
               ref={resultsRef}
-              className="min-h-[560px] scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-6 lg:min-h-[720px] lg:p-7"
+              className="min-h-[500px] min-w-0 overflow-x-hidden scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:min-h-[560px] sm:p-5 lg:min-h-[720px] lg:p-7"
             >
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -862,7 +1010,7 @@ export default function App() {
           ) : (
             <div
               ref={resultsRef}
-              className="mx-auto min-h-[420px] w-full max-w-[900px] scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-6"
+              className="mx-auto min-h-[420px] w-full max-w-[900px] min-w-0 overflow-x-hidden scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-6"
             >
               <motion.div
                 key="empty"
@@ -956,9 +1104,9 @@ export default function App() {
               plan: normalizedTier,
               successUrl:
                 typeof window !== 'undefined'
-                  ? `${window.location.origin}/?premium_auto_restore=1&premium_status=success&premium_email=${encodeURIComponent(
+                  ? `${window.location.origin}/payment-success?email=${encodeURIComponent(
                       sanitizeEmail(email)
-                    )}`
+                    )}&plan=${encodeURIComponent(normalizedTier)}`
                   : '',
               cancelUrl:
                 typeof window !== 'undefined'
@@ -977,15 +1125,27 @@ export default function App() {
           if (!response.ok) {
             throw new Error(data?.message || 'Could not start checkout.');
           }
+          trackEvent('checkout_started', {
+            plan: normalizedTier,
+            provider: String(data?.provider || 'unknown').toLowerCase()
+          });
           const checkoutUrl = String(data?.checkoutUrl || '').trim();
           if (!checkoutUrl) {
             throw new Error('Checkout URL missing from server response.');
           }
           const provider = String(data?.provider || 'gumroad').toLowerCase();
           if (typeof window !== 'undefined' && provider === 'kofi') {
+            const normalizedEmail = sanitizeEmail(email);
+            const pending = {
+              email: normalizedEmail,
+              plan: normalizedTier,
+              startedAt: Date.now()
+            };
+            savePendingKofiRestore(pending);
             window.setTimeout(() => setPremiumStatus(''), 25000);
+            setPremiumStatusTone('success');
             setPremiumStatus(
-              'Ko-fi checkout opened in a new tab. After payment completes (usually seconds), click Restore Premium with the same email you used.'
+              `Ko-fi opened in a new tab. After paying, open ${window.location.origin}/payment-success — or return here and use "Unlock my access for ${normalizedEmail}".`
             );
             setShowPaymentPreview(false);
             window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
@@ -998,30 +1158,18 @@ export default function App() {
         onRestorePremium={async (email) => {
           setPremiumStatusTone('success');
           setCheckoutRetryMode(false);
-          const response = await fetch(PREMIUM_RESTORE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              email,
-              chartFingerprint: chartFingerprint || null
-            })
+          trackEvent('restore_clicked', {
+            source: 'payment_modal',
+            has_chart_fingerprint: Boolean(chartFingerprint)
           });
-          let data;
-          try {
-            data = await response.json();
-          } catch (error) {
-            data = { message: 'Invalid response from server' };
-          }
-          if (!response.ok) {
-            throw new Error(data?.message || 'No premium access found for this email.');
-          }
-          const message = applyPremiumRestoreResult(data, email);
+          const message = (await restorePremiumNow(email, { quiet: true }))?.message;
           setShowPaymentPreview(false);
           window.setTimeout(() => {
             document.getElementById('paid-unlocked-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }, 120);
           return { message };
         }}
+        suggestedRestoreEmail={pendingKofiRestore?.email || ''}
       />
       <footer className="relative z-10 mx-auto mt-4 w-full max-w-[1400px] px-4 pb-8 text-center text-xs text-ivory/55 sm:px-6 lg:px-10">
         <a
@@ -1067,7 +1215,19 @@ export default function App() {
         >
           Disclaimer
         </a>
+        <span className="mx-2">·</span>
+        <a
+          className="hover:text-gold"
+          href={buildContactMailto()}
+          onClick={() => {
+            setFeedbackStatus('If your email app does not open, please email radheradhe742@proton.me directly.');
+            window.setTimeout(() => setFeedbackStatus(''), 5000);
+          }}
+        >
+          Contact
+        </a>
       </footer>
     </main>
   );
 }
+

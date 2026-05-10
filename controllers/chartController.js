@@ -14,7 +14,14 @@ const {
   checkAndRecordNewProfile,
   checkBurstLimit
 } = require('../services/antiBypassService');
-const { issueSessionToken, buildSessionCookie } = require('../services/sessionTokenService');
+const {
+  issueSessionToken,
+  buildSessionCookie,
+  issueDeviceToken,
+  verifyDeviceToken,
+  readDeviceTokenFromRequest,
+  buildDeviceCookie
+} = require('../services/sessionTokenService');
 const { applyClientChartAccess } = require('../services/chartClientRedaction');
 const { buildPanchangaForDate } = require('../services/currentAstronomyService');
 const { saveChartForEmail } = require('../services/premiumAccessService');
@@ -390,7 +397,15 @@ async function generateChart(req, res, next) {
     const chart = await buildChartFromRequest(req.body);
     chart.profileHash = profileHash;
     const sessionToken = issueSessionToken({ profileHash, fp: clientFingerprint.slice(0, 64) });
-    res.setHeader('Set-Cookie', buildSessionCookie(sessionToken));
+    const cookies = [buildSessionCookie(sessionToken)];
+    const existingDevice = verifyDeviceToken(readDeviceTokenFromRequest(req));
+    if (!existingDevice.valid) {
+      const deviceToken = issueDeviceToken({
+        fp: clientFingerprint.slice(0, 64)
+      });
+      cookies.push(buildDeviceCookie(deviceToken));
+    }
+    res.setHeader('Set-Cookie', cookies);
     chart.accuracy = buildAccuracySummary(chart);
     const lifeEvents = Array.isArray(req.body?.lifeEvents) ? req.body.lifeEvents : [];
     chart.timeRectification = evaluateBirthTimeRectification(chart, lifeEvents);

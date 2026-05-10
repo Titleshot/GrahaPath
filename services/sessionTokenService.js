@@ -2,6 +2,8 @@ const crypto = require('crypto');
 
 const TOKEN_TTL_SEC = Math.max(3600, Number(process.env.PAYWALL_SESSION_TTL_SEC || 30 * 24 * 60 * 60));
 const TOKEN_NAME = 'gp_session';
+const DEVICE_TOKEN_NAME = 'gp_device';
+const DEVICE_TTL_SEC = Math.max(7 * 24 * 60 * 60, Number(process.env.PAYWALL_DEVICE_TTL_SEC || 180 * 24 * 60 * 60));
 
 function base64url(input) {
   return Buffer.from(input)
@@ -36,6 +38,18 @@ function issueSessionToken(payload = {}) {
   return `${encoded}.${sig}`;
 }
 
+function issueDeviceToken(payload = {}) {
+  const body = {
+    ...payload,
+    did: payload.did || crypto.randomBytes(16).toString('hex'),
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + DEVICE_TTL_SEC
+  };
+  const encoded = base64url(JSON.stringify(body));
+  const sig = sign(encoded);
+  return `${encoded}.${sig}`;
+}
+
 function verifySessionToken(token) {
   const [encoded, sig] = String(token || '').split('.');
   if (!encoded || !sig) return { valid: false, reason: 'malformed' };
@@ -49,6 +63,23 @@ function verifySessionToken(token) {
   }
   const now = Math.floor(Date.now() / 1000);
   if (!Number.isFinite(data.exp) || data.exp < now) return { valid: false, reason: 'expired' };
+  return { valid: true, payload: data };
+}
+
+function verifyDeviceToken(token) {
+  const [encoded, sig] = String(token || '').split('.');
+  if (!encoded || !sig) return { valid: false, reason: 'malformed' };
+  const expected = sign(encoded);
+  if (sig !== expected) return { valid: false, reason: 'bad_signature' };
+  let data;
+  try {
+    data = JSON.parse(fromBase64url(encoded));
+  } catch {
+    return { valid: false, reason: 'bad_payload' };
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(data.exp) || data.exp < now) return { valid: false, reason: 'expired' };
+  if (typeof data.did !== 'string' || !data.did.trim()) return { valid: false, reason: 'missing_did' };
   return { valid: true, payload: data };
 }
 
@@ -71,15 +102,29 @@ function readSessionTokenFromRequest(req) {
   return cookies[TOKEN_NAME] || '';
 }
 
+function readDeviceTokenFromRequest(req) {
+  const cookies = parseCookies(req);
+  return cookies[DEVICE_TOKEN_NAME] || '';
+}
+
 function buildSessionCookie(token) {
   return `${TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${TOKEN_TTL_SEC}`;
 }
 
+function buildDeviceCookie(token) {
+  return `${DEVICE_TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${DEVICE_TTL_SEC}`;
+}
+
 module.exports = {
   TOKEN_NAME,
+  DEVICE_TOKEN_NAME,
   issueSessionToken,
+  issueDeviceToken,
   verifySessionToken,
+  verifyDeviceToken,
   readSessionTokenFromRequest,
-  buildSessionCookie
+  readDeviceTokenFromRequest,
+  buildSessionCookie,
+  buildDeviceCookie
 };
 

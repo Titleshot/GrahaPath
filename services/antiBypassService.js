@@ -175,6 +175,30 @@ async function checkAndUseFreeMessage(identityHash) {
   return { allowed: true, used, limit: FREE_CHAT_LIMIT };
 }
 
+function toIpBucket(ip) {
+  const raw = String(ip || 'unknown').trim();
+  if (!raw || raw === 'unknown') return 'unknown';
+  if (raw.includes(':')) {
+    // IPv6 or IPv4-mapped IPv6: keep a coarse /64-ish prefix for privacy + stability.
+    const parts = raw.split(':').filter(Boolean);
+    return `v6:${parts.slice(0, 4).join(':')}`;
+  }
+  const parts = raw.split('.');
+  if (parts.length === 4) {
+    return `v4:${parts[0]}.${parts[1]}.${parts[2]}`;
+  }
+  return raw;
+}
+
+async function checkAndUseFreeMessageBound({ profileHash, ip, deviceId, fallbackIdentityHash }) {
+  const safeProfile = String(profileHash || '').trim();
+  const safeDevice = String(deviceId || '').trim().slice(0, 96) || 'unknown-device';
+  const ipBucket = toIpBucket(ip);
+  const legacy = String(fallbackIdentityHash || '').trim() || 'legacy';
+  const composite = stableHash({ profileHash: safeProfile, ipBucket, device: safeDevice, legacy });
+  return checkAndUseFreeMessage(composite);
+}
+
 async function checkBurstLimit(ip) {
   const minuteBucket = Math.floor(nowMs() / 60000);
   const key = `anti:burst:${ip || 'unknown'}:${minuteBucket}`;
@@ -204,6 +228,7 @@ module.exports = {
   extractClientFingerprint,
   checkAndRecordNewProfile,
   checkAndUseFreeMessage,
+  checkAndUseFreeMessageBound,
   checkBurstLimit,
   assessAbuseRisk,
   clearIdentityUsage,

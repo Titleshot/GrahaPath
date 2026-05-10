@@ -63,7 +63,7 @@ export default function KundaliWheel({
 
   return (
     <motion.div
-      className="glass-panel p-4 sm:p-6"
+      className="glass-panel overflow-hidden p-3 sm:p-6"
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
@@ -74,7 +74,7 @@ export default function KundaliWheel({
         </div>
       </div>
 
-      <div className="relative mx-auto aspect-square w-full max-w-[560px]">
+      <div className="relative mx-auto aspect-square w-full max-w-[88vw] sm:max-w-[560px]">
         <svg
           viewBox="0 0 300 300"
           className={`h-full w-full drop-shadow-[0_0_24px_rgba(218,165,32,0.2)] transition ${
