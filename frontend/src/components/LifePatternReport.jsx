@@ -54,16 +54,6 @@ function strongestInterpretations(chart, limit = 3) {
     .slice(0, limit);
 }
 
-function buildKeyInsight(chart) {
-  const { interpretation: sun } = planetSignal(chart, 'Sun');
-  const { interpretation: moon } = planetSignal(chart, 'Moon');
-  const { interpretation: saturn } = planetSignal(chart, 'Saturn');
-  const strengths = joinHuman([sun?.strength, moon?.strength]);
-  const pressure = joinHuman([moon?.challenge, saturn?.challenge]);
-
-  return `You may appear guided by ${strengths || 'quiet intelligence and inner resolve'}, yet internally you can take time to process pressure around ${pressure || 'emotion and responsibility'}. This often creates a pattern of seeming composed while privately working through more than people realize.`;
-}
-
 function buildPersonalityCore(chart) {
   const { planet: sunPlanet, interpretation: sun } = planetSignal(chart, 'Sun');
   const { interpretation: moon } = planetSignal(chart, 'Moon');
@@ -149,9 +139,38 @@ function buildReportSections(chart) {
   return SECTION_ORDER.map((sectionName) => sectionBuilders[sectionName](chart));
 }
 
+function alignmentScore(chart) {
+  const score = Number(chart?.predictionQuality?.overallQuality?.score);
+  if (Number.isFinite(score) && score > 0) return Math.max(0, Math.min(100, Math.round(score)));
+  const level = String(chart?.accuracy?.confidenceLevel || '').toLowerCase();
+  if (level.includes('high')) return 84;
+  if (level.includes('medium')) return 69;
+  return 58;
+}
+
+function alignmentLabel(score) {
+  if (score >= 82) return 'High';
+  if (score >= 68) return 'Moderate';
+  return 'Developing';
+}
+
+function signalBadges(chart) {
+  const raw = Array.isArray(chart?.astroBrain?.dominantPlanets) ? chart.astroBrain.dominantPlanets : [];
+  const names = raw
+    .map((x) => (typeof x === 'string' ? x : x?.planet || x?.name))
+    .filter(Boolean)
+    .slice(0, 3);
+  const badges = [];
+  if (chart?.ascendant) badges.push(`${chart.ascendant} Lagna`);
+  if (chart?.moonSign) badges.push(`${chart.moonSign} Moon`);
+  if (names.length) badges.push(...names.map((p) => `${p} emphasis`));
+  return uniqueValues(badges).slice(0, 5);
+}
+
 export default function LifePatternReport({ chart }) {
   const sections = buildReportSections(chart);
-  const keyInsight = chart ? buildKeyInsight(chart) : '';
+  const score = alignmentScore(chart);
+  const badges = signalBadges(chart);
 
   if (!chart) {
     return null;
@@ -162,34 +181,35 @@ export default function LifePatternReport({ chart }) {
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: 'easeOut' }}
-      className="glass-panel overflow-hidden rounded-[2rem] p-5 sm:p-6"
+      className="glass-panel overflow-hidden rounded-[2rem] border border-gold-300/10 bg-black/20 p-5 sm:p-6"
     >
-      <div className="mb-6 flex flex-col gap-3 border-b border-gold-300/15 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3 border-b border-gold-300/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-gold-300/70">
-            Based on your planetary placements
-          </p>
-          <h2 className="mt-3 font-serif text-3xl text-gold-100">Life Pattern Report</h2>
+          <p className="text-xs uppercase tracking-[0.35em] text-gold-300/55">Secondary depth</p>
+          <h2 className="mt-3 font-serif text-2xl text-gold-100/95 sm:text-3xl">Detailed Pattern Breakdown</h2>
         </div>
-        <p className="max-w-sm text-sm leading-6 text-cream/55">
-          Concise preview generated from your ascendant, luminaries, planet houses, signs, and
-          interpretation signals.
-        </p>
+        <div className="min-w-[210px] rounded-2xl border border-emerald-300/20 bg-emerald-400/5 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-200/70">Pattern Resonance</p>
+          <p className="mt-1 text-sm font-semibold text-emerald-100">
+            {score}% <span className="text-xs font-normal text-emerald-100/70">({alignmentLabel(score)})</span>
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-4">
-        <motion.article
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="rounded-3xl border border-gold-300/25 bg-gold-300/8 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-        >
-          <p className="text-xs uppercase tracking-[0.3em] text-gold-300/75">
-            This is what defines you
-          </p>
-          <p className="mt-3 text-base leading-7 text-cream/85">{keyInsight}</p>
-        </motion.article>
+      {badges.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full border border-gold-300/20 bg-gold-300/5 px-3 py-1 text-[11px] text-cream/75"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
 
+      <div className="grid gap-4">
         {sections.map((section, index) => (
           <motion.article
             key={section.title}
@@ -218,7 +238,7 @@ export default function LifePatternReport({ chart }) {
                 </div>
               )}
             </div>
-            <p className="mt-4 text-sm leading-7 text-cream/78">{section.body}</p>
+            <p className="mt-3 text-sm leading-6 text-cream/78">{section.body}</p>
           </motion.article>
         ))}
       </div>

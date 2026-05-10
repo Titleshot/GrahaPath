@@ -16,6 +16,15 @@ const chatRoutes = safeRequire('./routes/chatRoutes', () => express.Router());
 const feedbackRoutes = safeRequire('./routes/feedbackRoutes', () => express.Router());
 const securityRoutes = safeRequire('./routes/securityRoutes', () => express.Router());
 const premiumRoutes = safeRequire('./routes/premiumRoutes', () => express.Router());
+const gumroadRuntime = safeRequire('./services/gumroadService', () => ({
+  summarizeGumroadReadiness: () => ({
+    checkoutReady: true,
+    webhookSecretOk: true,
+    blockingIssues: [],
+    recommendations: [],
+    issues: []
+  })
+}));
 const geminiRuntime = safeRequire('./services/grahapathGeminiService', () => ({
   probeGeminiReadiness: async () => ({ ok: false, reason: 'module_unavailable' }),
   getGeminiRuntimeStats: () => ({ available: false })
@@ -63,10 +72,25 @@ app.use(
     }
   })
 );
+app.use(
+  '/api/premium/webhook/kofi',
+  express.urlencoded({
+    extended: true,
+    limit: '2mb'
+  })
+);
 app.use(express.json({ limit: '3mb' }));
 
+function premiumRouterMounted(router) {
+  return Array.isArray(router?.stack) && router.stack.some((layer) => Boolean(layer?.route));
+}
+
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'grahapath-backend' });
+  res.json({
+    status: 'ok',
+    service: 'grahapath-backend',
+    premiumApi: premiumRouterMounted(premiumRoutes)
+  });
 });
 
 app.get('/health/gemini', async (_req, res) => {
@@ -94,6 +118,12 @@ app.use('/api', feedbackRoutes);
 app.use('/api', securityRoutes);
 app.use('/api', premiumRoutes);
 
+if (!premiumRouterMounted(premiumRoutes)) {
+  console.warn(
+    '[GrahaPath] Premium module did not register routes (stale deploy or require() failed). POST /api/premium/checkout-session and webhooks will 404 until you deploy current server.js + routes/premiumRoutes.js.'
+  );
+}
+
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
@@ -113,6 +143,14 @@ app.use((err, _req, res, _next) => {
 if (process.env.VERCEL !== '1') {
   app.listen(port, () => {
     console.log(`GrahaPath backend listening on port ${port}`);
+    try {
+      const g = gumroadRuntime.summarizeGumroadReadiness?.();
+      if (g && Array.isArray(g.blockingIssues) && g.blockingIssues.length > 0) {
+        console.warn('[GrahaPath] Gumroad:', g.blockingIssues.join(' | '));
+      }
+    } catch {
+      /* ignore */
+    }
     probeGeminiReadiness()
       .then((probe) => {
         if (probe.ok) {

@@ -8,8 +8,17 @@ const {
 const {
   createGumroadCheckoutUrl,
   verifyGumroadSignature,
-  resolvePlanFromWebhook
+  resolvePlanFromWebhook,
+  summarizeGumroadReadiness
 } = require('../services/gumroadService');
+const {
+  resolveCheckoutBackend,
+  kofiCheckoutUrlForPlan,
+  parseKofiFormBody,
+  verifyKofiPayload,
+  resolvePlanFromKofiPayload,
+  getKofiConfig
+} = require('../services/kofiService');
 
 function insightsForPlan(plan) {
   return String(plan || '').toLowerCase() === 'quick' ? 12 : 50;
@@ -64,15 +73,96 @@ async function createCheckoutSession(req, res) {
     if (!email) {
       return res.status(400).json({ error: 'InvalidRequest', message: 'Email is required.' });
     }
-    const checkoutUrl = createGumroadCheckoutUrl({ email, plan });
-    return res.json({ ok: true, checkoutUrl });
+
+    let gumroadCheckoutReady = false;
+    try {
+      gumroadCheckoutReady = summarizeGumroadReadiness().checkoutReady === true;
+    } catch {
+      gumroadCheckoutReady = false;
+    }
+
+    const backend = resolveCheckoutBackend({ gumroadCheckoutReady });
+
+    if (backend === 'kofi') {
+      const checkoutUrl = kofiCheckoutUrlForPlan(plan);
+      if (!checkoutUrl) {
+        return res.status(503).json({
+          error: 'KofiNotConfigured',
+          message: 'Ko-fi checkout URLs missing. Set KOFI_CHECKOUT_URL_QUICK and KOFI_CHECKOUT_URL_FULL.'
+        });
+      }
+      return res.json({ ok: true, checkoutUrl, provider: 'kofi' });
+    }
+
+    if (backend === 'gumroad') {
+      const checkoutUrl = createGumroadCheckoutUrl({ email, plan });
+      return res.json({ ok: true, checkoutUrl, provider: 'gumroad' });
+    }
+
+    return res.status(503).json({
+      error: 'PaymentsNotConfigured',
+      message:
+        'No checkout configured. Add Ko-fi (see KOFI_CHECKOUT_URL_* in .env.example) or Gumroad (GUMROAD_PRODUCT_URL_*). Optional: PAYMENT_CHECKOUT_PROVIDER=kofi|gumroad|auto.'
+    });
   } catch (error) {
     if (error.code === 'GUMROAD_NOT_CONFIGURED') {
       return res.status(503).json({ error: 'GumroadNotConfigured', message: error.message });
     }
     return res.status(500).json({
-      error: 'GumroadCheckoutFailed',
+      error: 'CheckoutSessionFailed',
       message: error.message || 'Could not start checkout.'
+    });
+  }
+}
+
+async function kofiWebhook(req, res) {
+  try {
+    const payload = parseKofiFormBody(req.body || {});
+    const cfg = getKofiConfig();
+
+    if (!payload) {
+      return res.status(400).json({
+        error: 'BadPayload',
+        message: 'Expected urlencoded body with data= (Ko-fi webhook format).'
+      });
+    }
+
+    if (!verifyKofiPayload(payload, cfg.verificationToken)) {
+      return res.status(401).json({ error: 'InvalidVerification', message: 'Ko-fi verification_token mismatch.' });
+    }
+
+    const email = String(payload.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: 'WebhookMissingEmail', message: 'Email missing in Ko-fi payload.' });
+    }
+
+    const plan = resolvePlanFromKofiPayload(payload, cfg);
+    const amountStr = payload.amount != null ? String(payload.amount).replace(/,/g, '') : '';
+    const amountUsd = Number.parseFloat(amountStr);
+
+    const premium = await upsertPremiumAccess({
+      email,
+      chartId: String(payload.kofi_transaction_id || payload.message_id || '').trim() || null,
+      chartFingerprint: null,
+      plan,
+      remainingInsights: insightsForPlan(plan)
+    });
+
+    await recordPaymentForEmail({
+      email,
+      gumroadOrderId: String(payload.kofi_transaction_id || payload.message_id || '').trim() || null,
+      amount: Number.isFinite(amountUsd) ? amountUsd : null,
+      plan,
+      status: 'paid'
+    });
+
+    return res.status(200).json({ ok: true, premium });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'KofiWebhookFailed',
+      message: error.message || 'Could not process Ko-fi webhook.'
     });
   }
 }
@@ -163,5 +253,6 @@ module.exports = {
   activatePremium,
   createCheckoutSession,
   gumroadWebhook,
+  kofiWebhook,
   restorePremium
 };

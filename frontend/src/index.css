@@ -16,6 +16,70 @@ body {
     radial-gradient(circle at top left, rgba(212, 175, 55, 0.18), transparent 34rem),
     radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.12), transparent 28rem),
     #030303;
+  overflow-x: hidden;
+}
+
+.starfield {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: repeat;
+  mix-blend-mode: screen;
+}
+
+.starfield::before,
+.starfield::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+}
+
+.starfield::before {
+  opacity: 0.28;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.85) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px);
+  background-size: 16px 16px, 96px 96px, 220px 220px;
+  background-position: 0 0, 24px 24px, 120px 84px;
+  animation: starTwinkle 22s infinite ease-in-out;
+  filter: blur(0.3px);
+}
+
+.starfield::after {
+  opacity: 0.18;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.65) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.4) 1px, transparent 1px);
+  background-size: 10px 10px, 72px 72px, 180px 180px;
+  background-position: 12px 14px, 62px 82px, 170px 98px;
+  animation: starTwinkleSlow 32s infinite ease-in-out;
+  filter: blur(0.15px);
+}
+
+@keyframes starTwinkle {
+  0%, 100% {
+    opacity: 0.28;
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(2px, -1px) scale(1.02);
+  }
+}
+
+@keyframes starTwinkleSlow {
+  0%, 100% {
+    opacity: 0.18;
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.34;
+    transform: translate(-2px, 2px) scale(1.01);
+  }
 }
 
 button,

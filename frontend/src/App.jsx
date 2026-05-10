@@ -8,7 +8,7 @@ import PaymentPreviewModal from './components/PaymentPreviewModal';
 import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
 import { getClientFingerprint } from './lib/clientFingerprint';
-import { withApiBase } from './lib/apiBase';
+import { API_BASE, withApiBase } from './lib/apiBase';
 import { 
   generateChartFingerprint, 
   hasChartUsedDemo, 
@@ -20,6 +20,12 @@ import {
 const API_URL = withApiBase('/api/generate-chart');
 const PREMIUM_CHECKOUT_URL = withApiBase('/api/premium/checkout-session');
 const PREMIUM_RESTORE_URL = withApiBase('/api/premium/restore');
+
+/** Vercel/static hosts have no `/api` proxy unless you set API base URL at build time. */
+const showProdApiMisconfig =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env.PROD &&
+  String(API_BASE || '').trim().length === 0;
 
 function normalizeAdDate(displayDate) {
   const match = /^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})$/.exec(displayDate.trim());
@@ -42,6 +48,25 @@ function normalizeAdDate(displayDate) {
   }
 
   return isoDate;
+}
+
+/** Prefer server `details[]`, then message/error; always include HTTP status when present. */
+function formatGenerateChartFailure(response, data) {
+  const status = response?.status;
+  const fromDetails = Array.isArray(data?.details)
+    ? data.details.map(String).find((s) => s.trim().length > 0)
+    : typeof data?.details === 'string'
+      ? data.details
+      : '';
+  const primary =
+    fromDetails ||
+    (typeof data?.message === 'string' && data.message.trim()) ||
+    (typeof data?.error === 'string' && data.error.trim()) ||
+    '';
+  if (primary && status) return `${primary} (HTTP ${status})`;
+  if (primary) return primary;
+  if (status) return `Chart request failed (HTTP ${status}${response.statusText ? `: ${response.statusText}` : ''}).`;
+  return 'Chart generation failed.';
 }
 
 function normalizeBirthTime(displayTime) {
@@ -200,6 +225,18 @@ export default function App() {
     };
   }, [chart]);
 
+  useEffect(() => {
+    if (!error || chart) return;
+    const reduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const id = window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: reduced ? 'auto' : 'smooth',
+        block: 'nearest'
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [error, chart]);
+
   function handleFormChange(event) {
     const { name, value } = event.target;
 
@@ -328,7 +365,7 @@ export default function App() {
       }
 
       if (!response.ok) {
-        throw new Error(data.details?.[0] || data.message || data.error || 'Chart generation failed.');
+        throw new Error(formatGenerateChartFailure(response, data));
       }
 
       // Generate chart fingerprint for demo protection
@@ -358,7 +395,12 @@ export default function App() {
 
       setChart(data);
     } catch (requestError) {
-      setError(requestError.message);
+      const raw = typeof requestError?.message === 'string' ? requestError.message : String(requestError || '');
+      const netHint =
+        /failed to fetch|networkerror|load failed|ecconnrefused|network request failed/i.test(raw)
+          ? ' Start the API from the GrahaPath repo root: npm run dev (port 3000). Open the site via Vite on http://localhost:5173.'
+          : '';
+      setError(raw + netHint);
     } finally {
       setIsLoading(false);
     }
@@ -560,6 +602,20 @@ export default function App() {
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
+      {showProdApiMisconfig ? (
+        <div
+          role="alert"
+          className="sticky top-0 z-[100] border-b border-amber-500/55 bg-amber-950/95 px-4 py-3 text-center text-sm text-amber-100 shadow-lg shadow-black/30"
+        >
+          This deployed build does not target the GrahaPath API (
+          <code className="rounded bg-black/35 px-1.5 py-0.5 text-xs">VITE_API_BASE_URL</code> is unset).
+          Charts and checkout need your Render/backend URL — set{' '}
+          <code className="rounded bg-black/35 px-1.5 py-0.5 text-xs">VITE_API_BASE_URL</code>
+          {' '}in Vercel (Production + Preview), redeploy, and allow your site origin on the API{' '}
+          (<code className="rounded bg-black/35 px-1.5 py-0.5 text-xs">FRONTEND_ORIGIN</code>
+          ).
+        </div>
+      ) : null}
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(212,175,55,0.1),transparent_28%)]" />
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1180px] flex-col px-4 py-6 sm:px-6 sm:py-8">
         <motion.header
@@ -748,6 +804,25 @@ export default function App() {
                       {feedbackStatus ? <p className="mt-1 text-xs text-ivory/65">{feedbackStatus}</p> : null}
                     </section>
                   </motion.div>
+                ) : error ? (
+                  <motion.div
+                    key="chart-error"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col gap-4 rounded-[1.25rem] border border-red-400/35 bg-red-950/40 p-6 text-left sm:p-8"
+                  >
+                    <p className="text-xs uppercase tracking-[0.28em] text-red-200/80">Chart could not be displayed</p>
+                    <p className="font-serif text-xl text-cream">{error}</p>
+                    <p className="text-sm leading-relaxed text-ivory/75">
+                      Typical fix: two terminals — repo root <span className="font-mono text-xs text-gold-200/90">npm run dev</span>{' '}
+                      (API <span className="font-mono text-xs">:3000</span>),{' '}
+                      <span className="font-mono text-xs">frontend</span>{' '}
+                      <span className="font-mono text-xs text-gold-200/90">npm run dev</span> (UI{' '}
+                      <span className="font-mono text-xs">:5173</span>). Leave{' '}
+                      <span className="font-mono text-xs">VITE_API_BASE_URL</span> unset for local proxying.
+                    </p>
+                  </motion.div>
                 ) : (
                   <motion.div
                     key="empty-fallback"
@@ -905,6 +980,16 @@ export default function App() {
           const checkoutUrl = String(data?.checkoutUrl || '').trim();
           if (!checkoutUrl) {
             throw new Error('Checkout URL missing from server response.');
+          }
+          const provider = String(data?.provider || 'gumroad').toLowerCase();
+          if (typeof window !== 'undefined' && provider === 'kofi') {
+            window.setTimeout(() => setPremiumStatus(''), 25000);
+            setPremiumStatus(
+              'Ko-fi checkout opened in a new tab. After payment completes (usually seconds), click Restore Premium with the same email you used.'
+            );
+            setShowPaymentPreview(false);
+            window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+            return;
           }
           if (typeof window !== 'undefined') {
             window.location.href = checkoutUrl;

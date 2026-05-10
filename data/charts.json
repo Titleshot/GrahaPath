@@ -1,0 +1,1390 @@
+{
+  "records": [
+    {
+      "id": "aijttm742@gmail.com:1778313920164",
+      "email": "aijttm742@gmail.com",
+      "birthDate": null,
+      "birthTime": "1998-03-02T04:30:00.000-08:00",
+      "birthPlace": "California, United States",
+      "chartData": {
+        "name": "Ajit Thapa",
+        "place": "California, United States",
+        "location": {
+          "displayName": "California, United States",
+          "latitude": 36.7014631,
+          "longitude": -118.755997
+        },
+        "timezone": "America/Los_Angeles",
+        "inputDateType": "AD",
+        "birthDateAD": "1998-03-02",
+        "birthDateBS": null,
+        "calculatedFrom": "AD Gregorian date",
+        "originalBsDate": null,
+        "locationInputMode": "exact_coordinates",
+        "timeInputMode": "exact_time",
+        "localDateTime": "1998-03-02T04:30:00.000-08:00",
+        "utcDateTime": "1998-03-02T12:30:00.000Z",
+        "ascendant": "Capricorn",
+        "moonSign": "Aries",
+        "sunSign": "Aquarius",
+        "ayanamsa": "Lahiri",
+        "houseSystem": "Whole Sign",
+        "nodeType": "True Node",
+        "calculationNotes": {
+          "ephemeris": "Swiss Ephemeris",
+          "zodiac": "Sidereal",
+          "ayanamsa": "Lahiri",
+          "houseSystem": "Whole Sign",
+          "nodeType": "True Node"
+        },
+        "planets": [
+          {
+            "name": "Sun",
+            "symbol": "☉",
+            "sign": "Aquarius",
+            "house": 2,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Sun",
+              "house": 2,
+              "sign": "Aquarius",
+              "theme": "identity, vitality, and authority",
+              "psychological": "the need to express confidence, purpose, and personal direction in matters of speech, family, values, savings, and food habits",
+              "strength": "leadership",
+              "challenge": "ego rigidity",
+              "reportLine": "Sun brings identity, vitality, and authority into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is ego rigidity.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "identity, vitality, and authority",
+                  "psychological": "the need to express confidence, purpose, and personal direction",
+                  "strengths": [
+                    "leadership",
+                    "clarity",
+                    "self-respect"
+                  ],
+                  "challenges": [
+                    "ego rigidity",
+                    "pride",
+                    "over-identification with status"
+                  ]
+                },
+                "houseMeaning": "speech, family, values, savings, and food habits",
+                "signMeaning": "innovative, social, detached, and systems-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Moon",
+            "symbol": "☽",
+            "sign": "Aries",
+            "house": 4,
+            "retrograde": false,
+            "nakshatra": "Ashwini",
+            "interpretation": {
+              "planet": "Moon",
+              "house": 4,
+              "sign": "Aries",
+              "theme": "mind, emotions, and inner security",
+              "psychological": "strong emotional identification with home, family, and inner safety",
+              "strength": "deep nurturing capacity and emotional sensitivity",
+              "challenge": "mood changes tied to domestic or family conditions",
+              "reportLine": "Your emotional peace is strongly connected to home, family, and the quality of your private life.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "mind, emotions, and inner security",
+                  "psychological": "emotional patterning, memory, comfort needs, and instinctive reactions",
+                  "strengths": [
+                    "empathy",
+                    "adaptability",
+                    "nurturing intelligence"
+                  ],
+                  "challenges": [
+                    "mood fluctuation",
+                    "attachment",
+                    "emotional dependency"
+                  ]
+                },
+                "houseMeaning": "home, emotional foundations, mother, property, and inner peace",
+                "signMeaning": "direct, pioneering, assertive, and action-oriented",
+                "houseCombination": {
+                  "psychological": "strong emotional identification with home, family, and inner safety",
+                  "strength": "deep nurturing capacity and emotional sensitivity",
+                  "challenge": "mood changes tied to domestic or family conditions",
+                  "reportLine": "Your emotional peace is strongly connected to home, family, and the quality of your private life."
+                },
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Mars",
+            "symbol": "♂",
+            "sign": "Pisces",
+            "house": 3,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Mars",
+              "house": 3,
+              "sign": "Pisces",
+              "theme": "courage, action, and assertion",
+              "psychological": "the drive to act, compete, protect boundaries, and pursue goals directly in matters of communication, courage, siblings, skills, and repeated effort",
+              "strength": "initiative",
+              "challenge": "impulsiveness",
+              "reportLine": "Mars brings courage, action, and assertion into communication, courage, siblings, skills, and repeated effort, expressing through a sensitive, imaginative, spiritual, and compassionate style; the main growth edge is impulsiveness.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "courage, action, and assertion",
+                  "psychological": "the drive to act, compete, protect boundaries, and pursue goals directly",
+                  "strengths": [
+                    "initiative",
+                    "bravery",
+                    "physical drive"
+                  ],
+                  "challenges": [
+                    "impulsiveness",
+                    "anger",
+                    "conflict"
+                  ]
+                },
+                "houseMeaning": "communication, courage, siblings, skills, and repeated effort",
+                "signMeaning": "sensitive, imaginative, spiritual, and compassionate",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Mercury",
+            "symbol": "☿",
+            "sign": "Aquarius",
+            "house": 2,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Mercury",
+              "house": 2,
+              "sign": "Aquarius",
+              "theme": "communication, analysis, and learning",
+              "psychological": "the mental style used for speech, commerce, reasoning, and adaptation in matters of speech, family, values, savings, and food habits",
+              "strength": "intelligence",
+              "challenge": "overthinking",
+              "reportLine": "Mercury brings communication, analysis, and learning into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is overthinking.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "communication, analysis, and learning",
+                  "psychological": "the mental style used for speech, commerce, reasoning, and adaptation",
+                  "strengths": [
+                    "intelligence",
+                    "skillfulness",
+                    "curiosity"
+                  ],
+                  "challenges": [
+                    "overthinking",
+                    "nervousness",
+                    "inconsistency"
+                  ]
+                },
+                "houseMeaning": "speech, family, values, savings, and food habits",
+                "signMeaning": "innovative, social, detached, and systems-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Jupiter",
+            "symbol": "♃",
+            "sign": "Aquarius",
+            "house": 2,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Jupiter",
+              "house": 2,
+              "sign": "Aquarius",
+              "theme": "wisdom, growth, and guidance",
+              "psychological": "the search for meaning, faith, ethics, teaching, and expansion in matters of speech, family, values, savings, and food habits",
+              "strength": "optimism",
+              "challenge": "excess",
+              "reportLine": "Jupiter brings wisdom, growth, and guidance into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is excess.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "wisdom, growth, and guidance",
+                  "psychological": "the search for meaning, faith, ethics, teaching, and expansion",
+                  "strengths": [
+                    "optimism",
+                    "judgment",
+                    "generosity"
+                  ],
+                  "challenges": [
+                    "excess",
+                    "dogmatism",
+                    "overconfidence"
+                  ]
+                },
+                "houseMeaning": "speech, family, values, savings, and food habits",
+                "signMeaning": "innovative, social, detached, and systems-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Venus",
+            "symbol": "♀",
+            "sign": "Capricorn",
+            "house": 1,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Venus",
+              "house": 1,
+              "sign": "Capricorn",
+              "theme": "love, harmony, and enjoyment",
+              "psychological": "the capacity for affection, attraction, aesthetics, pleasure, and cooperation in matters of self-expression, body, identity, and personal direction",
+              "strength": "charm",
+              "challenge": "indulgence",
+              "reportLine": "Venus brings love, harmony, and enjoyment into self-expression, body, identity, and personal direction, expressing through a structured, disciplined, ambitious, and duty-oriented style; the main growth edge is indulgence.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "love, harmony, and enjoyment",
+                  "psychological": "the capacity for affection, attraction, aesthetics, pleasure, and cooperation",
+                  "strengths": [
+                    "charm",
+                    "creativity",
+                    "diplomacy"
+                  ],
+                  "challenges": [
+                    "indulgence",
+                    "avoidance",
+                    "attachment to comfort"
+                  ]
+                },
+                "houseMeaning": "self-expression, body, identity, and personal direction",
+                "signMeaning": "structured, disciplined, ambitious, and duty-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Saturn",
+            "symbol": "♄",
+            "sign": "Pisces",
+            "house": 3,
+            "retrograde": false,
+            "interpretation": {
+              "planet": "Saturn",
+              "house": 3,
+              "sign": "Pisces",
+              "theme": "discipline and effort",
+              "psychological": "internal pressure in communication and effort-based skill development",
+              "strength": "resilience and persistence through practice",
+              "challenge": "slow progress, hesitation, or frustration while expressing ideas",
+              "reportLine": "You may feel that progress comes slowly, especially in areas where communication and effort are required.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "discipline and effort",
+                  "psychological": "internal pressure to mature through responsibility, limits, and sustained work",
+                  "strengths": [
+                    "resilience",
+                    "persistence",
+                    "self-control"
+                  ],
+                  "challenges": [
+                    "slow progress",
+                    "fear",
+                    "frustration"
+                  ]
+                },
+                "houseMeaning": "communication, courage, siblings, skills, and repeated effort",
+                "signMeaning": "sensitive, imaginative, spiritual, and compassionate",
+                "houseCombination": {
+                  "psychological": "internal pressure in communication and effort-based skill development",
+                  "strength": "resilience and persistence through practice",
+                  "challenge": "slow progress, hesitation, or frustration while expressing ideas",
+                  "reportLine": "You may feel that progress comes slowly, especially in areas where communication and effort are required."
+                },
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Rahu",
+            "symbol": "☊",
+            "sign": "Leo",
+            "house": 8,
+            "retrograde": true,
+            "interpretation": {
+              "planet": "Rahu",
+              "house": 8,
+              "sign": "Leo",
+              "theme": "ambition, desire, and unconventional growth",
+              "psychological": "a hunger for experience, recognition, novelty, and worldly expansion in matters of transformation, secrets, vulnerability, inheritance, and longevity",
+              "strength": "innovation",
+              "challenge": "obsession",
+              "reportLine": "Rahu brings ambition, desire, and unconventional growth into transformation, secrets, vulnerability, inheritance, and longevity, expressing through a expressive, proud, creative, and leadership-oriented style; the main growth edge is obsession.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "ambition, desire, and unconventional growth",
+                  "psychological": "a hunger for experience, recognition, novelty, and worldly expansion",
+                  "strengths": [
+                    "innovation",
+                    "strategy",
+                    "breakthrough thinking"
+                  ],
+                  "challenges": [
+                    "obsession",
+                    "confusion",
+                    "restlessness"
+                  ]
+                },
+                "houseMeaning": "transformation, secrets, vulnerability, inheritance, and longevity",
+                "signMeaning": "expressive, proud, creative, and leadership-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          },
+          {
+            "name": "Ketu",
+            "symbol": "☋",
+            "sign": "Aquarius",
+            "house": 2,
+            "retrograde": true,
+            "interpretation": {
+              "planet": "Ketu",
+              "house": 2,
+              "sign": "Aquarius",
+              "theme": "detachment, insight, and karmic release",
+              "psychological": "a tendency to withdraw from ordinary validation and seek deeper truth in matters of speech, family, values, savings, and food habits",
+              "strength": "intuition",
+              "challenge": "disconnection",
+              "reportLine": "Ketu brings detachment, insight, and karmic release into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is disconnection.",
+              "details": {
+                "baseMeaning": {
+                  "theme": "detachment, insight, and karmic release",
+                  "psychological": "a tendency to withdraw from ordinary validation and seek deeper truth",
+                  "strengths": [
+                    "intuition",
+                    "spiritual perception",
+                    "non-attachment"
+                  ],
+                  "challenges": [
+                    "disconnection",
+                    "doubt",
+                    "avoidance"
+                  ]
+                },
+                "houseMeaning": "speech, family, values, savings, and food habits",
+                "signMeaning": "innovative, social, detached, and systems-oriented",
+                "houseCombination": null,
+                "signCombination": null
+              }
+            }
+          }
+        ],
+        "interpretations": [
+          {
+            "planet": "Sun",
+            "house": 2,
+            "sign": "Aquarius",
+            "theme": "identity, vitality, and authority",
+            "psychological": "the need to express confidence, purpose, and personal direction in matters of speech, family, values, savings, and food habits",
+            "strength": "leadership",
+            "challenge": "ego rigidity",
+            "reportLine": "Sun brings identity, vitality, and authority into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is ego rigidity.",
+            "details": {
+              "baseMeaning": {
+                "theme": "identity, vitality, and authority",
+                "psychological": "the need to express confidence, purpose, and personal direction",
+                "strengths": [
+                  "leadership",
+                  "clarity",
+                  "self-respect"
+                ],
+                "challenges": [
+                  "ego rigidity",
+                  "pride",
+                  "over-identification with status"
+                ]
+              },
+              "houseMeaning": "speech, family, values, savings, and food habits",
+              "signMeaning": "innovative, social, detached, and systems-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Moon",
+            "house": 4,
+            "sign": "Aries",
+            "theme": "mind, emotions, and inner security",
+            "psychological": "strong emotional identification with home, family, and inner safety",
+            "strength": "deep nurturing capacity and emotional sensitivity",
+            "challenge": "mood changes tied to domestic or family conditions",
+            "reportLine": "Your emotional peace is strongly connected to home, family, and the quality of your private life.",
+            "details": {
+              "baseMeaning": {
+                "theme": "mind, emotions, and inner security",
+                "psychological": "emotional patterning, memory, comfort needs, and instinctive reactions",
+                "strengths": [
+                  "empathy",
+                  "adaptability",
+                  "nurturing intelligence"
+                ],
+                "challenges": [
+                  "mood fluctuation",
+                  "attachment",
+                  "emotional dependency"
+                ]
+              },
+              "houseMeaning": "home, emotional foundations, mother, property, and inner peace",
+              "signMeaning": "direct, pioneering, assertive, and action-oriented",
+              "houseCombination": {
+                "psychological": "strong emotional identification with home, family, and inner safety",
+                "strength": "deep nurturing capacity and emotional sensitivity",
+                "challenge": "mood changes tied to domestic or family conditions",
+                "reportLine": "Your emotional peace is strongly connected to home, family, and the quality of your private life."
+              },
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Mars",
+            "house": 3,
+            "sign": "Pisces",
+            "theme": "courage, action, and assertion",
+            "psychological": "the drive to act, compete, protect boundaries, and pursue goals directly in matters of communication, courage, siblings, skills, and repeated effort",
+            "strength": "initiative",
+            "challenge": "impulsiveness",
+            "reportLine": "Mars brings courage, action, and assertion into communication, courage, siblings, skills, and repeated effort, expressing through a sensitive, imaginative, spiritual, and compassionate style; the main growth edge is impulsiveness.",
+            "details": {
+              "baseMeaning": {
+                "theme": "courage, action, and assertion",
+                "psychological": "the drive to act, compete, protect boundaries, and pursue goals directly",
+                "strengths": [
+                  "initiative",
+                  "bravery",
+                  "physical drive"
+                ],
+                "challenges": [
+                  "impulsiveness",
+                  "anger",
+                  "conflict"
+                ]
+              },
+              "houseMeaning": "communication, courage, siblings, skills, and repeated effort",
+              "signMeaning": "sensitive, imaginative, spiritual, and compassionate",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Mercury",
+            "house": 2,
+            "sign": "Aquarius",
+            "theme": "communication, analysis, and learning",
+            "psychological": "the mental style used for speech, commerce, reasoning, and adaptation in matters of speech, family, values, savings, and food habits",
+            "strength": "intelligence",
+            "challenge": "overthinking",
+            "reportLine": "Mercury brings communication, analysis, and learning into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is overthinking.",
+            "details": {
+              "baseMeaning": {
+                "theme": "communication, analysis, and learning",
+                "psychological": "the mental style used for speech, commerce, reasoning, and adaptation",
+                "strengths": [
+                  "intelligence",
+                  "skillfulness",
+                  "curiosity"
+                ],
+                "challenges": [
+                  "overthinking",
+                  "nervousness",
+                  "inconsistency"
+                ]
+              },
+              "houseMeaning": "speech, family, values, savings, and food habits",
+              "signMeaning": "innovative, social, detached, and systems-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Jupiter",
+            "house": 2,
+            "sign": "Aquarius",
+            "theme": "wisdom, growth, and guidance",
+            "psychological": "the search for meaning, faith, ethics, teaching, and expansion in matters of speech, family, values, savings, and food habits",
+            "strength": "optimism",
+            "challenge": "excess",
+            "reportLine": "Jupiter brings wisdom, growth, and guidance into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is excess.",
+            "details": {
+              "baseMeaning": {
+                "theme": "wisdom, growth, and guidance",
+                "psychological": "the search for meaning, faith, ethics, teaching, and expansion",
+                "strengths": [
+                  "optimism",
+                  "judgment",
+                  "generosity"
+                ],
+                "challenges": [
+                  "excess",
+                  "dogmatism",
+                  "overconfidence"
+                ]
+              },
+              "houseMeaning": "speech, family, values, savings, and food habits",
+              "signMeaning": "innovative, social, detached, and systems-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Venus",
+            "house": 1,
+            "sign": "Capricorn",
+            "theme": "love, harmony, and enjoyment",
+            "psychological": "the capacity for affection, attraction, aesthetics, pleasure, and cooperation in matters of self-expression, body, identity, and personal direction",
+            "strength": "charm",
+            "challenge": "indulgence",
+            "reportLine": "Venus brings love, harmony, and enjoyment into self-expression, body, identity, and personal direction, expressing through a structured, disciplined, ambitious, and duty-oriented style; the main growth edge is indulgence.",
+            "details": {
+              "baseMeaning": {
+                "theme": "love, harmony, and enjoyment",
+                "psychological": "the capacity for affection, attraction, aesthetics, pleasure, and cooperation",
+                "strengths": [
+                  "charm",
+                  "creativity",
+                  "diplomacy"
+                ],
+                "challenges": [
+                  "indulgence",
+                  "avoidance",
+                  "attachment to comfort"
+                ]
+              },
+              "houseMeaning": "self-expression, body, identity, and personal direction",
+              "signMeaning": "structured, disciplined, ambitious, and duty-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Saturn",
+            "house": 3,
+            "sign": "Pisces",
+            "theme": "discipline and effort",
+            "psychological": "internal pressure in communication and effort-based skill development",
+            "strength": "resilience and persistence through practice",
+            "challenge": "slow progress, hesitation, or frustration while expressing ideas",
+            "reportLine": "You may feel that progress comes slowly, especially in areas where communication and effort are required.",
+            "details": {
+              "baseMeaning": {
+                "theme": "discipline and effort",
+                "psychological": "internal pressure to mature through responsibility, limits, and sustained work",
+                "strengths": [
+                  "resilience",
+                  "persistence",
+                  "self-control"
+                ],
+                "challenges": [
+                  "slow progress",
+                  "fear",
+                  "frustration"
+                ]
+              },
+              "houseMeaning": "communication, courage, siblings, skills, and repeated effort",
+              "signMeaning": "sensitive, imaginative, spiritual, and compassionate",
+              "houseCombination": {
+                "psychological": "internal pressure in communication and effort-based skill development",
+                "strength": "resilience and persistence through practice",
+                "challenge": "slow progress, hesitation, or frustration while expressing ideas",
+                "reportLine": "You may feel that progress comes slowly, especially in areas where communication and effort are required."
+              },
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Rahu",
+            "house": 8,
+            "sign": "Leo",
+            "theme": "ambition, desire, and unconventional growth",
+            "psychological": "a hunger for experience, recognition, novelty, and worldly expansion in matters of transformation, secrets, vulnerability, inheritance, and longevity",
+            "strength": "innovation",
+            "challenge": "obsession",
+            "reportLine": "Rahu brings ambition, desire, and unconventional growth into transformation, secrets, vulnerability, inheritance, and longevity, expressing through a expressive, proud, creative, and leadership-oriented style; the main growth edge is obsession.",
+            "details": {
+              "baseMeaning": {
+                "theme": "ambition, desire, and unconventional growth",
+                "psychological": "a hunger for experience, recognition, novelty, and worldly expansion",
+                "strengths": [
+                  "innovation",
+                  "strategy",
+                  "breakthrough thinking"
+                ],
+                "challenges": [
+                  "obsession",
+                  "confusion",
+                  "restlessness"
+                ]
+              },
+              "houseMeaning": "transformation, secrets, vulnerability, inheritance, and longevity",
+              "signMeaning": "expressive, proud, creative, and leadership-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          },
+          {
+            "planet": "Ketu",
+            "house": 2,
+            "sign": "Aquarius",
+            "theme": "detachment, insight, and karmic release",
+            "psychological": "a tendency to withdraw from ordinary validation and seek deeper truth in matters of speech, family, values, savings, and food habits",
+            "strength": "intuition",
+            "challenge": "disconnection",
+            "reportLine": "Ketu brings detachment, insight, and karmic release into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is disconnection.",
+            "details": {
+              "baseMeaning": {
+                "theme": "detachment, insight, and karmic release",
+                "psychological": "a tendency to withdraw from ordinary validation and seek deeper truth",
+                "strengths": [
+                  "intuition",
+                  "spiritual perception",
+                  "non-attachment"
+                ],
+                "challenges": [
+                  "disconnection",
+                  "doubt",
+                  "avoidance"
+                ]
+              },
+              "houseMeaning": "speech, family, values, savings, and food habits",
+              "signMeaning": "innovative, social, detached, and systems-oriented",
+              "houseCombination": null,
+              "signCombination": null
+            }
+          }
+        ],
+        "lifePatternPreview": [
+          "Sun brings identity, vitality, and authority into speech, family, values, savings, and food habits, expressing through a innovative, social, detached, and systems-oriented style; the main growth edge is ego rigidity.",
+          "Your emotional peace is strongly connected to home, family, and the quality of your private life.",
+          "Mars brings courage, action, and assertion into communication, courage, siblings, skills, and repeated effort, expressing through a sensitive, imaginative, spiritual, and compassionate style; the main growth edge is impulsiveness."
+        ],
+        "lifePhases": [
+          {
+            "id": "early-formation",
+            "phase": "Phase 1",
+            "ageRange": "0-14",
+            "title": "Early Formation Through Aries Processing",
+            "paragraphs": [
+              "Your early years likely carried a fast response and direct expression style of internal development, where you understood more than you expressed.",
+              "This pattern is linked to Moon in Aries (house 4), which often builds silent observation before outward confidence.",
+              "There may have been moments of feeling slightly out-of-sync with peers, not from disconnection but from deeper internal processing.",
+              "As a result, early sensitivity may later become pattern-recognition strength in adult life."
+            ],
+            "validationOptions": [
+              {
+                "value": "match",
+                "label": "✔ This matches me",
+                "score": 1
+              },
+              {
+                "value": "partial",
+                "label": "⚠ Partially",
+                "score": 0.55
+              },
+              {
+                "value": "no",
+                "label": "✖ Not really",
+                "score": 0
+              }
+            ]
+          },
+          {
+            "id": "identity-direction",
+            "phase": "Phase 2",
+            "ageRange": "15-24",
+            "title": "Identity Building Through Pressure and Experimentation",
+            "paragraphs": [
+              "This phase often reflects tension between self-definition and external pressure, especially with Saturn in Pisces (house 3) in the chart narrative.",
+              "You may have tested multiple directions while trying to reconcile personal identity (Capricorn) with practical expectations.",
+              "The push-pull dynamic can look like wanting clarity while resisting premature commitment — a normal growth pattern, not a flaw.",
+              "By the end of this phase, decision quality usually improves because your internal filters become sharper."
+            ],
+            "validationOptions": [
+              {
+                "value": "match",
+                "label": "✔ This matches me",
+                "score": 1
+              },
+              {
+                "value": "partial",
+                "label": "⚠ Partially",
+                "score": 0.55
+              },
+              {
+                "value": "no",
+                "label": "✖ Not really",
+                "score": 0
+              }
+            ]
+          },
+          {
+            "id": "pressure-alignment",
+            "phase": "Phase 3",
+            "ageRange": "25-Present",
+            "title": "Current Alignment: Responsibility Meets Direction",
+            "paragraphs": [
+              "Your current phase emphasizes long-term structuring in career, money, and personal direction, with skill-building and directional experimentation themes becoming more visible.",
+              "This is reinforced by Rahu in Leo (house 8), which can increase ambition while also testing focus and consistency.",
+              "Current timing suggests a consolidation period where steady effort matters more than speed.",
+              "Growth in this phase usually comes from disciplined execution and clearer boundaries, not instant certainty."
+            ],
+            "validationOptions": [
+              {
+                "value": "match",
+                "label": "✔ This matches me",
+                "score": 1
+              },
+              {
+                "value": "partial",
+                "label": "⚠ Partially",
+                "score": 0.55
+              },
+              {
+                "value": "no",
+                "label": "✖ Not really",
+                "score": 0
+              }
+            ]
+          }
+        ],
+        "lifePhaseTransition": {
+          "title": "Your responses show strong alignment with your planetary life pattern.",
+          "body": "These same planetary forces don’t just explain your past — they define your future direction, career growth, financial potential, relationships, and life outcomes.",
+          "cta": "Unlock Your Future Analysis"
+        },
+        "paywallPreview": {
+          "headline": "Your Chart Is Calculated. Your Future Is Not Yet Revealed.",
+          "subtext": "You have seen the first layer of your chart. Your future follows the same planetary structure, but requires deeper decoding.",
+          "features": [
+            {
+              "title": "Future Life Direction",
+              "description": "Understand where your life is heading and how clarity unfolds."
+            },
+            {
+              "title": "Earnings & Career Potential",
+              "description": "Discover your natural success pattern, income growth style, and career alignment."
+            },
+            {
+              "title": "Relationship & Emotional Pattern",
+              "description": "Learn how you connect, attach, and build long-term relationships."
+            },
+            {
+              "title": "Health & Energy Tendencies",
+              "description": "Identify areas where your body and mind require attention and balance."
+            },
+            {
+              "title": "Personalized Remedies",
+              "description": "Get specific mantras, behaviors, and actions to align your life path."
+            }
+          ],
+          "plans": [
+            {
+              "id": "basic",
+              "name": "Basic Unlock",
+              "price": "₹99",
+              "currency": "INR",
+              "recommended": false,
+              "features": [
+                "Future summary",
+                "Career direction",
+                "3 key insights"
+              ],
+              "includes": [
+                "Future summary",
+                "Career direction",
+                "3 key insights"
+              ]
+            },
+            {
+              "id": "full",
+              "name": "Full Analysis",
+              "price": "₹299",
+              "currency": "INR",
+              "recommended": true,
+              "features": [
+                "Full future report",
+                "Career + money + relationships",
+                "Detailed patterns",
+                "Core remedy suggestions"
+              ],
+              "includes": [
+                "Full future report",
+                "Career + money + relationships",
+                "Detailed patterns",
+                "Core remedy suggestions"
+              ]
+            },
+            {
+              "id": "premium",
+              "name": "Premium Guidance",
+              "price": "₹999",
+              "currency": "INR",
+              "recommended": false,
+              "features": [
+                "Everything in Full Analysis",
+                "Deep psychological breakdown",
+                "Personalized remedies",
+                "Daily alignment plan",
+                "Priority insights"
+              ],
+              "includes": [
+                "Everything in Full Analysis",
+                "Deep psychological breakdown",
+                "Personalized remedies",
+                "Daily alignment plan",
+                "Priority insights"
+              ]
+            }
+          ],
+          "cta": "Unlock My Full Analysis",
+          "trustLine": "One-time payment. No subscription. Instant access.",
+          "paymentEnabled": false
+        },
+        "remedies": [
+          {
+            "planet": "Moon",
+            "sign": "Aries",
+            "house": 4,
+            "problem": "Moon themes need emotional steadiness and mental clarity.",
+            "logic": "Moon alignment stabilizes feelings without suppressing sensitivity.",
+            "remedy": {
+              "mantra": "Om Shram Shreem Shroum Sah Chandraya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Practice 10 minutes of daily meditation for emotional stability.",
+                "Journal to reduce overthinking loops.",
+                "Hydrate well and keep sleep-time calm."
+              ],
+              "practicalAction": [
+                "Offer raw milk and water to Shiva on Mondays.",
+                "Respect and seek blessings from mother before important work."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          },
+          {
+            "planet": "Venus",
+            "sign": "Capricorn",
+            "house": 1,
+            "problem": "Venus themes need balanced attachment, values, and relationship hygiene.",
+            "logic": "Venus alignment supports harmony without indulgent avoidance.",
+            "remedy": {
+              "mantra": "Om Dram Dreem Droum Sah Shukraya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Practice respect in relationships.",
+                "Balance comfort with responsibility.",
+                "Maintain financial discipline and avoid vanity spending."
+              ],
+              "practicalAction": [
+                "Worship Lakshmi or Durga on Fridays.",
+                "Keep clothing and personal presentation clean and refined."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          },
+          {
+            "planet": "Saturn",
+            "sign": "Pisces",
+            "house": 3,
+            "problem": "Saturn themes need patience, structure, and karmic accountability.",
+            "logic": "Saturn alignment turns pressure into long-term stability.",
+            "remedy": {
+              "mantra": "Om Pram Preem Proum Sah Shanaishcharaya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Respect workers, helpers, and subordinates.",
+                "Follow punctuality and structure.",
+                "Choose long-term effort over shortcuts."
+              ],
+              "practicalAction": [
+                "Offer water to Peepal tree and light mustard-oil lamp on Saturdays.",
+                "Recite Shani Chalisa."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          }
+        ],
+        "remedyPreview": [
+          {
+            "planet": "Moon",
+            "sign": "Aries",
+            "house": 4,
+            "problem": "Moon themes need emotional steadiness and mental clarity.",
+            "logic": "Moon alignment stabilizes feelings without suppressing sensitivity.",
+            "remedy": {
+              "mantra": "Om Shram Shreem Shroum Sah Chandraya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Practice 10 minutes of daily meditation for emotional stability.",
+                "Journal to reduce overthinking loops.",
+                "Hydrate well and keep sleep-time calm."
+              ],
+              "practicalAction": [
+                "Offer raw milk and water to Shiva on Mondays.",
+                "Respect and seek blessings from mother before important work."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          },
+          {
+            "planet": "Venus",
+            "sign": "Capricorn",
+            "house": 1,
+            "problem": "Venus themes need balanced attachment, values, and relationship hygiene.",
+            "logic": "Venus alignment supports harmony without indulgent avoidance.",
+            "remedy": {
+              "mantra": "Om Dram Dreem Droum Sah Shukraya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Practice respect in relationships.",
+                "Balance comfort with responsibility.",
+                "Maintain financial discipline and avoid vanity spending."
+              ],
+              "practicalAction": [
+                "Worship Lakshmi or Durga on Fridays.",
+                "Keep clothing and personal presentation clean and refined."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          },
+          {
+            "planet": "Saturn",
+            "sign": "Pisces",
+            "house": 3,
+            "problem": "Saturn themes need patience, structure, and karmic accountability.",
+            "logic": "Saturn alignment turns pressure into long-term stability.",
+            "remedy": {
+              "mantra": "Om Pram Preem Proum Sah Shanaishcharaya Namah",
+              "repetition": "11 times daily",
+              "behaviorAlignment": [
+                "Respect workers, helpers, and subordinates.",
+                "Follow punctuality and structure.",
+                "Choose long-term effort over shortcuts."
+              ],
+              "practicalAction": [
+                "Offer water to Peepal tree and light mustard-oil lamp on Saturdays.",
+                "Recite Shani Chalisa."
+              ]
+            },
+            "note": "This helps align your energy; it is not a promise to remove every challenge."
+          }
+        ],
+        "houseCusps": [
+          {
+            "house": 1,
+            "degree": 270,
+            "sign": "Capricorn"
+          },
+          {
+            "house": 2,
+            "degree": 300,
+            "sign": "Aquarius"
+          },
+          {
+            "house": 3,
+            "degree": 330,
+            "sign": "Pisces"
+          },
+          {
+            "house": 4,
+            "degree": 0,
+            "sign": "Aries"
+          },
+          {
+            "house": 5,
+            "degree": 30,
+            "sign": "Taurus"
+          },
+          {
+            "house": 6,
+            "degree": 60,
+            "sign": "Gemini"
+          },
+          {
+            "house": 7,
+            "degree": 90,
+            "sign": "Cancer"
+          },
+          {
+            "house": 8,
+            "degree": 120,
+            "sign": "Leo"
+          },
+          {
+            "house": 9,
+            "degree": 150,
+            "sign": "Virgo"
+          },
+          {
+            "house": 10,
+            "degree": 180,
+            "sign": "Libra"
+          },
+          {
+            "house": 11,
+            "degree": 210,
+            "sign": "Scorpio"
+          },
+          {
+            "house": 12,
+            "degree": 240,
+            "sign": "Sagittarius"
+          }
+        ],
+        "astroBrain": {
+          "dominantPlanets": [
+            {
+              "planet": "Venus",
+              "totalScore": 4.73,
+              "strengthLabel": "moderate",
+              "influenceNote": "Ranked by magnitude of structural score as a proxy for chart emphasis (not moral good or bad)."
+            },
+            {
+              "planet": "Moon",
+              "totalScore": 3.452,
+              "strengthLabel": "moderate",
+              "influenceNote": "Ranked by magnitude of structural score as a proxy for chart emphasis (not moral good or bad)."
+            },
+            {
+              "planet": "Ketu",
+              "totalScore": 2.018,
+              "strengthLabel": "moderate",
+              "influenceNote": "Ranked by magnitude of structural score as a proxy for chart emphasis (not moral good or bad)."
+            }
+          ],
+          "challengedPlanets": [
+            {
+              "planet": "Mars",
+              "totalScore": -0.618,
+              "strengthLabel": "challenged",
+              "note": "Lower score may suggest more friction or slower integration — a pattern to work with, not a verdict."
+            },
+            {
+              "planet": "Saturn",
+              "totalScore": -0.5139999999999999,
+              "strengthLabel": "challenged",
+              "note": "Lower score may suggest more friction or slower integration — a pattern to work with, not a verdict."
+            },
+            {
+              "planet": "Rahu",
+              "totalScore": -0.13200000000000012,
+              "strengthLabel": "challenged",
+              "note": "Lower score may suggest more friction or slower integration — a pattern to work with, not a verdict."
+            }
+          ],
+          "summary": {
+            "payloadKind": "summary",
+            "timeCertaintyScore": 75,
+            "transitHouseDisagreementCount": 6,
+            "transitPlanetsCompared": 9,
+            "transitHouseAgreementRatio": 0.333,
+            "confluenceScore": 0.595,
+            "confluenceLevel": "moderate",
+            "criticalEventWindowsCount": 0,
+            "savKeyHouseAverage": 33.75,
+            "savLuckLevel": "moderate",
+            "patternPresence": {
+              "innerOuterTension": false,
+              "underlyingPatterns": true,
+              "criticalTiming": false
+            },
+            "houseNetForceByHouse": [
+              {
+                "house": 1,
+                "netForce": 0.4627
+              },
+              {
+                "house": 2,
+                "netForce": 0.4584
+              },
+              {
+                "house": 3,
+                "netForce": 0.26
+              },
+              {
+                "house": 4,
+                "netForce": 0.4953
+              },
+              {
+                "house": 5,
+                "netForce": 0.5618
+              },
+              {
+                "house": 6,
+                "netForce": 0.5309
+              },
+              {
+                "house": 7,
+                "netForce": 0.3764
+              },
+              {
+                "house": 8,
+                "netForce": 0.4139
+              },
+              {
+                "house": 9,
+                "netForce": 0.5309
+              },
+              {
+                "house": 10,
+                "netForce": 0.4382
+              },
+              {
+                "house": 11,
+                "netForce": 0.5927
+              },
+              {
+                "house": 12,
+                "netForce": 0.67
+              }
+            ]
+          }
+        },
+        "predictionQuality": {
+          "inputConfidence": {
+            "score": 95,
+            "level": "high",
+            "note": "Exact coordinates and birth time support high-confidence chart structure."
+          },
+          "logicDepthScore": {
+            "score": 52,
+            "note": "Built from 11 aspects, 4 interaction patterns, 4 yogas, and 5 causal insights."
+          },
+          "timingStrengthScore": {
+            "score": 100,
+            "note": "Mahadasha and Antardasha are both active in timing analysis."
+          },
+          "personalizationScore": {
+            "score": 81,
+            "note": "Uses 4 strong aspects, 4 pada signatures, and 5 tailored future sections."
+          },
+          "ashtakavargaSavScore": {
+            "score": 92,
+            "note": "SAV spread 22.0, key-area avg 33.8, relative variance 0.209 (bands: spread 6–20, key 25–36).",
+            "metrics": {
+              "savSpread": 22,
+              "savMean": 31.92,
+              "savCoefficientOfVariation": 0.209,
+              "keyHouseAverage": 33.75,
+              "luckLevel": "moderate",
+              "calibration": {
+                "spreadMin": 6,
+                "spreadMax": 20,
+                "keyMin": 25,
+                "keyMax": 36,
+                "cvMin": 0.042,
+                "cvMax": 0.128
+              }
+            }
+          },
+          "overallQuality": {
+            "score": 83,
+            "weights": {
+              "input": 0.2,
+              "logic": 0.22,
+              "timing": 0.16,
+              "personalization": 0.2,
+              "sav": 0.22
+            },
+            "note": "Composite blends input confidence, logic depth, timing, personalization, and SAV structural weighting."
+          }
+        },
+        "remedyMapping": {
+          "version": 1,
+          "prioritizedPlanets": [
+            "Mars",
+            "Rahu",
+            "Ketu"
+          ],
+          "fromShadbala": [
+            {
+              "driver": "shadbala_normalized_low",
+              "planet": "Mars",
+              "strengthHint": 0.508,
+              "behavioralFocus": {
+                "planet": "Mars",
+                "mantra": "Om Kram Kreem Kroum Sah Bhaumaya Namah",
+                "behaviors": [
+                  "Channel heat via exercise and physical discipline.",
+                  "Delay reactive decisions when angry."
+                ],
+                "practicalActions": [
+                  "Recite Hanuman Chalisa on Tuesdays.",
+                  "Avoid alcohol and non-veg on Tuesdays."
+                ],
+                "traditionalRituals": [
+                  "Recite Hanuman Chalisa on Tuesdays.",
+                  "Avoid alcohol and non-veg on Tuesdays."
+                ],
+                "itemsToDonate": [
+                  "Red lentils",
+                  "Red cloth",
+                  "Jaggery"
+                ],
+                "framing": "Mars alignment channels force into constructive execution."
+              }
+            },
+            {
+              "driver": "shadbala_normalized_low",
+              "planet": "Rahu",
+              "strengthHint": 0.517,
+              "behavioralFocus": {
+                "planet": "Rahu",
+                "mantra": "Om Bhram Bhreem Bhroum Sah Rahave Namah",
+                "behaviors": [
+                  "Avoid get-rich-quick temptation.",
+                  "Reduce screen overuse and digital overstimulation."
+                ],
+                "practicalActions": [
+                  "Worship Shiva or Kalabhairava.",
+                  "Feed street dogs."
+                ],
+                "traditionalRituals": [
+                  "Worship Shiva or Kalabhairava.",
+                  "Feed street dogs."
+                ],
+                "itemsToDonate": [
+                  "Barley",
+                  "Mustard",
+                  "Support sanitation workers"
+                ],
+                "framing": "Rahu alignment converts hunger into strategy and discipline."
+              }
+            },
+            {
+              "driver": "shadbala_normalized_low",
+              "planet": "Ketu",
+              "strengthHint": 0.517,
+              "behavioralFocus": {
+                "planet": "Ketu",
+                "mantra": "Om Sram Sreem Sroum Sah Ketave Namah",
+                "behaviors": [
+                  "Reduce past-focused overthinking.",
+                  "Use meditation and breath work for grounding."
+                ],
+                "practicalActions": [
+                  "Regular Ganesha worship.",
+                  "Offer temple flag donation where culturally appropriate."
+                ],
+                "traditionalRituals": [
+                  "Regular Ganesha worship.",
+                  "Offer temple flag donation where culturally appropriate."
+                ],
+                "itemsToDonate": [
+                  "Dual-tone blanket",
+                  "Black/white sesame",
+                  "Lime"
+                ],
+                "framing": "Ketu alignment converts withdrawal into insight and focus."
+              }
+            }
+          ],
+          "fromWeakestSavHouses": [
+            {
+              "driver": "sarvashtakavarga_house_low",
+              "house": 1,
+              "savScore": 23,
+              "signLordUsed": null,
+              "lifeAreaCue": "self, body, identity",
+              "behavioralFocus": null,
+              "note": "House 1 shows lower cumulative SAV in this model (self, body, identity). Use gentle routine upgrades in this life area rather than drastic moves."
+            },
+            {
+              "driver": "sarvashtakavarga_house_low",
+              "house": 4,
+              "savScore": 24,
+              "signLordUsed": null,
+              "lifeAreaCue": "mother, home, emotional security, inner peace",
+              "behavioralFocus": null,
+              "note": "House 4 shows lower cumulative SAV in this model (mother, home, emotional security, inner peace). Use gentle routine upgrades in this life area rather than drastic moves."
+            },
+            {
+              "driver": "sarvashtakavarga_house_low",
+              "house": 3,
+              "savScore": 26,
+              "signLordUsed": null,
+              "lifeAreaCue": "courage, effort, communication, siblings",
+              "behavioralFocus": null,
+              "note": "House 3 shows lower cumulative SAV in this model (courage, effort, communication, siblings). Use gentle routine upgrades in this life area rather than drastic moves."
+            }
+          ],
+          "synthesis": "Structural Shadbala is relatively soft for Mars, Rahu, Ketu; behavioral steadiness tends to compound more than intensity. Low Sarvashtakavarga reinforcement in houses 1, 4, 3 suggests pacing gains in those arenas with consistent small wins.",
+          "caveat": "Remedy mapping prioritizes weakest Shadbala and lowest SAV houses as practical behavioral hints. This is supportive guidance—not medical, legal, or guaranteed outcome advice."
+        },
+        "timeSensitivity": {
+          "testedOffsetsMinutes": [
+            -20,
+            20
+          ],
+          "unstable": false,
+          "confidenceImpact": "stable",
+          "metrics": {
+            "ascendantChangedInVariants": 0,
+            "moonHouseChangedInVariants": 0,
+            "houseShiftRate": 0
+          },
+          "note": "Core house structure is stable across +/-20 minute sensitivity checks."
+        },
+        "profileHash": "9ebb4c793a4d2de1a9dc2fd4ab225e0b0d57a6e4b20da9b3a0117063a5557557",
+        "accuracy": {
+          "analysisMode": "full",
+          "confidenceLevel": "high",
+          "accuracyNotes": [
+            "Exact coordinates and timezone context were used for chart calculation.",
+            "Ascendant and house-level interpretation are enabled with high confidence."
+          ]
+        },
+        "timeRectification": {
+          "model": "rectification_v3_per_event_impact",
+          "dateAlignment": {
+            "score": 0,
+            "matched": 0,
+            "total": 0,
+            "byEvent": []
+          },
+          "eventAlignment": {
+            "score": 0,
+            "matched": 0,
+            "total": 0,
+            "weightedMatched": 0,
+            "totalImpactMass": 0,
+            "matchedImpactMass": 0,
+            "byEvent": []
+          },
+          "suggestion": {
+            "status": "acceptable",
+            "confidence": "medium",
+            "note": "Provide life-event checkpoints to refine timing confidence further."
+          },
+          "caveat": "Rectification assistant is an evidence-weighted heuristic and not a substitute for full manual rectification practice. Event alignment score uses per-event impact weights (major milestones count more than minor notes)."
+        },
+        "access": {
+          "deepData": false,
+          "tier": "basic"
+        },
+        "dashaSnapshot": {
+          "mahaDasha": "Moon",
+          "antarDasha": "Moon",
+          "pratyantar": "Sun",
+          "startDate": "2025-07-11",
+          "endDate": "2026-05-12"
+        }
+      },
+      "dashaData": null,
+      "createdAt": "2026-05-09T08:05:20.087Z"
+    }
+  ]
+}

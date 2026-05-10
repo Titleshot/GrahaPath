@@ -1,8 +1,65 @@
-const swe = require('swisseph');
+/**
+ * Lazy-load swisseph so `node server.js` can start when the native addon
+ * is not yet built (Windows: need Python + MSVC, then `npm rebuild swisseph`).
+ */
+let sweModule = null;
+
+function getSwe() {
+  if (!sweModule) {
+    try {
+      sweModule = require('swisseph');
+    } catch (cause) {
+      const err = new Error(
+        'Swiss Ephemeris native module is missing. Install build tools (Python 3 + VS C++ workload), then run: npm rebuild swisseph'
+      );
+      err.code = 'SWISSEPH_LOAD_FAILED';
+      err.cause = cause;
+      throw err;
+    }
+    if (process.env.SWISSEPH_EPHE_PATH) {
+      sweModule.swe_set_ephe_path(process.env.SWISSEPH_EPHE_PATH);
+    }
+  }
+  return sweModule;
+}
+
+function getPlanetaryBodies() {
+  const s = getSwe();
+  return [
+    { name: 'Sun', symbol: '☉', body: s.SE_SUN },
+    { name: 'Moon', symbol: '☽', body: s.SE_MOON },
+    { name: 'Mars', symbol: '♂', body: s.SE_MARS },
+    { name: 'Mercury', symbol: '☿', body: s.SE_MERCURY },
+    { name: 'Jupiter', symbol: '♃', body: s.SE_JUPITER },
+    { name: 'Venus', symbol: '♀', body: s.SE_VENUS },
+    { name: 'Saturn', symbol: '♄', body: s.SE_SATURN },
+    { name: 'Rahu', symbol: '☊', body: s.SE_TRUE_NODE }
+  ];
+}
+
+function tropicalFlags() {
+  const s = getSwe();
+  return s.SEFLG_SWIEPH | s.SEFLG_SPEED;
+}
+
+function siderealFlags() {
+  const s = getSwe();
+  return s.SEFLG_SWIEPH | s.SEFLG_SIDEREAL | s.SEFLG_SPEED;
+}
+
 const { interpretChartPlanets } = require('./interpretationService');
 const { getLifePhaseValidation } = require('./lifePhaseService');
 const { buildPaywallPreview } = require('./paywallService');
 const { generateRemedies } = require('./remedyService');
+const {
+  generateAstroBrain,
+  buildAstroBrainPublicPayload,
+  buildAstroBrainDebugPayload
+} = require('./astroBrain/astroBrainService');
+const { buildCareerWealthDomain } = require('./astroBrain/careerWealthEngine');
+const { buildTimeCalibration } = require('./astroBrain/timeCalibrationEngine');
+const { buildPredictionQuality } = require('./predictionQualityService');
+const { buildRemedyMapping } = require('./remedyMappingService');
 
 const ZODIAC_SIGNS = [
   'Aries',
@@ -49,19 +106,6 @@ const NAKSHATRAS = [
   'Revati'
 ];
 
-const PLANETS = [
-  { name: 'Sun', symbol: '☉', body: swe.SE_SUN },
-  { name: 'Moon', symbol: '☽', body: swe.SE_MOON },
-  { name: 'Mars', symbol: '♂', body: swe.SE_MARS },
-  { name: 'Mercury', symbol: '☿', body: swe.SE_MERCURY },
-  { name: 'Jupiter', symbol: '♃', body: swe.SE_JUPITER },
-  { name: 'Venus', symbol: '♀', body: swe.SE_VENUS },
-  { name: 'Saturn', symbol: '♄', body: swe.SE_SATURN },
-  { name: 'Rahu', symbol: '☊', body: swe.SE_TRUE_NODE }
-];
-
-const SIDEREAL_FLAGS = swe.SEFLG_SWIEPH | swe.SEFLG_SIDEREAL | swe.SEFLG_SPEED;
-const TROPICAL_FLAGS = swe.SEFLG_SWIEPH | swe.SEFLG_SPEED;
 const HOUSE_SYSTEM_PLACIDUS = 'P';
 const FULL_CIRCLE_DEGREES = 360;
 const SIGN_DEGREES = 30;
@@ -74,10 +118,6 @@ const CALCULATION_NOTES = {
   houseSystem: 'Whole Sign',
   nodeType: NODE_TYPE
 };
-
-if (process.env.SWISSEPH_EPHE_PATH) {
-  swe.swe_set_ephe_path(process.env.SWISSEPH_EPHE_PATH);
-}
 
 class AstrologyCalculationError extends Error {
   constructor(message) {
@@ -114,6 +154,11 @@ function nakshatraFromLongitude(longitude) {
   return NAKSHATRAS[index];
 }
 
+function nakshatraPadaFromLongitude(longitude) {
+  const withinNakshatra = normalizeDegree(longitude) % NAKSHATRA_DEGREES;
+  return Math.min(4, Math.floor(withinNakshatra / (NAKSHATRA_DEGREES / 4)) + 1);
+}
+
 function wholeSignHouse(longitude, ascendantLongitude) {
   const planetSign = Math.floor(normalizeDegree(longitude) / SIGN_DEGREES);
   const ascendantSign = Math.floor(normalizeDegree(ascendantLongitude) / SIGN_DEGREES);
@@ -128,12 +173,13 @@ function toJulianDay(utcDateTime) {
     utcDateTime.second / 3600 +
     utcDateTime.millisecond / 3600000;
 
-  const result = swe.swe_julday(
+  const s = getSwe();
+  const result = s.swe_julday(
     utcDateTime.year,
     utcDateTime.month,
     utcDateTime.day,
     decimalHour,
-    swe.SE_GREG_CAL
+    s.SE_GREG_CAL
   );
 
   return typeof result === 'number' ? result : result.julianDay;
@@ -141,7 +187,7 @@ function toJulianDay(utcDateTime) {
 
 function callSwissEphemeris(methodName, ...args) {
   return new Promise((resolve, reject) => {
-    const method = swe[methodName];
+    const method = getSwe()[methodName];
 
     if (typeof method !== 'function') {
       reject(new AstrologyCalculationError(`Swiss Ephemeris method unavailable: ${methodName}`));
@@ -174,8 +220,8 @@ function callSwissEphemeris(methodName, ...args) {
 
 async function calculatePlanet(julianDay, planet) {
   const [tropicalResult, siderealResult] = await Promise.all([
-    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, TROPICAL_FLAGS),
-    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, SIDEREAL_FLAGS)
+    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, tropicalFlags()),
+    callSwissEphemeris('swe_calc_ut', julianDay, planet.body, siderealFlags())
   ]);
 
   if (tropicalResult.error || siderealResult.error) {
@@ -209,8 +255,15 @@ async function calculateHouseCusps(julianDay, latitude, longitude) {
     throw new AstrologyCalculationError(`Swiss Ephemeris house calculation failed: ${houses.error}`);
   }
 
+  const tropicalCusps = Array.isArray(houses.house)
+    ? houses.house.slice(0, 12).map((value) => normalizeDegree(value))
+    : Array.isArray(houses.cusps)
+      ? houses.cusps.slice(0, 12).map((value) => normalizeDegree(value))
+      : [];
+
   return {
-    ascendantTropical: normalizeDegree(houses.ascendant)
+    ascendantTropical: normalizeDegree(houses.ascendant),
+    tropicalCusps
   };
 }
 
@@ -239,7 +292,31 @@ function calculateKetu(rahu) {
   };
 }
 
-function formatPlanet(rawPlanet, ascendantLongitude) {
+function isWithinArc(longitude, start, end) {
+  if (start <= end) {
+    return longitude >= start && longitude < end;
+  }
+  return longitude >= start || longitude < end;
+}
+
+function activeBhavaHouse(longitude, siderealCusps) {
+  if (!Array.isArray(siderealCusps) || siderealCusps.length < 12) {
+    return null;
+  }
+
+  const degree = normalizeDegree(longitude);
+  for (let i = 0; i < 12; i += 1) {
+    const start = siderealCusps[i];
+    const end = siderealCusps[(i + 1) % 12];
+    if (isWithinArc(degree, start, end)) {
+      return i + 1;
+    }
+  }
+
+  return null;
+}
+
+function formatPlanet(rawPlanet, ascendantLongitude, siderealBhavaCusps) {
   return {
     name: rawPlanet.name,
     symbol: rawPlanet.symbol,
@@ -247,7 +324,11 @@ function formatPlanet(rawPlanet, ascendantLongitude) {
     absoluteDegree: round(rawPlanet.longitude, 4),
     sign: signFromLongitude(rawPlanet.longitude),
     house: wholeSignHouse(rawPlanet.longitude, ascendantLongitude),
-    nakshatra: nakshatraFromLongitude(rawPlanet.longitude)
+    speed: round(rawPlanet.speed, 6),
+    retrograde: Number(rawPlanet.speed) < 0,
+    activeBhavaHouse: activeBhavaHouse(rawPlanet.longitude, siderealBhavaCusps),
+    nakshatra: nakshatraFromLongitude(rawPlanet.longitude),
+    nakshatraPada: nakshatraPadaFromLongitude(rawPlanet.longitude)
   };
 }
 
@@ -263,6 +344,72 @@ function formatDebugPlanet(rawPlanet, ayanamsa) {
   };
 }
 
+/**
+ * When unset, transits prefer bhāva-chalit (Placidus sidereal cusps) if cusps are passed.
+ * Set TRANSIT_PRIMARY_HOUSE=whole_sign_only to force whole-sign houses only.
+ */
+function transitHouseResolution(siderealLongitude, natalAscendantLongitude, siderealBhavaCusps) {
+  const whole = wholeSignHouse(siderealLongitude, natalAscendantLongitude);
+  const bhava =
+    Array.isArray(siderealBhavaCusps) && siderealBhavaCusps.length >= 12
+      ? activeBhavaHouse(siderealLongitude, siderealBhavaCusps)
+      : null;
+  const preferBhava =
+    bhava != null && String(process.env.TRANSIT_PRIMARY_HOUSE || '').toLowerCase() !== 'whole_sign_only';
+  const primary = preferBhava ? bhava : whole;
+  return {
+    houseWholeSign: whole,
+    houseBhavaChalit: bhava,
+    houseFromNatalAsc: primary,
+    transitHouseMode: preferBhava ? 'bhava_chalit_sidereal' : 'whole_sign'
+  };
+}
+
+async function buildTransitSnapshot({ natalAscendantLongitude, siderealBhavaCusps = null }) {
+  const { DateTime } = require('luxon');
+  const nowUtc = DateTime.utc();
+  return buildTransitSnapshotAtUtc(nowUtc.toISO(), natalAscendantLongitude, { siderealBhavaCusps });
+}
+
+/** Sidereal transit snapshot at a specific UTC instant (for life-event rectification tests). */
+async function buildTransitSnapshotAtUtc(utcIso, natalAscendantLongitude, options = {}) {
+  const siderealBhavaCusps = options?.siderealBhavaCusps ?? null;
+  const { DateTime } = require('luxon');
+  const utc = typeof utcIso === 'string' ? DateTime.fromISO(utcIso, { zone: 'utc' }) : utcIso;
+  if (!utc || !utc.isValid) {
+    throw new AstrologyCalculationError('Invalid UTC instant for transit snapshot.');
+  }
+
+  const swe = getSwe();
+  const jd = toJulianDay(utc);
+  const ayanamsaAt = swe.swe_get_ayanamsa_ut(jd);
+
+  const rawPlanets = await Promise.all(getPlanetaryBodies().map((planet) => calculatePlanet(jd, planet)));
+  const rahu = rawPlanets.find((planet) => planet.name === 'Rahu');
+  const withKetu = [...rawPlanets, calculateKetu(rahu)];
+
+  return {
+    generatedAt: utc.toISO(),
+    transitHouseNote:
+      siderealBhavaCusps && String(process.env.TRANSIT_PRIMARY_HOUSE || '').toLowerCase() !== 'whole_sign_only'
+        ? 'Primary house column uses Lahiri sidereal Placidus cusps when available; see houseWholeSign for whole-sign reference.'
+        : 'Primary house column uses whole-sign houses from natal ascendant.',
+    planets: withKetu.map((p) => {
+      const siderealLongitude = normalizeDegree(p.tropicalLongitude - ayanamsaAt);
+      const hrs = transitHouseResolution(siderealLongitude, natalAscendantLongitude, siderealBhavaCusps);
+      return {
+        name: p.name,
+        sign: signFromLongitude(siderealLongitude),
+        absoluteDegree: round(siderealLongitude, 4),
+        houseFromNatalAsc: hrs.houseFromNatalAsc,
+        houseWholeSign: hrs.houseWholeSign,
+        houseBhavaChalit: hrs.houseBhavaChalit,
+        transitHouseMode: hrs.transitHouseMode
+      };
+    })
+  };
+}
+
 async function generateBirthChart({
   name,
   place,
@@ -275,17 +422,23 @@ async function generateBirthChart({
 }) {
   // Lahiri is the required Vedic ayanamsa. Swiss Ephemeris subtracts it when
   // SEFLG_SIDEREAL is used, so planet longitudes below are sidereal positions.
+  const swe = getSwe();
   swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
 
   const julianDay = toJulianDay(utcDateTime);
   const ayanamsa = swe.swe_get_ayanamsa_ut(julianDay);
   const houses = await calculateHouseCusps(julianDay, location.latitude, location.longitude);
   const ascendantLongitude = normalizeDegree(houses.ascendantTropical - ayanamsa);
+  const siderealBhavaCusps = (houses.tropicalCusps || []).map((cusp) => normalizeDegree(cusp - ayanamsa));
 
-  const rawPlanets = await Promise.all(PLANETS.map((planet) => calculatePlanet(julianDay, planet)));
+  const rawPlanets = await Promise.all(
+    getPlanetaryBodies().map((planet) => calculatePlanet(julianDay, planet))
+  );
   const rahu = rawPlanets.find((planet) => planet.name === 'Rahu');
   const rawPlanetsWithKetu = [...rawPlanets, calculateKetu(rahu)];
-  const allPlanets = rawPlanetsWithKetu.map((planet) => formatPlanet(planet, ascendantLongitude));
+  const allPlanets = rawPlanetsWithKetu.map((planet) =>
+    formatPlanet(planet, ascendantLongitude, siderealBhavaCusps)
+  );
   const interpretations = interpretChartPlanets(allPlanets);
   const interpretedPlanets = allPlanets.map((planet, index) => ({
     ...planet,
@@ -295,7 +448,10 @@ async function generateBirthChart({
     .filter((interpretation) => interpretation.reportLine)
     .slice(0, 3)
     .map((interpretation) => interpretation.reportLine);
-  const lifePhaseValidation = getLifePhaseValidation();
+  const lifePhaseValidation = getLifePhaseValidation({
+    ascendant: signFromLongitude(ascendantLongitude),
+    planets: interpretedPlanets
+  });
   const paywallPreview = buildPaywallPreview();
   const remedies = generateRemedies({ planets: interpretedPlanets });
 
@@ -332,8 +488,24 @@ async function generateBirthChart({
     remedies,
     remedyPreview: remedies,
     houseCusps: wholeSignCusps(ascendantLongitude),
+    bhavaChalit: {
+      houseSystem: 'Placidus cusps from Swiss Ephemeris, shifted to sidereal Lahiri for active-house reference',
+      siderealCusps: siderealBhavaCusps.map((degree, index) => ({
+        house: index + 1,
+        degree: round(degree, 4),
+        sign: signFromLongitude(degree)
+      })),
+      caveat:
+        'Bhava-chalit active house is provided as an auxiliary interpretive layer. Whole-sign houses remain primary for Jyotish framing.'
+    },
     julianDay: round(julianDay, 6)
   };
+
+  chart.transitsNow = await buildTransitSnapshot({
+    natalAscendantLongitude: ascendantLongitude,
+    siderealBhavaCusps
+  });
+  chart.timeCalibration = buildTimeCalibration(chart, chart.transitsNow);
 
   if (includeDebug) {
     chart.debug = {
@@ -341,10 +513,19 @@ async function generateBirthChart({
     };
   }
 
+  const astroFull = generateAstroBrain(chart);
+  chart.careerWealth = buildCareerWealthDomain(chart, astroFull);
+  chart.astroBrain = includeDebug
+    ? buildAstroBrainDebugPayload(astroFull)
+    : buildAstroBrainPublicPayload(astroFull);
+  chart.predictionQuality = buildPredictionQuality(chart);
+  chart.remedyMapping = buildRemedyMapping(chart);
+
   return chart;
 }
 
 module.exports = {
   AstrologyCalculationError,
-  generateBirthChart
+  generateBirthChart,
+  buildTransitSnapshotAtUtc
 };

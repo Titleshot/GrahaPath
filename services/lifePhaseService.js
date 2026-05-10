@@ -4,55 +4,133 @@ const VALIDATION_OPTIONS = [
   { value: 'no', label: '✖ Not really', score: 0 }
 ];
 
-const LIFE_PHASES = [
+const SIGN_TONES = {
+  Aries: 'fast response and direct expression',
+  Taurus: 'steady processing and stability-seeking',
+  Gemini: 'mental agility and multiple viewpoints',
+  Cancer: 'protective emotion and memory depth',
+  Leo: 'identity-led expression and visibility needs',
+  Virgo: 'analysis, correction, and detail focus',
+  Libra: 'balance-seeking and relational calibration',
+  Scorpio: 'deep internal processing and trust testing',
+  Sagittarius: 'meaning-seeking and future framing',
+  Capricorn: 'duty-focused maturity and delayed rewards',
+  Aquarius: 'detached insight and unconventional framing',
+  Pisces: 'sensitivity, permeability, and symbolic processing'
+};
+
+const FALLBACK_PHASES = [
   {
     id: 'early-formation',
     phase: 'Phase 1',
     ageRange: '0-14',
     title: 'Early Emotional & Mental Formation',
-    content: [
-      'During your early years, your chart suggests that your emotional sensitivity and awareness developed faster than your surroundings could fully understand.',
-      'You may have noticed moments where you observed more than you expressed — processing things internally rather than reacting outwardly.',
-      'There could have been phases where you felt slightly different from others, not necessarily disconnected, but more aware of your environment and people’s behavior.',
-      'This phase often shapes a deep inner world — one that later becomes your strength, but early on, may have felt like overthinking or emotional depth without clear direction.'
-    ],
-    validationOptions: VALIDATION_OPTIONS
+    paragraphs: [
+      'During early years, your pattern suggests heightened emotional observation before expression.',
+      'You may have processed situations internally before reacting outwardly.',
+      'This can create strong self-awareness later, even if it felt like overthinking early on.'
+    ]
   },
   {
     id: 'identity-direction',
     phase: 'Phase 2',
     ageRange: '15-24',
     title: 'Identity Building & Internal Conflict',
-    content: [
-      'As you moved into your teenage and early adult years, your chart indicates a phase of questioning direction and identity.',
-      'You may have explored multiple paths — academically, socially, or personally — without feeling fully settled in one.',
-      'There is often a push-pull dynamic here: one part of you seeks clarity and structure, while another part resists limitation and seeks freedom.',
-      'This phase may have brought moments of self-doubt, comparison, or pressure to “figure things out,” even when the internal path was still forming.',
-      'However, this exploration is not a weakness — it is how your system learns depth before direction.'
-    ],
-    validationOptions: VALIDATION_OPTIONS
+    paragraphs: [
+      'This phase often brings identity testing through study, peers, and early responsibility.',
+      'You may have explored multiple paths before committing to one direction.',
+      'The tension between freedom and structure can be part of your growth arc.'
+    ]
   },
   {
     id: 'pressure-alignment',
     phase: 'Phase 3',
     ageRange: '25-Present',
     title: 'Responsibility, Career Pressure & Alignment',
-    content: [
-      'In your current phase, your chart shows increasing pressure to stabilize your path — especially in areas related to career, finances, and long-term direction.',
-      'You may feel a growing need to become “clear” and “settled,” while internally still refining what truly aligns with you.',
-      'There can be moments where external expectations feel heavier than your internal readiness, creating a sense of pressure or urgency.',
-      'At the same time, your chart indicates that this phase is where your real growth begins — not through instant clarity, but through consistent effort and self-understanding.',
-      'This is the phase where your life starts shaping into something real.'
-    ],
-    validationOptions: VALIDATION_OPTIONS
+    paragraphs: [
+      'This period tends to prioritize clarity in work, finances, and long-term direction.',
+      'Pressure can increase as external expectations meet internal refinement.',
+      'Sustained consistency often matters more than fast outcomes in this phase.'
+    ]
   }
 ];
 
-function getLifePhaseValidation() {
+function planetByName(chart, name) {
+  return chart?.planets?.find((p) => p.name === name) || null;
+}
+
+function houseTone(house) {
+  if ([1, 4, 7, 10].includes(house)) return 'high visibility and direct life pressure';
+  if ([6, 8, 12].includes(house)) return 'internal pressure, complexity, and slower integration';
+  if ([2, 11].includes(house)) return 'value and resource-oriented focus';
+  return 'skill-building and directional experimentation';
+}
+
+function describeSignal(p) {
+  if (!p) return 'a mixed planetary signal';
+  return `${p.name} in ${p.sign} (house ${p.house})`;
+}
+
+function dynamicLifePhases(chart) {
+  const moon = planetByName(chart, 'Moon');
+  const saturn = planetByName(chart, 'Saturn');
+  const rahu = planetByName(chart, 'Rahu');
+  const lagna = chart?.ascendant || 'your ascendant';
+  const dasha = chart?.astroBrain?.currentDasha?.planet || null;
+
+  const moonTone = moon ? SIGN_TONES[moon.sign] || 'emotional processing depth' : 'emotional processing depth';
+  const saturnTone = saturn ? houseTone(saturn.house) : 'responsibility pressure';
+  const rahuTone = rahu ? houseTone(rahu.house) : 'ambition and uncertainty';
+
+  return [
+    {
+      id: 'early-formation',
+      phase: 'Phase 1',
+      ageRange: '0-14',
+      title: `Early Formation Through ${moon?.sign || 'Emotional'} Processing`,
+      paragraphs: [
+        `Your early years likely carried a ${moonTone} style of internal development, where you understood more than you expressed.`,
+        `This pattern is linked to ${describeSignal(moon)}, which often builds silent observation before outward confidence.`,
+        `There may have been moments of feeling slightly out-of-sync with peers, not from disconnection but from deeper internal processing.`,
+        `As a result, early sensitivity may later become pattern-recognition strength in adult life.`
+      ]
+    },
+    {
+      id: 'identity-direction',
+      phase: 'Phase 2',
+      ageRange: '15-24',
+      title: 'Identity Building Through Pressure and Experimentation',
+      paragraphs: [
+        `This phase often reflects tension between self-definition and external pressure, especially with ${describeSignal(saturn)} in the chart narrative.`,
+        `You may have tested multiple directions while trying to reconcile personal identity (${lagna}) with practical expectations.`,
+        `The push-pull dynamic can look like wanting clarity while resisting premature commitment — a normal growth pattern, not a flaw.`,
+        `By the end of this phase, decision quality usually improves because your internal filters become sharper.`
+      ]
+    },
+    {
+      id: 'pressure-alignment',
+      phase: 'Phase 3',
+      ageRange: '25-Present',
+      title: 'Current Alignment: Responsibility Meets Direction',
+      paragraphs: [
+        `Your current phase emphasizes long-term structuring in career, money, and personal direction, with ${saturnTone} themes becoming more visible.`,
+        `This is reinforced by ${describeSignal(rahu)}, which can increase ambition while also testing focus and consistency.`,
+        dasha
+          ? `The active ${dasha} period can make these themes feel immediate right now, increasing pressure to choose what is sustainable.`
+          : 'Current timing suggests a consolidation period where steady effort matters more than speed.',
+        `Growth in this phase usually comes from disciplined execution and clearer boundaries, not instant certainty.`
+      ]
+    }
+  ];
+}
+
+function getLifePhaseValidation(chart = null) {
+  const phases = chart ? dynamicLifePhases(chart) : FALLBACK_PHASES;
   return {
-    phases: LIFE_PHASES.map((phase) => ({
+    phases: phases.map((phase) => ({
       ...phase,
-      paragraphs: phase.content
+      validationOptions: VALIDATION_OPTIONS,
+      paragraphs: phase.paragraphs || phase.content
     })),
     transition: {
       title: 'Your responses show strong alignment with your planetary life pattern.',
@@ -68,7 +146,7 @@ function scorePhaseResponses(responses = []) {
   const responseList = Array.isArray(responses)
     ? responses
     : Object.entries(responses).map(([phaseId, value]) => ({ phaseId, value }));
-  const normalizedResponses = LIFE_PHASES.map((phase) => {
+  const normalizedResponses = FALLBACK_PHASES.map((phase) => {
     const response = responseList.find((item) => item.phaseId === phase.id);
     const value = response && scoreByValue.has(response.value) ? response.value : null;
 
@@ -79,7 +157,7 @@ function scorePhaseResponses(responses = []) {
     };
   });
   const totalScore = normalizedResponses.reduce((sum, response) => sum + response.score, 0);
-  const alignmentScore = Math.round((totalScore / LIFE_PHASES.length) * 100);
+  const alignmentScore = Math.round((totalScore / FALLBACK_PHASES.length) * 100);
 
   return {
     alignmentScore,
@@ -94,7 +172,7 @@ function scorePhaseResponses(responses = []) {
 }
 
 module.exports = {
-  LIFE_PHASES,
+  LIFE_PHASES: FALLBACK_PHASES,
   VALIDATION_OPTIONS,
   buildLifePhaseValidation: getLifePhaseValidation,
   getLifePhaseValidation,

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Demo Limit</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            text-align: center;
+        }
+        .button {
+            background: #d4af37;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .button:hover {
+            background: #b8941f;
+        }
+        .success {
+            color: #4caf50;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Reset GrahaPath Demo Limit</h1>
+    <p>Click the button below to reset your demo usage limit and get 2 more free chances.</p>
+    
+    <button class="button" onclick="resetDemoLimit()">Reset Demo Limit</button>
+    <button class="button" onclick="clearAllData()">Clear All Data</button>
+    
+    <div id="message" class="success"></div>
+
+    <script>
+        function resetDemoLimit() {
+            localStorage.removeItem('usedDemoCharts');
+            localStorage.removeItem('storedCharts');
+            
+            document.getElementById('message').innerHTML = 
+                '✅ Demo limit reset successfully! You now have 2+ free demo chances.<br>' +
+                'Please refresh the GrahaPath page and try again.';
+        }
+        
+        function clearAllData() {
+            localStorage.clear();
+            document.getElementById('message').innerHTML = 
+                '✅ All data cleared! Demo limit reset completely.<br>' +
+                'Please refresh the GrahaPath page and try again.';
+        }
+    </script>
+</body>
+</html>

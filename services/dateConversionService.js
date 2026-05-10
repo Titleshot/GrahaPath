@@ -1,3 +1,4 @@
+const { DateTime } = require('luxon');
 const NepaliDateModule = require('nepali-date-converter');
 
 const NepaliDate = NepaliDateModule.default || NepaliDateModule;
@@ -94,9 +95,42 @@ function convertBsToAd(year, month, day) {
   };
 }
 
+function convertAdToBs(adDateIso, zone = 'Asia/Kathmandu') {
+  if (typeof adDateIso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(adDateIso)) {
+    throw new Error('AD date must be in YYYY-MM-DD format.');
+  }
+
+  const dt = DateTime.fromISO(adDateIso, { zone, setZone: true });
+  if (!dt.isValid) {
+    throw new Error(`Invalid AD date: ${adDateIso}`);
+  }
+
+  // nepali-date-converter accepts a JS Date (AD) and can return BS fields via getBS().
+  const nepaliDate = new NepaliDate(dt.toJSDate());
+  const bs = nepaliDate.getBS();
+
+  const year = asInteger(bs.year);
+  const monthZeroBased = asInteger(bs.month);
+  const day = asInteger(bs.date);
+
+  if (!Number.isInteger(year) || !Number.isInteger(monthZeroBased) || !Number.isInteger(day)) {
+    throw new Error('Failed to convert AD to BS.');
+  }
+
+  const month = monthZeroBased + 1; // library exposes month index; BS months are 1–12
+
+  return {
+    year,
+    month,
+    day,
+    bsDate: formatBsDate(year, month, day)
+  };
+}
+
 module.exports = {
   BS_MONTH_NAMES,
   convertBsToAd,
+  convertAdToBs,
   formatBsDate,
   getBsMonthLength
 };

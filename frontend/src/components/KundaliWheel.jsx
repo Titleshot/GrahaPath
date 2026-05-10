@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { getRashiParts } from '../data/vedicNames';
+import { hasDeepChartData } from '../lib/chartAccess';
+import PlanetWheelModal from './PlanetWheelModal';
 
 const HOUSE_LABEL_RADIUS = 128;
 const PLANET_RADIUS = 96;
@@ -27,9 +30,36 @@ function planetPosition(house, index, total) {
   return polarToCartesian(PLANET_RADIUS, houseAngle(house) + spread);
 }
 
-export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) {
+export default function KundaliWheel({
+  chart,
+  selectedPlanet: controlledSelected,
+  onSelectPlanet,
+  forceDeepData = false,
+  mode = 'paid'
+}) {
   const planets = chart?.planets || [];
   const ascendantParts = getRashiParts(chart.ascendant);
+  const isFreeMode = mode === 'free';
+  const ephemerisUnlocked = isFreeMode ? false : hasDeepChartData(chart, forceDeepData);
+  const [detailPlanet, setDetailPlanet] = useState(null);
+
+  const selectedForHighlight = controlledSelected ?? detailPlanet;
+
+  useEffect(() => {
+    if (!ephemerisUnlocked || isFreeMode) {
+      setDetailPlanet(null);
+    }
+  }, [ephemerisUnlocked, isFreeMode]);
+
+  function handlePlanetClick(planet) {
+    if (isFreeMode || !ephemerisUnlocked) return;
+    setDetailPlanet(planet);
+    onSelectPlanet?.(planet);
+  }
+
+  function closeModal() {
+    setDetailPlanet(null);
+  }
 
   return (
     <motion.div
@@ -38,18 +68,19 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-gold-300/70">Interactive kundali</p>
-          <h2 className="font-serif text-2xl text-cream">Whole-sign wheel</h2>
-        </div>
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
         <div className="rounded-full border border-gold-400/30 px-4 py-2 text-sm text-gold-100">
           Ascendant: <span className="text-gold-300">{chart.ascendant}</span>
         </div>
       </div>
 
       <div className="relative mx-auto aspect-square w-full max-w-[560px]">
-        <svg viewBox="0 0 300 300" className="h-full w-full drop-shadow-[0_0_24px_rgba(218,165,32,0.2)]">
+        <svg
+          viewBox="0 0 300 300"
+          className={`h-full w-full drop-shadow-[0_0_24px_rgba(218,165,32,0.2)] transition ${
+            isFreeMode ? 'pointer-events-none select-none blur-[3px] saturate-90' : ''
+          }`}
+        >
           <defs>
             <radialGradient id="wheelGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#f7d774" stopOpacity="0.18" />
@@ -101,9 +132,11 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
           <text x={CENTER} y="162" textAnchor="middle" className="fill-gold-100 text-[7px]">
             {ascendantParts.vedic} / {ascendantParts.devanagari}
           </text>
-          <text x={CENTER} y="174" textAnchor="middle" className="fill-gold-100 text-[7px]" opacity="0.8">
-            {chart.ascendantDegree} deg
-          </text>
+          {chart.ascendantDegree != null && chart.ascendantDegree !== '' ? (
+            <text x={CENTER} y="174" textAnchor="middle" className="fill-gold-100 text-[7px]" opacity="0.8">
+              {chart.ascendantDegree} deg
+            </text>
+          ) : null}
 
           {Array.from({ length: 12 }, (_item, index) => {
             const house = index + 1;
@@ -111,7 +144,7 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
 
             return housePlanets.map((planet, planetIndex) => {
               const position = planetPosition(house, planetIndex, housePlanets.length);
-              const isSelected = selectedPlanet?.name === planet.name;
+              const isSelected = selectedForHighlight?.name === planet.name;
 
               return (
                 <g
@@ -120,11 +153,11 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
                   tabIndex="0"
                   aria-label={`${planet.name} in house ${planet.house}`}
                   className="cursor-pointer"
-                  onClick={() => onSelectPlanet(planet)}
+                  onClick={() => handlePlanetClick(planet)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      onSelectPlanet(planet);
+                      handlePlanetClick(planet);
                     }
                   }}
                 >
@@ -150,11 +183,45 @@ export default function KundaliWheel({ chart, selectedPlanet, onSelectPlanet }) 
             });
           })}
         </svg>
+        {isFreeMode ? (
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="max-w-[340px] rounded-2xl border border-gold/30 bg-black/75 px-4 py-4 text-center shadow-xl backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold/65">Demo chart view</p>
+              <p className="mt-2 text-sm leading-relaxed text-cream/90">
+                Full interactive chart unlocks with Life Decode.
+              </p>
+              <p className="mt-2 text-[11px] leading-relaxed text-ivory/70">
+                Demo view shows your core chart summary. Full placements unlock after Life Decode.
+              </p>
+            </div>
+          </div>
+        ) : !ephemerisUnlocked ? (
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="max-w-[320px] rounded-2xl border border-gold/30 bg-black/75 px-4 py-4 text-center shadow-xl backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-gold/65">Premium required</p>
+              <p className="mt-2 text-sm leading-relaxed text-cream/90">
+                Deep chart view is blurred in free tier. Unlock premium to open full wheel and detailed graha
+                interactions.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <p className="mt-4 text-center text-xs text-cream/50">
-        Tap a planet to explore your personal insight. Placements come directly from your calculated chart.
+        {isFreeMode
+          ? 'Free demo shows Lagna and core rashi identity. Planet-level placement map unlocks in paid mode.'
+          : ephemerisUnlocked
+          ? 'Tap a planet for a full placement popup — sign, house, nakṣatra, and GrahaPath interpretation.'
+          : 'Chart is blurred in free tier. Upgrade to premium to unlock full wheel visibility and planet drill-down.'}
       </p>
+
+      <PlanetWheelModal
+        planet={detailPlanet}
+        onClose={closeModal}
+        ephemerisUnlocked={ephemerisUnlocked}
+        basicMode={isFreeMode}
+      />
     </motion.div>
   );
 }

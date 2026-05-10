@@ -1,139 +1,95 @@
+const { remediesByKey } = require('./remediesDb');
+
 const REMEDY_LIBRARY = {
-  Saturn: {
-    problem:
-      'Your chart shows Saturn influence around discipline, patience, responsibility, and long-term growth.',
-    logic:
-      'Saturn represents structure, responsibility, and delayed rewards. When imbalanced, it can create pressure, self-doubt, and slow progress. Alignment with Saturn does not remove challenges; it helps transform pressure into stability and long-term success.',
-    mantra: 'Om Sham Shanicharaya Namah',
-    behavior: [
-      'Maintain a consistent daily routine',
-      'Complete tasks even when motivation is low',
-      'Avoid procrastination patterns'
-    ],
-    action: [
-      'Fix one daily habit such as sleep, work, or focus',
-      'Track consistency for 21 days'
-    ]
+  Sun: {
+    problem: 'Sun themes need alignment around confidence, direction, and responsible leadership.',
+    logic: 'Sun alignment builds clarity, vitality, and principled authority.',
+    mantra: remediesByKey.Sun.mantra,
+    behavior: remediesByKey.Sun.practical_lifestyle,
+    action: remediesByKey.Sun.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Sun.traditional_rituals,
+    practical_lifestyle: remediesByKey.Sun.practical_lifestyle,
+    items_to_donate: remediesByKey.Sun.items_to_donate
   },
   Moon: {
-    problem: 'Your chart shows emotional fluctuation, sensitivity, or overthinking patterns.',
-    logic:
-      'Moon governs emotions and mental stability. When unstable, it can create mood shifts and internal confusion. Moon alignment helps create emotional steadiness without suppressing sensitivity.',
-    mantra: 'Om Som Somaya Namah',
-    behavior: [
-      'Reduce overthinking loops',
-      'Use journaling or quiet reflection',
-      'Protect your emotional environment'
-    ],
-    action: [
-      'Spend time near water or in a calm environment',
-      'Reduce emotional overload before sleep'
-    ]
-  },
-  Sun: {
-    problem: 'Your chart shows identity, confidence, authority, or self-direction themes.',
-    logic:
-      'Sun represents vitality, confidence, and personal direction. When imbalanced, it can create pride, self-doubt, or pressure to prove yourself. Sun alignment helps strengthen clarity without forcing dominance.',
-    mantra: 'Om Suryaya Namah',
-    behavior: [
-      'Practice clear self-expression',
-      'Take responsibility without seeking constant approval',
-      'Avoid ego-based comparison'
-    ],
-    action: [
-      'Start the day with sunlight or a grounding morning routine',
-      'Set one clear intention every morning'
-    ]
+    problem: 'Moon themes need emotional steadiness and mental clarity.',
+    logic: 'Moon alignment stabilizes feelings without suppressing sensitivity.',
+    mantra: remediesByKey.Moon.mantra,
+    behavior: remediesByKey.Moon.practical_lifestyle,
+    action: remediesByKey.Moon.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Moon.traditional_rituals,
+    practical_lifestyle: remediesByKey.Moon.practical_lifestyle,
+    items_to_donate: remediesByKey.Moon.items_to_donate
   },
   Mars: {
-    problem: 'Your chart shows action, anger, courage, or conflict-management themes.',
-    logic:
-      'Mars represents drive, courage, and decisive action. When imbalanced, it can create impatience, conflict, or reactive decisions. Mars alignment helps turn raw force into disciplined action.',
-    mantra: 'Om Angarakaya Namah',
-    behavior: [
-      'Pause before reacting',
-      'Channel anger into physical movement or focused work',
-      'Choose direct but respectful communication'
-    ],
-    action: [
-      'Use exercise or walking to release excess heat',
-      'Complete one difficult task before distraction'
-    ]
+    problem: 'Mars themes need disciplined action and anger management.',
+    logic: 'Mars alignment channels force into constructive execution.',
+    mantra: remediesByKey.Mars.mantra,
+    behavior: remediesByKey.Mars.practical_lifestyle,
+    action: remediesByKey.Mars.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Mars.traditional_rituals,
+    practical_lifestyle: remediesByKey.Mars.practical_lifestyle,
+    items_to_donate: remediesByKey.Mars.items_to_donate
   },
   Mercury: {
-    problem: 'Your chart shows communication, analysis, learning, or overthinking themes.',
-    logic:
-      'Mercury represents intelligence, speech, trade, and adaptability. When imbalanced, it can create nervousness, scattered thinking, or over-analysis. Mercury alignment helps sharpen thought into useful communication.',
-    mantra: 'Om Budhaya Namah',
-    behavior: [
-      'Speak with precision',
-      'Avoid over-explaining when clarity is enough',
-      'Write ideas before acting on them'
-    ],
-    action: [
-      'Keep a short daily learning or writing habit',
-      'Reduce unnecessary information overload'
-    ]
+    problem: 'Mercury themes need cleaner communication and cognitive discipline.',
+    logic: 'Mercury alignment improves analysis, speech, and decision quality.',
+    mantra: remediesByKey.Mercury.mantra,
+    behavior: remediesByKey.Mercury.practical_lifestyle,
+    action: remediesByKey.Mercury.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Mercury.traditional_rituals,
+    practical_lifestyle: remediesByKey.Mercury.practical_lifestyle,
+    items_to_donate: remediesByKey.Mercury.items_to_donate
   },
   Jupiter: {
-    problem: 'Your chart shows belief, growth, wisdom, teaching, or direction themes.',
-    logic:
-      'Jupiter represents wisdom, faith, ethics, and expansion. When imbalanced, it can create overconfidence or confusion around belief. Jupiter alignment helps growth become guided by judgment and humility.',
-    mantra: 'Om Gurave Namah',
-    behavior: [
-      'Seek wisdom before making major decisions',
-      'Balance optimism with practical judgment',
-      'Learn from mentors or trusted guidance'
-    ],
-    action: [
-      'Study or reflect on one meaningful principle daily',
-      'Practice generosity without overextending yourself'
-    ]
+    problem: 'Jupiter themes need wisdom-led expansion and humility.',
+    logic: 'Jupiter alignment strengthens meaning, ethics, and guidance.',
+    mantra: remediesByKey.Jupiter.mantra,
+    behavior: remediesByKey.Jupiter.practical_lifestyle,
+    action: remediesByKey.Jupiter.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Jupiter.traditional_rituals,
+    practical_lifestyle: remediesByKey.Jupiter.practical_lifestyle,
+    items_to_donate: remediesByKey.Jupiter.items_to_donate
   },
   Venus: {
-    problem: 'Your chart shows love, harmony, attachment, pleasure, or relationship themes.',
-    logic:
-      'Venus represents affection, beauty, pleasure, and connection. When imbalanced, it can create attachment, indulgence, or avoidance of discomfort. Venus alignment helps love and enjoyment become balanced rather than consuming.',
-    mantra: 'Om Shukraya Namah',
-    behavior: [
-      'Practice balanced affection',
-      'Avoid comfort-based avoidance',
-      'Choose harmony without losing honesty'
-    ],
-    action: [
-      'Create one beautiful, calming space in your routine',
-      'Notice where pleasure becomes distraction'
-    ]
+    problem: 'Venus themes need balanced attachment, values, and relationship hygiene.',
+    logic: 'Venus alignment supports harmony without indulgent avoidance.',
+    mantra: remediesByKey.Venus.mantra,
+    behavior: remediesByKey.Venus.practical_lifestyle,
+    action: remediesByKey.Venus.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Venus.traditional_rituals,
+    practical_lifestyle: remediesByKey.Venus.practical_lifestyle,
+    items_to_donate: remediesByKey.Venus.items_to_donate
+  },
+  Saturn: {
+    problem: 'Saturn themes need patience, structure, and karmic accountability.',
+    logic: 'Saturn alignment turns pressure into long-term stability.',
+    mantra: remediesByKey.Saturn.mantra,
+    behavior: remediesByKey.Saturn.practical_lifestyle,
+    action: remediesByKey.Saturn.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Saturn.traditional_rituals,
+    practical_lifestyle: remediesByKey.Saturn.practical_lifestyle,
+    items_to_donate: remediesByKey.Saturn.items_to_donate
   },
   Rahu: {
-    problem: 'Your chart shows ambition, desire, restlessness, or unconventional growth themes.',
-    logic:
-      'Rahu represents hunger, ambition, innovation, and worldly expansion. When imbalanced, it can create obsession or confusion. Rahu alignment helps desire become strategy rather than compulsion.',
-    mantra: 'Om Rahave Namah',
-    behavior: [
-      'Question obsessive urges before acting',
-      'Turn ambition into a clear plan',
-      'Avoid comparing your path with others'
-    ],
-    action: [
-      'Limit one distracting habit for 21 days',
-      'Convert one big desire into a practical next step'
-    ]
+    problem: 'Rahu themes need clarity against obsession, confusion, and shortcuts.',
+    logic: 'Rahu alignment converts hunger into strategy and discipline.',
+    mantra: remediesByKey.Rahu.mantra,
+    behavior: remediesByKey.Rahu.practical_lifestyle,
+    action: remediesByKey.Rahu.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Rahu.traditional_rituals,
+    practical_lifestyle: remediesByKey.Rahu.practical_lifestyle,
+    items_to_donate: remediesByKey.Rahu.items_to_donate
   },
   Ketu: {
-    problem: 'Your chart shows detachment, uncertainty, spiritual sensitivity, or withdrawal themes.',
-    logic:
-      'Ketu represents detachment, insight, and release. When imbalanced, it can create disconnection or doubt. Ketu alignment helps turn withdrawal into wisdom and quiet perception.',
-    mantra: 'Om Ketave Namah',
-    behavior: [
-      'Avoid disappearing from responsibilities',
-      'Use solitude intentionally',
-      'Trust insight without rejecting practical life'
-    ],
-    action: [
-      'Keep a short meditation or breath practice',
-      'Complete one grounding task after reflection'
-    ]
+    problem: 'Ketu themes need grounded detachment and practical spiritual integration.',
+    logic: 'Ketu alignment converts withdrawal into insight and focus.',
+    mantra: remediesByKey.Ketu.mantra,
+    behavior: remediesByKey.Ketu.practical_lifestyle,
+    action: remediesByKey.Ketu.traditional_rituals.slice(0, 2),
+    traditional_rituals: remediesByKey.Ketu.traditional_rituals,
+    practical_lifestyle: remediesByKey.Ketu.practical_lifestyle,
+    items_to_donate: remediesByKey.Ketu.items_to_donate
   }
 };
 
@@ -192,6 +148,7 @@ function generateRemedies(chart, limit = 3) {
 }
 
 module.exports = {
+  remediesByKey,
   REMEDY_LIBRARY,
   generateRemedies
 };

@@ -53,6 +53,47 @@ function verifyGumroadSignature(rawBodyBuffer, signature) {
   return crypto.timingSafeEqual(a, b);
 }
 
+/** For ops / `npm run check:gumroad` — never log secrets. */
+function summarizeGumroadReadiness() {
+  const cfg = getGumroadConfig();
+  const blockingIssues = [];
+  const recommendations = [];
+  const quickOk = Boolean(normalizeHttpUrl(cfg.productUrlQuick));
+  const fullOk = Boolean(normalizeHttpUrl(cfg.productUrlFull));
+  if (!quickOk) {
+    blockingIssues.push('GUMROAD_PRODUCT_URL_QUICK must be a full https checkout URL');
+  }
+  if (!fullOk) {
+    blockingIssues.push('GUMROAD_PRODUCT_URL_FULL must be a full https checkout URL');
+  }
+  const checkoutReady = quickOk && fullOk;
+  const webhookSecretOk = Boolean(cfg.webhookSecret);
+  if (!webhookSecretOk) {
+    blockingIssues.push('GUMROAD_WEBHOOK_SECRET is empty — webhooks cannot be verified');
+  }
+  const hasPermalinkPair = Boolean(
+    String(cfg.productPermalinkQuick || '').trim() && String(cfg.productPermalinkFull || '').trim()
+  );
+  const hasIdPair = Boolean(String(cfg.productIdQuick || '').trim() && String(cfg.productIdFull || '').trim());
+  if (!hasPermalinkPair && !hasIdPair) {
+    recommendations.push(
+      'Set GUMROAD_PRODUCT_PERMALINK_* or GUMROAD_PRODUCT_ID_* so each sale maps cleanly to quick vs full'
+    );
+  }
+  const planMappingRecommended = hasPermalinkPair || hasIdPair;
+  return {
+    checkoutReady,
+    webhookSecretOk,
+    planMappingRecommended,
+    /** True when checkout works and webhooks verify (recommended for production). */
+    productionOk: checkoutReady && webhookSecretOk,
+    blockingIssues,
+    recommendations,
+    /** All messages (blocking first) for CLI output. */
+    issues: [...blockingIssues, ...recommendations]
+  };
+}
+
 function resolvePlanFromWebhook(payload) {
   const cfg = getGumroadConfig();
   const content = payload || {};
@@ -76,5 +117,6 @@ function resolvePlanFromWebhook(payload) {
 module.exports = {
   createGumroadCheckoutUrl,
   verifyGumroadSignature,
-  resolvePlanFromWebhook
+  resolvePlanFromWebhook,
+  summarizeGumroadReadiness
 };

@@ -13,10 +13,13 @@ export default function RemedyPreview({ remedies = [] }) {
       className="glass-panel rounded-[2rem] p-5 sm:p-6"
     >
       <div className="mb-5 border-b border-gold-300/15 pb-4">
-        <p className="text-xs uppercase tracking-[0.35em] text-gold-300/70">Remedy Preview</p>
-        <h2 className="mt-2 font-serif text-2xl text-gold-100">Alignment Practices</h2>
-        <p className="mt-2 text-sm leading-6 text-cream/58">
-          Remedies are shown as alignment support, not as promises or guarantees.
+        <p className="text-xs uppercase tracking-[0.35em] text-gold-300/70">Remedies</p>
+        <h2 className="mt-2 font-serif text-2xl text-gold-100">Your Personal Correction Path</h2>
+        <p className="mt-2 text-sm leading-relaxed text-cream/58">
+          Remedies are shown as alignment support, not promises or guarantees.
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-cream/70">
+          Without alignment, patterns repeat. With alignment, your path becomes clearer.
         </p>
       </div>
 

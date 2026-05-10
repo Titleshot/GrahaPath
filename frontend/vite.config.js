@@ -1,8 +1,23 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+  publicDir: path.resolve(__dirname, '../folder'),
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, '')
+      }
+    }
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -10,10 +25,21 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        changeOrigin: true
       },
       '/generate-chart': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/chat': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/chat-v2': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/payment-proof': {
         target: 'http://localhost:3000',
         changeOrigin: true
       }

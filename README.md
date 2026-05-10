@@ -71,3 +71,18 @@ Optional syntax check:
 ```bash
 npm run check
 ```
+
+## Supabase MVP setup
+
+For premium restore, insights, chart persistence, and payment tracking:
+
+1. Create a Supabase project.
+2. Run `scripts/supabase-mvp-schema.sql` in the Supabase SQL editor.
+3. Add these environment variables:
+
+```bash
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+If Supabase env vars are not configured, GrahaPath falls back to local JSON files in `data/`.

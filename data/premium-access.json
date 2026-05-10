@@ -1,0 +1,40 @@
+{
+  "records": {
+    "ajittm742@gmail.com": {
+      "email": "ajittm742@gmail.com",
+      "chartId": null,
+      "chartFingerprint": "any_fingerprint",
+      "plan": "full",
+      "remainingInsights": 50,
+      "premiumActive": true,
+      "purchaseStatus": "paid",
+      "purchaseTimestamp": "2026-05-08T10:08:00.000Z",
+      "createdAt": "2026-05-08T10:08:00.000Z",
+      "updatedAt": "2026-05-08T10:08:00.000Z"
+    },
+    "ajitt742@gmail.com": {
+      "email": "ajitt742@gmail.com",
+      "chartId": "4eacd4e463ab30a1672443be0202f531e61cf8144c92b0f22f4b5ff05a151ca4",
+      "chartFingerprint": "cd03918f8c437b0539dd740c1336dabc736452303063f5932dd40811277b442a",
+      "plan": "full",
+      "remainingInsights": 50,
+      "premiumActive": true,
+      "purchaseStatus": "paid",
+      "purchaseTimestamp": "2026-05-09T06:32:41.034Z",
+      "createdAt": "2026-05-09T06:32:41.034Z",
+      "updatedAt": "2026-05-09T06:32:41.034Z"
+    },
+    "aijttm742@gmail.com": {
+      "email": "aijttm742@gmail.com",
+      "chartId": "9ebb4c793a4d2de1a9dc2fd4ab225e0b0d57a6e4b20da9b3a0117063a5557557",
+      "chartFingerprint": "48c7e3dbda4a771499436f6e33d2f24f8fb8c11a5ccf1d318d1536c1a980dee6",
+      "plan": "quick",
+      "remainingInsights": 12,
+      "premiumActive": true,
+      "purchaseStatus": "paid",
+      "purchaseTimestamp": "2026-05-09T08:05:20.011Z",
+      "createdAt": "2026-05-09T08:05:20.011Z",
+      "updatedAt": "2026-05-09T08:05:20.011Z"
+    }
+  }
+}

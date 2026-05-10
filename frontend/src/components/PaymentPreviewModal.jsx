@@ -157,6 +157,10 @@ export default function PaymentPreviewModal({
 
             <div className="mt-5 rounded-2xl border border-gold/20 bg-black/35 p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-gold/70">Checkout & save premium access</p>
+              <p className="mt-2 text-[11px] leading-snug text-ivory/55">
+                If checkout opens Ko-fi, use this same email on Ko-fi, then tap <span className="text-gold-200">Restore Premium</span> here
+                after payment (webhooks may take a few seconds).
+              </p>
               <label className="mt-3 block text-xs text-ivory/75">
                 Email (required)
                 <input
