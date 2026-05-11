@@ -108,7 +108,7 @@ function BirthDetailsForm({
     if (isSearchingPlaces) {
       return 'Searching places...';
     }
-    return 'Select an exact place from suggestions for best chart accuracy.';
+    return 'Type your city (e.g. "Kathmandu, Nepal") and pick from the dropdown for accurate coordinates.';
   }, [isSearchingPlaces, selectedLocation]);
 
   function handleAdDateChange(event) {
@@ -213,7 +213,7 @@ function BirthDetailsForm({
         setIsSearchingPlaces(false);
         if (suggestions.length === 0 && place.length >= 3) {
           setPlaceSuggestError(
-            'No matches yet — keep typing (e.g. “City, Country”) or pick a result when it appears.'
+            'No matches yet — try “City, Country” format (e.g. “Pokhara, Nepal”) and select from the list.'
           );
         } else {
           setPlaceSuggestError('');
