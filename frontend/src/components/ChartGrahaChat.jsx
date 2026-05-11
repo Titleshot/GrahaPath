@@ -511,14 +511,19 @@ export default function ChartGrahaChat({
       </form>
 
       {teaserMode && !forceUnlocked && insightsLeft <= 0 && (
-        <div className="mt-4 rounded-2xl border border-gold/30 bg-black/55 p-4">
-          <p className="text-sm text-gold-100">Your chart has deeper active layers waiting to unlock.</p>
+        <div className="mt-4 rounded-2xl border border-gold/30 bg-black/55 p-5 text-center">
+          <p className="text-sm leading-relaxed text-gold-100">
+            Your chart contains deeper timing layers, emotional blueprints, and life-phase patterns waiting underneath.
+          </p>
+          <p className="mt-2 text-xs text-ivory-100/50">
+            Explore detailed planetary reasoning, activation windows, and ongoing conversational analysis.
+          </p>
           <button
             type="button"
             onClick={() => onTeaserLock?.()}
-            className="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gold/60 bg-gold/90 px-4 py-2 text-xs font-semibold text-black transition hover:bg-gold"
+            className="mt-4 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gold/60 bg-gold/90 px-5 py-2.5 text-xs font-semibold tracking-wide text-black transition hover:bg-gold"
           >
-            Unlock Full Life Decode
+            Explore Full Life Decode
           </button>
         </div>
       )}

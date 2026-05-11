@@ -102,17 +102,21 @@ function buildOrchestrationDirectives({
   let budget = '';
   if (plan === 'free') {
     budget =
-      'Length: FREE tier — target ~120–180 words, at most 1–2 explicit placement references unless user asked for more detail.';
+      'Length: FREE tier — target ~120–180 words. Shorter than premium. At most 1–2 explicit placement references. ' +
+      'DEMO FEEL: Emotionally validate the present/past. Show brief chart reasoning. Tease deeper layers WITHOUT revealing them. ' +
+      'End so user feels "there is more underneath" — never "you hit a limit." ' +
+      'Do NOT predict specific future events — validation creates trust, trust creates curiosity.';
   } else if (plan === 'quick') {
-    budget = 'Length: QUICK paid — up to ~300–450 words; clearer chart reasoning ok.';
+    budget = 'Length: QUICK paid — up to ~300–450 words; clearer chart reasoning, timing windows, and emotional blueprint allowed. More layered than free.';
   } else {
-    budget = 'Length: FULL access — allow deeper reasoning; structured sections only when intent is deep_analysis or user clearly wants detail.';
+    budget = 'Length: FULL access — deeper reasoning, structured sections, timing-aware analysis, multi-layered exploration. Feel expansive and conversational. Invite ongoing dialogue.';
   }
 
   let cta = '';
   if (!premiumUnlocked) {
     cta =
-      'Premium CTA: do not append unlock/premium lines to every reply. Only mention deeper timing/remedies layer when the user asks for depth, timing windows, remedies, or when the answer naturally leaves that door open.';
+      'NEVER append sales lines like "unlock premium" or "upgrade now." The depth tease itself is the conversion. ' +
+      'Only naturally reference deeper layers when the answer organically leads there.';
   }
 
   const prose = forcePlainProse

@@ -288,7 +288,7 @@ function grahaPathChatV2(req, res, next) {
       incCounter('security.free_tier_block');
       return res.status(402).json({
         error: 'FreeTierLimitReached',
-        message: 'Free chat limit reached for this chart profile. Please unlock premium to continue.'
+        message: 'Your chart has deeper layers waiting to be explored. Unlock full access to continue the conversation.'
       });
     }
 
