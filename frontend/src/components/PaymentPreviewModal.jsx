@@ -38,14 +38,15 @@ export default function PaymentPreviewModal({
       setErrorMessage('');
       try {
         const saved = String(window.localStorage.getItem(LAST_PREMIUM_EMAIL_KEY) || '').trim();
-        if (saved && !email.trim()) {
+        if (saved) {
           setEmail(saved);
         }
       } catch {
         // Ignore localStorage access failures.
       }
     }
-  }, [open, email]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,13 +55,17 @@ export default function PaymentPreviewModal({
     if (!restoreEmail.trim()) {
       setRestoreEmail(suggested);
     }
-  }, [open, suggestedRestoreEmail, restoreEmail]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, suggestedRestoreEmail]);
 
   useEffect(() => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) return;
     try {
-      window.localStorage.setItem(LAST_PREMIUM_EMAIL_KEY, normalizedEmail);
+      if (normalizedEmail) {
+        window.localStorage.setItem(LAST_PREMIUM_EMAIL_KEY, normalizedEmail);
+      } else {
+        window.localStorage.removeItem(LAST_PREMIUM_EMAIL_KEY);
+      }
     } catch {
       // Ignore localStorage access failures.
     }

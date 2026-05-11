@@ -616,13 +616,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (routePath === '/payment-success') return;
     if (!pendingKofiRestore?.email) return;
     if (paidUnlocked) return;
-    if (isAutoRestoringKofi) return;
 
-    // Expire the pending restore after 10 minutes — if the user visited Ko-fi but
-    // never paid, we should not keep auto-restoring on every focus event forever.
     const startedAt = Number(pendingKofiRestore.startedAt) || 0;
     const TEN_MINUTES = 10 * 60 * 1000;
     if (startedAt && Date.now() - startedAt > TEN_MINUTES) {
@@ -630,27 +626,13 @@ export default function App() {
       return;
     }
 
-    const onFocus = async () => {
-      if (isAutoRestoringKofi) return;
-      setIsAutoRestoringKofi(true);
+    if (!premiumStatus) {
       setPremiumStatusTone('success');
-      setPremiumStatus('Checking your payment and unlocking premium...');
-      try {
-        await restorePremiumNow(pendingKofiRestore.email, { quiet: false });
-      } catch (error) {
-        setPremiumStatusTone('warning');
-        setPremiumStatus(
-          error?.message ||
-            'Payment may still be processing. Click "Unlock my access" once more in a few seconds.'
-        );
-      } finally {
-        setIsAutoRestoringKofi(false);
-      }
-    };
-
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [routePath, pendingKofiRestore, paidUnlocked, isAutoRestoringKofi, chartFingerprint]);
+      setPremiumStatus(
+        `After completing payment on Ko-fi, click "Unlock my access" below to activate your premium.`
+      );
+    }
+  }, [pendingKofiRestore, paidUnlocked, premiumStatus]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
