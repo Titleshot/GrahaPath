@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 
-const LAST_UPDATED = 'May 7, 2026';
+const LAST_UPDATED = 'May 11, 2026';
+const CONTACT_EMAIL = 'radheradhe742@proton.me';
 
 const DOCS = {
   terms: {
@@ -30,12 +31,12 @@ const DOCS = {
       {
         heading: 'Payments and Digital Product Nature',
         body:
-          'Payments are processed through Gumroad. GrahaPath does not directly process card details. Digital access is provided after successful payment flow.'
+          'Payments are processed through Ko-fi. GrahaPath does not directly process card details. Digital access is provided after successful payment flow.'
       },
       {
         heading: 'Refunds',
         body:
-          'Refund terms are subject to the final refund policy. Until finalized, refund handling remains a policy placeholder and should be reviewed before public launch.'
+          `Refund requests can be made within 7 days of purchase by contacting ${CONTACT_EMAIL}. Digital access that has already been substantially used may not be eligible for a full refund.`
       },
       {
         heading: 'No Guaranteed Outcomes',
@@ -63,7 +64,7 @@ const DOCS = {
       },
       {
         heading: 'Contact',
-        body: 'For legal or support queries, contact: legal@grahapath.example (placeholder email).'
+        body: `For legal or support queries, contact: ${CONTACT_EMAIL}.`
       }
     ]
   },
@@ -83,7 +84,7 @@ const DOCS = {
       {
         heading: 'Payments',
         body:
-          'Payment processing is handled by Gumroad. GrahaPath does not store full payment card details directly.'
+          'Payment processing is handled by Ko-fi. GrahaPath does not store full payment card details directly.'
       },
       {
         heading: 'AI Processing Disclosure',
@@ -98,7 +99,7 @@ const DOCS = {
       {
         heading: 'Retention',
         body:
-          'Data retention periods are subject to final policy decisions and legal review before public production launch.'
+          'We retain your data for as long as your account is active or as needed to provide the service. You may request deletion at any time by contacting us.'
       },
       {
         heading: 'User Rights',
@@ -112,7 +113,7 @@ const DOCS = {
       {
         heading: 'Third-Party Services',
         body:
-          'GrahaPath may rely on third-party providers such as Gumroad, AI providers, analytics/hosting providers, and related infrastructure services.'
+          'GrahaPath may rely on third-party providers such as Ko-fi, AI providers, analytics/hosting providers, and related infrastructure services.'
       },
       {
         heading: 'Security',
@@ -121,7 +122,7 @@ const DOCS = {
       },
       {
         heading: 'Contact',
-        body: 'For privacy requests, contact: privacy@grahapath.example (placeholder email).'
+        body: `For privacy requests, contact: ${CONTACT_EMAIL}.`
       }
     ]
   },
