@@ -190,13 +190,11 @@ function toIpBucket(ip) {
   return raw;
 }
 
-async function checkAndUseFreeMessageBound({ profileHash, ip, deviceId, fallbackIdentityHash }) {
-  const safeProfile = String(profileHash || '').trim();
-  const safeDevice = String(deviceId || '').trim().slice(0, 96) || 'unknown-device';
-  const ipBucket = toIpBucket(ip);
-  const legacy = String(fallbackIdentityHash || '').trim() || 'legacy';
-  const composite = stableHash({ profileHash: safeProfile, ipBucket, device: safeDevice, legacy });
-  return checkAndUseFreeMessage(composite);
+async function checkAndUseFreeMessageBound({ profileHash }) {
+  // Keyed on profileHash alone: same birth details = same counter regardless of
+  // browser, device, IP, or cookies. Prevents the "switch browser" bypass.
+  const safeProfile = String(profileHash || '').trim() || 'unknown-profile';
+  return checkAndUseFreeMessage(safeProfile);
 }
 
 async function checkBurstLimit(ip) {
