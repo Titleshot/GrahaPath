@@ -34,10 +34,10 @@ async function geocodePlace(place) {
     throw new GeocodingError('Please enter a complete place like "City, Country".');
   }
 
-  let response;
+  let match = null;
 
   try {
-    response = await requestNominatim(
+    const response = await requestNominatim(
       {
         q: normalizedPlace,
         format: 'json',
@@ -48,18 +48,26 @@ async function geocodePlace(place) {
       },
       2
     );
+    const matches = Array.isArray(response.data) ? response.data : [];
+    match = selectBestMatch(normalizedPlace, matches);
   } catch (error) {
-    throw new GeocodingError(
-      `Geocoding provider failed for place: ${normalizedPlace}`,
-      'GEOCODE_PROVIDER_FAILED'
-    );
+    console.warn(`[GrahaPath] Nominatim geocode failed: ${error?.message || error}`);
   }
 
-  const matches = Array.isArray(response.data) ? response.data : [];
-  const match = selectBestMatch(normalizedPlace, matches);
+  if (!match) {
+    try {
+      const photonResult = await geocodePlacePhoton(normalizedPlace);
+      if (photonResult) return photonResult;
+    } catch (error) {
+      console.warn(`[GrahaPath] Photon geocode fallback failed: ${error?.message || error}`);
+    }
+  }
 
   if (!match) {
-    throw new GeocodingError(`Unable to resolve place: ${normalizedPlace}`);
+    throw new GeocodingError(
+      `Geocoding failed for: ${normalizedPlace}. Try a more specific place like "Kathmandu, Nepal".`,
+      'GEOCODE_PROVIDER_FAILED'
+    );
   }
 
   const latitude = Number.parseFloat(match.lat);
@@ -138,6 +146,36 @@ async function searchPlaceSuggestions(query, limit = 6) {
   if (nominatimResults.length > 0) return nominatimResults;
 
   return searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
+}
+
+async function geocodePlacePhoton(place) {
+  try {
+    const response = await axios.get(PHOTON_URL, {
+      params: { q: place, limit: 3, lang: 'en' },
+      headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation; radheradhe742@proton.me)' },
+      timeout: 10000
+    });
+    const features = response.data?.features || [];
+    for (const f of features) {
+      const coords = f.geometry?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) continue;
+      const lat = coords[1];
+      const lon = coords[0];
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const p = f.properties || {};
+      const parts = [p.name, p.state, p.country].filter(Boolean);
+      return {
+        place,
+        displayName: parts.join(', ') || p.label || place,
+        latitude: lat,
+        longitude: lon
+      };
+    }
+    return null;
+  } catch (error) {
+    console.warn(`[GrahaPath] Photon geocode error: ${error?.message || error}`);
+    return null;
+  }
 }
 
 async function searchPlaceSuggestionsPhoton(query, limit = 6) {
