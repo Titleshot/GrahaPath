@@ -12,6 +12,22 @@ const MAJOR_SETTLEMENT_TYPES = new Set(['city', 'town', 'village']);
 const REGIONAL_TYPES = new Set(['administrative', 'state', 'county', 'province', 'region']);
 const NOMINATIM_EMAIL = process.env.NOMINATIM_EMAIL || 'radheradhe742@proton.me';
 
+let nominatimCircuitOpen = 0;
+const CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000;
+
+function isNominatimAvailable() {
+  if (!nominatimCircuitOpen) return true;
+  if (Date.now() - nominatimCircuitOpen > CIRCUIT_COOLDOWN_MS) {
+    nominatimCircuitOpen = 0;
+    return true;
+  }
+  return false;
+}
+
+function tripNominatimCircuit() {
+  nominatimCircuitOpen = Date.now();
+}
+
 class GeocodingError extends Error {
   constructor(message, code = 'GEOCODE_NOT_FOUND') {
     super(message);
@@ -36,22 +52,28 @@ async function geocodePlace(place) {
 
   let match = null;
 
-  try {
-    const response = await requestNominatim(
-      {
-        q: normalizedPlace,
-        format: 'json',
-        limit: 5,
-        addressdetails: 1,
-        extratags: 1,
-        'accept-language': 'en'
-      },
-      2
-    );
-    const matches = Array.isArray(response.data) ? response.data : [];
-    match = selectBestMatch(normalizedPlace, matches);
-  } catch (error) {
-    console.warn(`[GrahaPath] Nominatim geocode failed: ${error?.message || error}`);
+  if (isNominatimAvailable()) {
+    try {
+      const response = await requestNominatim(
+        {
+          q: normalizedPlace,
+          format: 'json',
+          limit: 5,
+          addressdetails: 1,
+          extratags: 1,
+          'accept-language': 'en'
+        },
+        1
+      );
+      const matches = Array.isArray(response.data) ? response.data : [];
+      match = selectBestMatch(normalizedPlace, matches);
+    } catch (error) {
+      console.warn(`[GrahaPath] Nominatim geocode failed: ${error?.message || error}`);
+      const status = error?.response?.status;
+      if (status === 429 || status >= 500) {
+        tripNominatimCircuit();
+      }
+    }
   }
 
   if (!match) {
@@ -91,57 +113,62 @@ async function searchPlaceSuggestions(query, limit = 6) {
     return [];
   }
 
-  let matches = [];
-  try {
-    const response = await requestNominatim({
-      q: normalizedQuery,
-      format: 'json',
-      limit: Math.max(1, Math.min(10, limit)),
-      addressdetails: 1,
-      extratags: 1,
-      'accept-language': 'en',
-      viewbox: '68,39,98,5',
-      bounded: 0
-    });
-    matches = Array.isArray(response.data) ? response.data : [];
-  } catch (error) {
-    const status = error?.response?.status;
-    const code = error?.code;
-    console.warn(`[GrahaPath] Nominatim place search failed: status=${status || 'n/a'} code=${code || 'n/a'} — ${error?.message || error}`);
-  }
   const requestedLimit = Math.max(1, Math.min(SUGGESTION_LIMIT, limit));
 
-  const mapped = matches
-    .map((candidate) => ({
-      candidate,
-      displayName: candidate.display_name,
-      latitude: Number.parseFloat(candidate.lat),
-      longitude: Number.parseFloat(candidate.lon),
-      importance: Number(candidate.importance) || 0,
-      overlap: tokenOverlapScore(normalizedQuery, candidate.display_name || ''),
-      score: scoreMatch(normalizedQuery, candidate),
-      countryCode: String(candidate?.address?.country_code || '').toLowerCase(),
-      placeType: String(candidate?.type || '').toLowerCase()
-    }))
-    .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude));
+  if (isNominatimAvailable()) {
+    try {
+      const response = await requestNominatim({
+        q: normalizedQuery,
+        format: 'json',
+        limit: Math.max(1, Math.min(10, limit)),
+        addressdetails: 1,
+        extratags: 1,
+        'accept-language': 'en',
+        viewbox: '68,39,98,5',
+        bounded: 0
+      });
+      const matches = Array.isArray(response.data) ? response.data : [];
 
-  const preferred = mapped
-    .filter((row) => MAJOR_SETTLEMENT_TYPES.has(row.placeType) || REGIONAL_TYPES.has(row.placeType))
-    .sort((a, b) => scoreSuggestionRow(b) - scoreSuggestionRow(a));
+      const mapped = matches
+        .map((candidate) => ({
+          candidate,
+          displayName: candidate.display_name,
+          latitude: Number.parseFloat(candidate.lat),
+          longitude: Number.parseFloat(candidate.lon),
+          importance: Number(candidate.importance) || 0,
+          overlap: tokenOverlapScore(normalizedQuery, candidate.display_name || ''),
+          score: scoreMatch(normalizedQuery, candidate),
+          countryCode: String(candidate?.address?.country_code || '').toLowerCase(),
+          placeType: String(candidate?.type || '').toLowerCase()
+        }))
+        .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude));
 
-  const fallback = mapped
-    .filter((row) => !MAJOR_SETTLEMENT_TYPES.has(row.placeType) && !REGIONAL_TYPES.has(row.placeType))
-    .sort((a, b) => scoreSuggestionRow(b) - scoreSuggestionRow(a));
+      const preferred = mapped
+        .filter((row) => MAJOR_SETTLEMENT_TYPES.has(row.placeType) || REGIONAL_TYPES.has(row.placeType))
+        .sort((a, b) => scoreSuggestionRow(b) - scoreSuggestionRow(a));
 
-  const nominatimResults = [...preferred, ...fallback]
-    .slice(0, requestedLimit)
-    .map((row) => ({
-      displayName: row.displayName,
-      latitude: row.latitude,
-      longitude: row.longitude
-    }));
+      const fallback = mapped
+        .filter((row) => !MAJOR_SETTLEMENT_TYPES.has(row.placeType) && !REGIONAL_TYPES.has(row.placeType))
+        .sort((a, b) => scoreSuggestionRow(b) - scoreSuggestionRow(a));
 
-  if (nominatimResults.length > 0) return nominatimResults;
+      const nominatimResults = [...preferred, ...fallback]
+        .slice(0, requestedLimit)
+        .map((row) => ({
+          displayName: row.displayName,
+          latitude: row.latitude,
+          longitude: row.longitude
+        }));
+
+      if (nominatimResults.length > 0) return nominatimResults;
+    } catch (error) {
+      const status = error?.response?.status;
+      const code = error?.code;
+      console.warn(`[GrahaPath] Nominatim place search failed: status=${status || 'n/a'} code=${code || 'n/a'} — ${error?.message || error}`);
+      if (status === 429 || status >= 500) {
+        tripNominatimCircuit();
+      }
+    }
+  }
 
   return searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
 }
@@ -222,7 +249,7 @@ function isRetryableNominatimError(error) {
   );
 }
 
-async function requestNominatim(params, retries = 1) {
+async function requestNominatim(params, retries = 0) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
@@ -235,7 +262,7 @@ async function requestNominatim(params, retries = 1) {
           'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation; support@grahapath.ai)',
           'Accept-Language': 'en,en-US'
         },
-        timeout: 10000
+        timeout: 4000
       });
       return response;
     } catch (error) {
