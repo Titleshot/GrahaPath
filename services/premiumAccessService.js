@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const STORE_FILE = path.join(DATA_DIR, 'premium-access.json');
@@ -18,7 +19,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false }
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket }
   });
 }
 
