@@ -621,6 +621,15 @@ export default function App() {
     if (paidUnlocked) return;
     if (isAutoRestoringKofi) return;
 
+    // Expire the pending restore after 10 minutes — if the user visited Ko-fi but
+    // never paid, we should not keep auto-restoring on every focus event forever.
+    const startedAt = Number(pendingKofiRestore.startedAt) || 0;
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (startedAt && Date.now() - startedAt > TEN_MINUTES) {
+      savePendingKofiRestore(null);
+      return;
+    }
+
     const onFocus = async () => {
       if (isAutoRestoringKofi) return;
       setIsAutoRestoringKofi(true);

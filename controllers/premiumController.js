@@ -229,16 +229,8 @@ async function restorePremium(req, res) {
     });
   }
 
-  // Optional fingerprint guard:
-  // - if client provides a fingerprint and stored record has one, enforce match
-  // - if client does not provide one, allow restore by email
-  const storedFingerprint = record.chart_fingerprint || record.chartFingerprint || null;
-  if (chartFingerprint && storedFingerprint && storedFingerprint !== chartFingerprint) {
-    return res.status(403).json({
-      error: 'ChartMismatch',
-      message: 'This premium access is linked to a different chart profile.'
-    });
-  }
+  // Fingerprint guard removed: premium is tied to the email, not a specific chart.
+  // Users should be able to restore access on any device or with different birth details.
 
   const restoredChart = await findLatestChartByEmail(email);
 
