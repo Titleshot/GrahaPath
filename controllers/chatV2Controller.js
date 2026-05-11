@@ -141,6 +141,7 @@ function grahaPathChatV2(req, res, next) {
       },
       clientFingerprint
     );
+    const sessionProfileHash = chart?.profileHash || profileHash;
 
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
@@ -182,7 +183,7 @@ function grahaPathChatV2(req, res, next) {
         message: 'Session expired or missing. Please regenerate your chart and try again.'
       });
     }
-    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== profileHash) {
+    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== sessionProfileHash) {
       incCounter('security.profile_mismatch');
       return res.status(403).json({
         error: 'ProfileMismatch',

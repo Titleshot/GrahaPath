@@ -91,9 +91,9 @@ async function searchPlaceSuggestions(query, limit = 6) {
     return [];
   }
 
-  let response;
+  let matches = [];
   try {
-    response = await requestNominatim({
+    const response = await requestNominatim({
       q: normalizedQuery,
       format: 'json',
       limit: Math.max(1, Math.min(10, limit)),
@@ -103,14 +103,12 @@ async function searchPlaceSuggestions(query, limit = 6) {
       viewbox: '68,39,98,5',
       bounded: 0
     });
+    matches = Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     const status = error?.response?.status;
     const code = error?.code;
     console.warn(`[GrahaPath] Nominatim place search failed: status=${status || 'n/a'} code=${code || 'n/a'} — ${error?.message || error}`);
-    return [];
   }
-
-  const matches = Array.isArray(response.data) ? response.data : [];
   const requestedLimit = Math.max(1, Math.min(SUGGESTION_LIMIT, limit));
 
   const mapped = matches

@@ -193,6 +193,7 @@ function grahaPathChat(req, res, next) {
       },
       clientFingerprint
     );
+    const sessionProfileHash = chart?.profileHash || profileHash;
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
     const session = verifySessionToken(sessionToken);
@@ -235,7 +236,7 @@ function grahaPathChat(req, res, next) {
         message: 'Session expired or missing. Please regenerate your chart and try again.'
       });
     }
-    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== profileHash) {
+    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== sessionProfileHash) {
       incCounter('security.profile_mismatch');
       return res.status(403).json({
         error: 'ProfileMismatch',
@@ -368,6 +369,7 @@ function lifePhaseValidationHandler(req, res, next) {
       },
       clientFingerprint
     );
+    const sessionProfileHash = chart?.profileHash || profileHash;
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
     const session = verifySessionToken(sessionToken);
@@ -408,7 +410,7 @@ function lifePhaseValidationHandler(req, res, next) {
         message: 'Session expired or missing. Please regenerate your chart and try again.'
       });
     }
-    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== profileHash) {
+    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== sessionProfileHash) {
       incCounter('security.profile_mismatch');
       return res.status(403).json({
         error: 'ProfileMismatch',
