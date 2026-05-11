@@ -47,7 +47,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 const corsOrigins = process.env.FRONTEND_ORIGIN
-  ? process.env.FRONTEND_ORIGIN.split(',').map((s) => s.trim())
+  ? process.env.FRONTEND_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
   : [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
@@ -57,9 +57,48 @@ const corsOrigins = process.env.FRONTEND_ORIGIN
       'http://127.0.0.1:4173'
     ];
 
+/** Allow typical Vite / LAN dev hosts when not in production (avoids CORS failures with FRONTEND_ORIGIN=Vercel-only). */
+function isDevBrowserOrigin(origin) {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== 'http:') return false;
+    const { hostname, port } = u;
+    const p = port ? Number(port) : 80;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') return true;
+    if (
+      (hostname.startsWith('192.168.') || /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) &&
+      p >= 5173 &&
+      p <= 5200
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function corsOriginCallback(origin, callback) {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+  if (corsOrigins.includes(origin)) {
+    callback(null, true);
+    return;
+  }
+  if (process.env.NODE_ENV !== 'production' && isDevBrowserOrigin(origin)) {
+    callback(null, true);
+    return;
+  }
+  callback(null, false);
+}
+
 app.use(
   cors({
-    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins
+    // Always use callback so a single FRONTEND_ORIGIN does not block local Vite (5173) during development.
+    origin: corsOriginCallback,
+    credentials: true
   })
 );
 app.use(

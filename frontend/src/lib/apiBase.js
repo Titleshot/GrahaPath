@@ -1,4 +1,28 @@
-const API_BASE = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+function normalizeApiBase(raw) {
+  return String(raw || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * In Vite dev, pointing at http://localhost:3000 (or 127.0.0.1:3000) bypasses the dev proxy and
+ * triggers cross-origin + CORS. Prefer same-origin `/api` so requests go through vite.config proxy.
+ */
+function devPreferViteProxy(apiBase) {
+  if (!import.meta.env.DEV) return apiBase;
+  const base = normalizeApiBase(apiBase);
+  if (!base) return '';
+  try {
+    const u = new URL(base);
+    const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+    const isLocal3000 =
+      (u.hostname === 'localhost' || u.hostname === '127.0.0.1') && (port === '3000' || port === '');
+    if (isLocal3000 && u.protocol === 'http:') return '';
+  } catch {
+    // ignore invalid URL
+  }
+  return base;
+}
+
+const API_BASE = devPreferViteProxy(import.meta.env.VITE_API_BASE_URL);
 
 export function withApiBase(path) {
   const cleanPath = String(path || '').trim();
@@ -6,6 +30,14 @@ export function withApiBase(path) {
   if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
   if (!API_BASE) return cleanPath;
   return `${API_BASE}${cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`}`;
+}
+
+/** Fetch to GrahaPath API — always include cookies (session) when UI and API are on different hosts. */
+export function apiFetch(input, init = {}) {
+  return fetch(input, {
+    ...init,
+    credentials: init.credentials ?? 'include'
+  });
 }
 
 export { API_BASE };

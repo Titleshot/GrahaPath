@@ -9,7 +9,7 @@ import PaymentSuccessPage from './components/PaymentSuccessPage';
 import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
 import { getClientFingerprint } from './lib/clientFingerprint';
-import { API_BASE, withApiBase } from './lib/apiBase';
+import { API_BASE, apiFetch, withApiBase } from './lib/apiBase';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { 
   generateChartFingerprint, 
@@ -162,6 +162,7 @@ export default function App() {
     name: '',
     dateType: 'AD',
     date: '',
+    dateDisplay: '',
     bsDate: {
       year: '2053',
       month: '12',
@@ -293,6 +294,7 @@ export default function App() {
     setPremiumEmail('');
     setPremiumInsights(null);
 
+    let chartRequestTimer;
     try {
       const payload = {
         name: formData.name,
@@ -359,13 +361,17 @@ export default function App() {
         payload.lifeEvents = lifeEvents;
       }
 
-      const response = await fetch(API_URL, {
+      const chartAbort = new AbortController();
+      chartRequestTimer = window.setTimeout(() => chartAbort.abort(), 120000);
+
+      const response = await apiFetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-gp-client-fp': getClientFingerprint()
         },
         body: JSON.stringify(payload),
+        signal: chartAbort.signal
       });
 
       const responseText = await response.text();
@@ -413,13 +419,24 @@ export default function App() {
         has_life_events: Array.isArray(payload.lifeEvents) && payload.lifeEvents.length > 0
       });
     } catch (requestError) {
-      const raw = typeof requestError?.message === 'string' ? requestError.message : String(requestError || '');
+      const aborted = typeof requestError?.name === 'string' && requestError.name === 'AbortError';
+      const raw = aborted
+        ? import.meta.env.DEV
+          ? 'Chart request timed out (2 min). Check the terminal running the API (npm run dev).'
+          : 'Chart request timed out (2 min). The chart service may be busy or still waking up — try again in a moment.'
+        : typeof requestError?.message === 'string'
+          ? requestError.message
+          : String(requestError || '');
       const netHint =
+        !aborted &&
         /failed to fetch|networkerror|load failed|ecconnrefused|network request failed/i.test(raw)
-          ? ' Start the API from the GrahaPath repo root: npm run dev (port 3000). Open the site via Vite on http://localhost:5173.'
+          ? import.meta.env.DEV
+            ? ' Start the API from the GrahaPath repo root (npm run dev). Open the site with the frontend dev server; leave VITE_API_BASE_URL unset so /api is proxied.'
+            : ' Usually: Vercel must build with VITE_API_BASE_URL set to your API (e.g. https://grahapath-api.onrender.com), and Render must list this site in FRONTEND_ORIGIN — then redeploy. Cold start can also cause a short delay; retry once.'
           : '';
       setError(raw + netHint);
     } finally {
+      if (chartRequestTimer) window.clearTimeout(chartRequestTimer);
       setIsLoading(false);
     }
   }
@@ -550,7 +567,7 @@ export default function App() {
     if (!normalizedEmail) {
       throw new Error('Email is required to restore premium.');
     }
-    const response = await fetch(PREMIUM_RESTORE_URL, {
+    const response = await apiFetch(PREMIUM_RESTORE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -639,7 +656,7 @@ export default function App() {
     const runAutoRestore = async () => {
       try {
         setPremiumStatus('Finalizing your premium access...');
-        const response = await fetch(PREMIUM_RESTORE_URL, {
+        const response = await apiFetch(PREMIUM_RESTORE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -962,14 +979,21 @@ export default function App() {
                   >
                     <p className="text-xs uppercase tracking-[0.28em] text-red-200/80">Chart could not be displayed</p>
                     <p className="font-serif text-xl text-cream">{error}</p>
-                    <p className="text-sm leading-relaxed text-ivory/75">
-                      Typical fix: two terminals — repo root <span className="font-mono text-xs text-gold-200/90">npm run dev</span>{' '}
-                      (API <span className="font-mono text-xs">:3000</span>),{' '}
-                      <span className="font-mono text-xs">frontend</span>{' '}
-                      <span className="font-mono text-xs text-gold-200/90">npm run dev</span> (UI{' '}
-                      <span className="font-mono text-xs">:5173</span>). Leave{' '}
-                      <span className="font-mono text-xs">VITE_API_BASE_URL</span> unset for local proxying.
-                    </p>
+                    {import.meta.env.DEV ? (
+                      <p className="text-sm leading-relaxed text-ivory/75">
+                        Local dev: run the API from the repo root (<span className="font-mono text-xs text-gold-200/90">npm run dev</span>
+                        ), then the frontend app dev server. Leave{' '}
+                        <span className="font-mono text-xs">VITE_API_BASE_URL</span> unset so <span className="font-mono text-xs">/api</span>{' '}
+                        is proxied.
+                      </p>
+                    ) : (
+                      <p className="text-sm leading-relaxed text-ivory/75">
+                        If the error includes <span className="font-mono text-xs">Failed to fetch</span>, the browser
+                        never reached the chart API — use Vercel{' '}
+                        <span className="font-mono text-xs">VITE_API_BASE_URL</span> and Render{' '}
+                        <span className="font-mono text-xs">FRONTEND_ORIGIN</span> as described in the line above.
+                      </p>
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div
@@ -1094,7 +1118,7 @@ export default function App() {
           setPremiumStatusTone('success');
           setCheckoutRetryMode(false);
           const normalizedTier = tier === 'quick' ? 'quick' : 'full';
-          const response = await fetch(PREMIUM_CHECKOUT_URL, {
+          const response = await apiFetch(PREMIUM_CHECKOUT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

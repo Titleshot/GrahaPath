@@ -107,12 +107,28 @@ function readDeviceTokenFromRequest(req) {
   return cookies[DEVICE_TOKEN_NAME] || '';
 }
 
+/** Browsers only send cookies on cross-site XHR/fetch when SameSite=None; Secure (e.g. Vercel UI → Render API). */
+function useCrossSiteCookies() {
+  const explicit = String(process.env.PAYWALL_COOKIE_CROSS_SITE || '').toLowerCase();
+  if (explicit === 'true' || explicit === '1') return true;
+  if (explicit === 'false' || explicit === '0') return false;
+  return String(process.env.RENDER || '').toLowerCase() === 'true';
+}
+
 function buildSessionCookie(token) {
-  return `${TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${TOKEN_TTL_SEC}`;
+  const base = `${TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Max-Age=${TOKEN_TTL_SEC}`;
+  if (useCrossSiteCookies()) {
+    return `${base}; SameSite=None; Secure`;
+  }
+  return `${base}; SameSite=Lax`;
 }
 
 function buildDeviceCookie(token) {
-  return `${DEVICE_TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${DEVICE_TTL_SEC}`;
+  const base = `${DEVICE_TOKEN_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Max-Age=${DEVICE_TTL_SEC}`;
+  if (useCrossSiteCookies()) {
+    return `${base}; SameSite=None; Secure`;
+  }
+  return `${base}; SameSite=Lax`;
 }
 
 module.exports = {

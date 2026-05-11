@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { withApiBase } from '../lib/apiBase';
+import { apiFetch, withApiBase } from '../lib/apiBase';
 
 const inputClass =
   'w-full rounded-2xl border border-gold-400/20 bg-black/40 px-4 py-3 text-sm text-ivory-100 outline-none transition placeholder:text-ivory-100/30 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20';
@@ -88,6 +88,7 @@ function BirthDetailsForm({
 }) {
   const [placeSuggestions, setPlaceSuggestions] = useState([]);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [placeSuggestError, setPlaceSuggestError] = useState('');
   const [isPlaceFocused, setIsPlaceFocused] = useState(false);
   const placeAbortRef = useRef(null);
   const placeCacheRef = useRef(new Map());
@@ -153,6 +154,7 @@ function BirthDetailsForm({
     const place = (formData.place || '').trim();
     if (place.length < 3) {
       setPlaceSuggestions([]);
+      setPlaceSuggestError('');
       setIsSearchingPlaces(false);
       if (placeAbortRef.current) {
         placeAbortRef.current.abort();
@@ -167,6 +169,7 @@ function BirthDetailsForm({
         // Do not trust cached empty arrays forever; they can come from transient failures.
         if (cached.length > 0) {
           setPlaceSuggestions(cached);
+          setPlaceSuggestError('');
           setIsSearchingPlaces(false);
           return;
         }
@@ -180,9 +183,12 @@ function BirthDetailsForm({
       const controller = new AbortController();
       placeAbortRef.current = controller;
       setIsSearchingPlaces(true);
+      setPlaceSuggestError('');
       try {
-        const response = await fetch(`${PLACE_SUGGEST_URL}?q=${encodeURIComponent(place)}`, {
-          signal: controller.signal
+        // Public endpoint — omit cookies so the browser can use a simple CORS GET (avoids production failures).
+        const response = await apiFetch(`${PLACE_SUGGEST_URL}?q=${encodeURIComponent(place)}`, {
+          signal: controller.signal,
+          credentials: 'omit'
         });
         let payload;
         try {
@@ -192,6 +198,11 @@ function BirthDetailsForm({
         }
         if (!response.ok) {
           setPlaceSuggestions([]);
+          setPlaceSuggestError(
+            import.meta.env.DEV
+              ? 'Suggestions unavailable — run the API from the repo root (npm run dev) and reload.'
+              : 'Place search is temporarily unavailable. Wait a few seconds (the API may be waking up) and try again.'
+          );
           return;
         }
         const suggestions = payload.suggestions || [];
@@ -200,8 +211,23 @@ function BirthDetailsForm({
         }
         setPlaceSuggestions(suggestions);
         setIsSearchingPlaces(false);
-      } catch (_error) {
+        if (suggestions.length === 0 && place.length >= 3) {
+          setPlaceSuggestError(
+            'No matches yet — keep typing (e.g. “City, Country”) or pick a result when it appears.'
+          );
+        } else {
+          setPlaceSuggestError('');
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError' || (typeof error?.message === 'string' && error.message.includes('aborted'))) {
+          return;
+        }
         setPlaceSuggestions([]);
+        setPlaceSuggestError(
+          import.meta.env.DEV
+            ? 'Could not reach the API for place search — run backend + frontend dev servers from the repo README.'
+            : 'Could not load suggestions. Check your connection, wait if the service just started, then try again.'
+        );
       } finally {
         setIsSearchingPlaces(false);
       }
@@ -234,6 +260,7 @@ function BirthDetailsForm({
       displayName: suggestion.displayName
     });
     setPlaceSuggestions([]);
+    setPlaceSuggestError('');
     setIsPlaceFocused(false);
   }
 
@@ -328,6 +355,9 @@ function BirthDetailsForm({
             )}
           </div>
           <p className={helperClass}>{placeHelperText}</p>
+          {placeSuggestError ? (
+            <p className="text-xs leading-relaxed text-amber-200/90">{placeSuggestError}</p>
+          ) : null}
           <p className="text-xs leading-5 text-gold-200/55">
             Timezone is auto-calculated from selected coordinates.
           </p>

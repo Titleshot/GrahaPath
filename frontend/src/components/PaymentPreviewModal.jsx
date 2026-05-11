@@ -99,9 +99,17 @@ export default function PaymentPreviewModal({
             initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border border-gold/25 bg-gradient-to-br from-[#080710] via-[#090613] to-black p-5 shadow-2xl shadow-black/60"
+            className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border border-gold/25 bg-gradient-to-br from-[#080710] via-[#090613] to-black p-5 pr-14 shadow-2xl shadow-black/60"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="absolute right-3 top-3 z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gold/35 bg-black/55 text-2xl font-light leading-none text-gold/90 shadow-sm transition hover:border-gold/55 hover:bg-gold/10 hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold/70"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
             <p className="text-xs uppercase tracking-[0.32em] text-gold/70">Unlock Full Life Decode</p>
             <h3 className="mt-2 font-serif text-2xl text-gold">Choose your unlock tier</h3>
             {checkoutRetryMode ? (

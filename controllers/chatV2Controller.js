@@ -11,11 +11,17 @@ const {
   buildIdentityHash,
   inferBsDateObjectFromChart,
   extractClientFingerprint,
-  checkAndUseFreeMessage,
+  checkAndUseFreeMessageBound,
   checkBurstLimit,
   assessAbuseRisk
 } = require('../services/antiBypassService');
-const { verifySessionToken, readSessionTokenFromRequest } = require('../services/sessionTokenService');
+const {
+  verifySessionToken,
+  readSessionTokenFromRequest,
+  verifyDeviceToken,
+  readDeviceTokenFromRequest
+} = require('../services/sessionTokenService');
+const { verifySecurityChallenge } = require('../services/securityChallengeService');
 const { incCounter } = require('../services/securityMetricsService');
 const { looksLikeReportOrLifePhaseJson } = require('../services/grahapathChat/responseFormatter');
 const { detectIntent } = require('../services/grahapathChat/intentDetector');
@@ -145,16 +151,27 @@ function grahaPathChatV2(req, res, next) {
       burstCount: burst.count
     });
     if (risk.requireChallenge) {
-      const expected = String(process.env.SECURITY_CHALLENGE_TOKEN || '');
-      const got = String(req.headers['x-gp-challenge-token'] || '');
-      if (expected && got && got === expected) {
+      const challengeToken = String(req.headers['x-gp-turnstile-token'] || req.body?.challengeToken || '').trim();
+      const staticToken = String(req.headers['x-gp-challenge-token'] || '').trim();
+      const challenge = await verifySecurityChallenge({
+        token: challengeToken,
+        staticToken,
+        remoteIp: requester
+      });
+      if (challenge.ok) {
         incCounter('security.challenge_pass');
       } else {
         incCounter('security.challenge_required');
         return res.status(429).json({
           error: 'ChallengeRequired',
           message: 'Additional verification is required before continuing.',
-          challenge: { required: true, reasons: risk.reasons }
+          challenge: {
+            required: true,
+            reasons: risk.reasons,
+            provider: challenge.provider,
+            siteKey: challenge.siteKey || null,
+            reason: challenge.reason || null
+          }
         });
       }
     }
@@ -257,9 +274,16 @@ function grahaPathChatV2(req, res, next) {
       }
     }
 
+    const deviceToken = readDeviceTokenFromRequest(req);
+    const device = verifyDeviceToken(deviceToken);
     const freeGate = demoPremium
       ? { allowed: true, used: 0, limit: freeLimit }
-      : await checkAndUseFreeMessage(identityHash);
+      : await checkAndUseFreeMessageBound({
+          profileHash,
+          ip: requester,
+          deviceId: device.valid ? device.payload.did : 'unknown-device',
+          fallbackIdentityHash: identityHash
+        });
     if (!freeGate.allowed) {
       incCounter('security.free_tier_block');
       return res.status(402).json({

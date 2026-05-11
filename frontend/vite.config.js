@@ -13,8 +13,23 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api/, '')
+        changeOrigin: true
+      },
+      '/generate-chart': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/chat': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/chat-v2': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/payment-proof': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
       }
     }
   },

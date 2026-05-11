@@ -7,7 +7,7 @@ import ValidationResult from './ValidationResult';
 import LockedPreview from './LockedPreview';
 import ChartGrahaChat from './ChartGrahaChat';
 import { getClientFingerprint } from '../lib/clientFingerprint';
-import { withApiBase } from '../lib/apiBase';
+import { apiFetch, withApiBase } from '../lib/apiBase';
 
 const API_LIFE_PHASES = withApiBase('/api/life-phase-validation');
 
@@ -194,7 +194,7 @@ export default function DemoExperience({ chart, onUnlock }) {
     setAiPhases([]);
     setAiCoreInsight('');
     setAiCoreReason('');
-    fetch(API_LIFE_PHASES, {
+    apiFetch(API_LIFE_PHASES, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

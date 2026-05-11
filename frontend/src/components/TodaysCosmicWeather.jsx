@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { buildDailyGrahaWeather } from '../lib/dailyGrahaWeather';
-import { withApiBase } from '../lib/apiBase';
+import { apiFetch, withApiBase } from '../lib/apiBase';
 
 function levelMeta(value) {
   const v = String(value || '').toLowerCase();
@@ -43,7 +43,7 @@ export default function TodaysCosmicWeather({ chart }) {
   const [loadedTransit, setLoadedTransit] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetch(withApiBase('/api/daily-weather'), {
+    apiFetch(withApiBase('/api/daily-weather'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chart })

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getClientFingerprint } from '../lib/clientFingerprint';
 import PremiumUnlockModal from './PremiumUnlockModal';
 import { readPremiumDemoUnlock, writePremiumDemoUnlock } from '../lib/chartAccess';
-import { withApiBase } from '../lib/apiBase';
+import { apiFetch, withApiBase } from '../lib/apiBase';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
 const AUTO_GREETING_ENABLED =
@@ -214,7 +214,7 @@ export default function ChartGrahaChat({
     setGreetingLoading(true);
 
     const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : 'free';
-    fetch(API_CHAT_V2, {
+    apiFetch(API_CHAT_V2, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -233,7 +233,8 @@ export default function ChartGrahaChat({
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
-          throw new Error(data.message || `Greeting failed (${res.status}). Is the backend on port 3000?`);
+          const hint = import.meta.env.DEV ? `Greeting failed (${res.status}). Is the API dev server running?` : `Greeting failed (${res.status}).`;
+          throw new Error(data.message || hint);
         }
         const text =
           typeof data.answer === 'string' && data.answer.trim()
@@ -250,7 +251,9 @@ export default function ChartGrahaChat({
           const detail =
             typeof err?.message === 'string' && err.message.trim().length > 0
               ? err.message
-              : 'Network error — is the GrahaPath server running on port 3000?';
+              : import.meta.env.DEV
+                ? 'Network error — is the GrahaPath API dev server running?'
+                : 'Network error — check your connection or try again in a moment.';
           setMessages([
             {
               role: 'assistant',
@@ -296,7 +299,7 @@ export default function ChartGrahaChat({
     const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : teaserMode ? 'free' : 'free';
 
     try {
-      const res = await fetch(API_CHAT_V2, {
+      const res = await apiFetch(API_CHAT_V2, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
