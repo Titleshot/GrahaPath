@@ -1,6 +1,7 @@
 const axios = require('axios');
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const PHOTON_URL = 'https://photon.komoot.io/api';
 const MIN_IMPORTANCE = 0.02;
 const MIN_TOKEN_OVERLAP = 0.35;
 const STRONG_TOKEN_OVERLAP = 0.6;
@@ -9,7 +10,7 @@ const SUGGESTION_LIMIT = 5;
 const SOUTH_ASIA_COUNTRY_CODES = new Set(['np', 'in', 'bt', 'bd', 'pk', 'lk']);
 const MAJOR_SETTLEMENT_TYPES = new Set(['city', 'town', 'village']);
 const REGIONAL_TYPES = new Set(['administrative', 'state', 'county', 'province', 'region']);
-const NOMINATIM_EMAIL = process.env.NOMINATIM_EMAIL || undefined;
+const NOMINATIM_EMAIL = process.env.NOMINATIM_EMAIL || 'radheradhe742@proton.me';
 
 class GeocodingError extends Error {
   constructor(message, code = 'GEOCODE_NOT_FOUND') {
@@ -94,7 +95,10 @@ async function searchPlaceSuggestions(query, limit = 6) {
       viewbox: '68,39,98,5',
       bounded: 0
     });
-  } catch (_error) {
+  } catch (error) {
+    const status = error?.response?.status;
+    const code = error?.code;
+    console.warn(`[GrahaPath] Nominatim place search failed: status=${status || 'n/a'} code=${code || 'n/a'} — ${error?.message || error}`);
     return [];
   }
 
@@ -123,13 +127,47 @@ async function searchPlaceSuggestions(query, limit = 6) {
     .filter((row) => !MAJOR_SETTLEMENT_TYPES.has(row.placeType) && !REGIONAL_TYPES.has(row.placeType))
     .sort((a, b) => scoreSuggestionRow(b) - scoreSuggestionRow(a));
 
-  return [...preferred, ...fallback]
+  const nominatimResults = [...preferred, ...fallback]
     .slice(0, requestedLimit)
     .map((row) => ({
       displayName: row.displayName,
       latitude: row.latitude,
       longitude: row.longitude
     }));
+
+  if (nominatimResults.length > 0) return nominatimResults;
+
+  return searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
+}
+
+async function searchPlaceSuggestionsPhoton(query, limit = 6) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  if (normalizedQuery.length < 3) return [];
+  try {
+    const response = await axios.get(PHOTON_URL, {
+      params: { q: normalizedQuery, limit: Math.min(10, limit), lang: 'en' },
+      headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation)' },
+      timeout: 10000
+    });
+    const features = response.data?.features || [];
+    return features
+      .map((f) => {
+        const p = f.properties || {};
+        const coords = f.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return null;
+        const parts = [p.name, p.state, p.country].filter(Boolean);
+        return {
+          displayName: parts.join(', ') || p.label || '',
+          latitude: coords[1],
+          longitude: coords[0]
+        };
+      })
+      .filter((r) => r && Number.isFinite(r.latitude) && Number.isFinite(r.longitude) && r.displayName)
+      .slice(0, Math.max(1, limit));
+  } catch (error) {
+    console.warn(`[GrahaPath] Photon fallback failed: ${error?.message || error}`);
+    return [];
+  }
 }
 
 function sleep(ms) {
