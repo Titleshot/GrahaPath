@@ -6,14 +6,8 @@ const {
   saveChartForEmail
 } = require('../services/premiumAccessService');
 const {
-  createGumroadCheckoutUrl,
-  verifyGumroadSignature,
-  resolvePlanFromWebhook,
-  summarizeGumroadReadiness
-} = require('../services/gumroadService');
-const {
-  resolveCheckoutBackend,
   kofiCheckoutUrlForPlan,
+  isKofiCheckoutFullyConfigured,
   parseKofiFormBody,
   verifyKofiPayload,
   resolvePlanFromKofiPayload,
@@ -36,7 +30,7 @@ async function activatePremium(req, res) {
     });
     await recordPaymentForEmail({
       email: body.email,
-      gumroadOrderId: body.gumroadOrderId,
+      orderId: body.orderId || body.gumroadOrderId,
       amount: body.amount,
       plan: body.plan,
       status: body.status || 'paid'
@@ -74,40 +68,23 @@ async function createCheckoutSession(req, res) {
       return res.status(400).json({ error: 'InvalidRequest', message: 'Email is required.' });
     }
 
-    let gumroadCheckoutReady = false;
-    try {
-      gumroadCheckoutReady = summarizeGumroadReadiness().checkoutReady === true;
-    } catch {
-      gumroadCheckoutReady = false;
+    if (!isKofiCheckoutFullyConfigured()) {
+      return res.status(503).json({
+        error: 'PaymentsNotConfigured',
+        message: 'Ko-fi checkout URLs missing. Set KOFI_CHECKOUT_URL_QUICK and KOFI_CHECKOUT_URL_FULL.'
+      });
     }
 
-    const backend = resolveCheckoutBackend({ gumroadCheckoutReady });
-
-    if (backend === 'kofi') {
-      const checkoutUrl = kofiCheckoutUrlForPlan(plan);
-      if (!checkoutUrl) {
-        return res.status(503).json({
-          error: 'KofiNotConfigured',
-          message: 'Ko-fi checkout URLs missing. Set KOFI_CHECKOUT_URL_QUICK and KOFI_CHECKOUT_URL_FULL.'
-        });
-      }
-      return res.json({ ok: true, checkoutUrl, provider: 'kofi' });
+    const checkoutUrl = kofiCheckoutUrlForPlan(plan);
+    if (!checkoutUrl) {
+      return res.status(503).json({
+        error: 'KofiNotConfigured',
+        message: 'Ko-fi checkout URL missing for the selected plan.'
+      });
     }
 
-    if (backend === 'gumroad') {
-      const checkoutUrl = createGumroadCheckoutUrl({ email, plan });
-      return res.json({ ok: true, checkoutUrl, provider: 'gumroad' });
-    }
-
-    return res.status(503).json({
-      error: 'PaymentsNotConfigured',
-      message:
-        'No checkout configured. Add Ko-fi (see KOFI_CHECKOUT_URL_* in .env.example) or Gumroad (GUMROAD_PRODUCT_URL_*). Optional: PAYMENT_CHECKOUT_PROVIDER=kofi|gumroad|auto.'
-    });
+    return res.json({ ok: true, checkoutUrl, provider: 'kofi' });
   } catch (error) {
-    if (error.code === 'GUMROAD_NOT_CONFIGURED') {
-      return res.status(503).json({ error: 'GumroadNotConfigured', message: error.message });
-    }
     return res.status(500).json({
       error: 'CheckoutSessionFailed',
       message: error.message || 'Could not start checkout.'
@@ -152,7 +129,7 @@ async function kofiWebhook(req, res) {
 
     await recordPaymentForEmail({
       email,
-      gumroadOrderId: String(payload.kofi_transaction_id || payload.message_id || '').trim() || null,
+      orderId: String(payload.kofi_transaction_id || payload.message_id || '').trim() || null,
       amount: Number.isFinite(amountUsd) ? amountUsd : null,
       plan,
       status: 'paid'
@@ -163,49 +140,6 @@ async function kofiWebhook(req, res) {
     return res.status(500).json({
       error: 'KofiWebhookFailed',
       message: error.message || 'Could not process Ko-fi webhook.'
-    });
-  }
-}
-
-async function gumroadWebhook(req, res) {
-  try {
-    const signature = req.headers['x-gumroad-signature'];
-    const rawBody = req.rawBody;
-    if (!verifyGumroadSignature(rawBody, signature)) {
-      return res.status(401).json({ error: 'InvalidSignature', message: 'Invalid webhook signature.' });
-    }
-
-    const email = String(req.body?.email || req.body?.purchase_email || '')
-      .trim()
-      .toLowerCase();
-    if (!email) {
-      return res.status(400).json({ error: 'WebhookMissingEmail', message: 'Email missing in Gumroad payload.' });
-    }
-
-    const plan = resolvePlanFromWebhook(req.body);
-    const amountUsd = Number(req.body?.price || req.body?.sale_price || req.body?.amount || 0);
-
-    const premium = await upsertPremiumAccess({
-      email,
-      chartId: req.body?.order_number || req.body?.sale_id || null,
-      chartFingerprint: null,
-      plan,
-      remainingInsights: insightsForPlan(plan)
-    });
-
-    await recordPaymentForEmail({
-      email,
-      gumroadOrderId: String(req.body?.sale_id || req.body?.order_number || '').trim() || null,
-      amount: Number.isFinite(amountUsd) ? amountUsd : null,
-      plan,
-      status: 'paid'
-    });
-
-    return res.json({ ok: true, premium });
-  } catch (error) {
-    return res.status(500).json({
-      error: 'GumroadWebhookFailed',
-      message: error.message || 'Could not process webhook.'
     });
   }
 }
@@ -244,7 +178,6 @@ async function restorePremium(req, res) {
 module.exports = {
   activatePremium,
   createCheckoutSession,
-  gumroadWebhook,
   kofiWebhook,
   restorePremium
 };

@@ -10,8 +10,6 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "check": "node scripts/syntax-check.js",
-    "check:gumroad": "node scripts/verify-gumroad-env.js",
-    "check:gumroad:strict": "node scripts/verify-gumroad-env.js --strict",
     "check:kofi": "node scripts/verify-kofi-env.js",
     "check:kofi:strict": "node scripts/verify-kofi-env.js --strict",
     "render:merge-kofi-env": "node scripts/merge-render-kofi-env.js",

@@ -1166,7 +1166,7 @@ export default function App() {
           if (!checkoutUrl) {
             throw new Error('Checkout URL missing from server response.');
           }
-          const provider = String(data?.provider || 'gumroad').toLowerCase();
+          const provider = String(data?.provider || 'kofi').toLowerCase();
           if (typeof window !== 'undefined' && provider === 'kofi') {
             const normalizedEmail = sanitizeEmail(email);
             const pending = {

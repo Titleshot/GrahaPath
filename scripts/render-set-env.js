@@ -34,10 +34,6 @@ function buildVarsFromEnv() {
   pushIf('SUPABASE_URL', 'SUPABASE_URL', '');
   pushIf('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', '');
   pushIf('FEEDBACK_FORMSPREE_ENDPOINT', 'FEEDBACK_FORMSPREE_ENDPOINT', '');
-  pushIf('GUMROAD_PRODUCT_URL_QUICK', 'GUMROAD_PRODUCT_URL_QUICK', '');
-  pushIf('GUMROAD_PRODUCT_URL_FULL', 'GUMROAD_PRODUCT_URL_FULL', '');
-  pushIf('GUMROAD_PRODUCT_PERMALINK_QUICK', 'GUMROAD_PRODUCT_PERMALINK_QUICK', '');
-  pushIf('GUMROAD_PRODUCT_PERMALINK_FULL', 'GUMROAD_PRODUCT_PERMALINK_FULL', '');
   pushIf('FRONTEND_ORIGIN', 'FRONTEND_ORIGIN', 'https://grahapath-web.vercel.app');
   pushIf('NODE_VERSION', 'NODE_VERSION', '20');
 
@@ -64,7 +60,7 @@ async function run() {
   const vars = buildVarsFromEnv();
   if (!vars.length) {
     console.error(
-      'No vars to set. Export at least one of: OPENAI_API_KEY, SUPABASE_URL, GUMROAD_*, FRONTEND_ORIGIN, or use merge-render-kofi-env.js for Ko-fi.'
+      'No vars to set. Export at least one of: OPENAI_API_KEY, SUPABASE_URL, FRONTEND_ORIGIN, or use merge-render-kofi-env.js for Ko-fi.'
     );
     process.exit(1);
   }

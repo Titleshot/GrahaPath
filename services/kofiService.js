@@ -9,12 +9,10 @@ function getKofiConfig() {
     shopLinkCodeFull: String(process.env.KOFI_SHOP_LINK_CODE_FULL || '').trim(),
     membershipTierQuick: String(process.env.KOFI_MEMBERSHIP_TIER_QUICK || '').trim().toLowerCase(),
     membershipTierFull: String(process.env.KOFI_MEMBERSHIP_TIER_FULL || '').trim().toLowerCase(),
-    /** Donation fallback only when USD; amount >= min → full, else quick. */
     donationFullMinUsd: Math.max(
       0,
       Number.parseFloat(String(process.env.KOFI_DONATION_FULL_MIN_USD || '').trim())
-    ),
-    checkoutProviderPreference: String(process.env.PAYMENT_CHECKOUT_PROVIDER || 'auto').trim().toLowerCase()
+    )
   };
 }
 
@@ -49,23 +47,9 @@ function isKofiCheckoutFullyConfigured() {
   return Boolean(kofiCheckoutUrlForPlan('quick') && kofiCheckoutUrlForPlan('full'));
 }
 
-/**
- * Decide checkout: kofi | gumroad | none
- * PAYMENT_CHECKOUT_PROVIDER=auto | kofi | gumroad (default auto)
- */
-function resolveCheckoutBackend({ gumroadCheckoutReady }) {
-  const pref = getKofiConfig().checkoutProviderPreference;
-  const kofiOk = isKofiCheckoutFullyConfigured();
-
-  if (pref === 'kofi') {
-    return kofiOk ? 'kofi' : 'none';
-  }
-  if (pref === 'gumroad') {
-    return gumroadCheckoutReady ? 'gumroad' : 'none';
-  }
-  if (kofiOk) return 'kofi';
-  if (gumroadCheckoutReady) return 'gumroad';
-  return 'none';
+/** Check if Ko-fi checkout is available. */
+function resolveCheckoutBackend() {
+  return isKofiCheckoutFullyConfigured() ? 'kofi' : 'none';
 }
 
 /**

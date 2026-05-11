@@ -325,7 +325,7 @@ async function findLatestChartByEmail(email) {
   return matches[0]?.chartData || null;
 }
 
-async function recordPaymentForEmail({ email, gumroadOrderId, amount, plan, status = 'paid' }) {
+async function recordPaymentForEmail({ email, orderId, amount, plan, status = 'paid' }) {
   const normalizedEmail = normalizeEmail(email);
   if (!isValidEmail(normalizedEmail)) return null;
   const normalizedPlan = sanitizePlan(plan);
@@ -339,7 +339,7 @@ async function recordPaymentForEmail({ email, gumroadOrderId, amount, plan, stat
         .from('payments')
         .insert({
           user_id: user.id,
-          gumroad_order_id: gumroadOrderId || null,
+          gumroad_order_id: orderId || null,
           amount: safeAmount,
           plan: normalizedPlan,
           status
@@ -350,7 +350,7 @@ async function recordPaymentForEmail({ email, gumroadOrderId, amount, plan, stat
         return {
           id: data.id,
           userId: data.user_id,
-          gumroadOrderId: data.gumroad_order_id,
+          orderId: data.gumroad_order_id,
           amount: data.amount,
           plan: data.plan,
           status: data.status,
@@ -364,7 +364,7 @@ async function recordPaymentForEmail({ email, gumroadOrderId, amount, plan, stat
   const record = {
     id: `${normalizedEmail}:${Date.now()}`,
     email: normalizedEmail,
-    gumroadOrderId: gumroadOrderId || null,
+    orderId: orderId || null,
     amount: safeAmount,
     plan: normalizedPlan,
     status,

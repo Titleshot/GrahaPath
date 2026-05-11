@@ -6,7 +6,8 @@ function safeRequire(modulePath, fallbackFactory) {
   try {
     return require(modulePath);
   } catch (error) {
-    console.warn(`[GrahaPath] Optional module unavailable: ${modulePath} (${error?.code || 'error'})`);
+    console.error(`[GrahaPath] Optional module unavailable: ${modulePath} — ${error?.message || error}`);
+    if (error?.stack) console.error(error.stack);
     return fallbackFactory();
   }
 }
@@ -16,15 +17,6 @@ const chatRoutes = safeRequire('./routes/chatRoutes', () => express.Router());
 const feedbackRoutes = safeRequire('./routes/feedbackRoutes', () => express.Router());
 const securityRoutes = safeRequire('./routes/securityRoutes', () => express.Router());
 const premiumRoutes = safeRequire('./routes/premiumRoutes', () => express.Router());
-const gumroadRuntime = safeRequire('./services/gumroadService', () => ({
-  summarizeGumroadReadiness: () => ({
-    checkoutReady: true,
-    webhookSecretOk: true,
-    blockingIssues: [],
-    recommendations: [],
-    issues: []
-  })
-}));
 const geminiRuntime = safeRequire('./services/grahapathGeminiService', () => ({
   probeGeminiReadiness: async () => ({ ok: false, reason: 'module_unavailable' }),
   getGeminiRuntimeStats: () => ({ available: false })
@@ -102,16 +94,6 @@ app.use(
   })
 );
 app.use(
-  '/api/premium/webhook/gumroad',
-  express.urlencoded({
-    extended: false,
-    limit: '2mb',
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    }
-  })
-);
-app.use(
   '/api/premium/webhook/kofi',
   express.urlencoded({
     extended: true,
@@ -182,14 +164,6 @@ app.use((err, _req, res, _next) => {
 if (process.env.VERCEL !== '1') {
   app.listen(port, () => {
     console.log(`GrahaPath backend listening on port ${port}`);
-    try {
-      const g = gumroadRuntime.summarizeGumroadReadiness?.();
-      if (g && Array.isArray(g.blockingIssues) && g.blockingIssues.length > 0) {
-        console.warn('[GrahaPath] Gumroad:', g.blockingIssues.join(' | '));
-      }
-    } catch {
-      /* ignore */
-    }
     probeGeminiReadiness()
       .then((probe) => {
         if (probe.ok) {

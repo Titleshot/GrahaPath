@@ -30,7 +30,6 @@ const pairs = [
   ['KOFI_CHECKOUT_URL_FULL', process.env.KOFI_CHECKOUT_URL_FULL || 'https://ko-fi.com/s/cb8b7003ea'],
   ['KOFI_SHOP_LINK_CODE_QUICK', process.env.KOFI_SHOP_LINK_CODE_QUICK || '56695dc75d'],
   ['KOFI_SHOP_LINK_CODE_FULL', process.env.KOFI_SHOP_LINK_CODE_FULL || 'cb8b7003ea'],
-  ['PAYMENT_CHECKOUT_PROVIDER', process.env.PAYMENT_CHECKOUT_PROVIDER || 'kofi'],
   ['KOFI_VERIFICATION_TOKEN', kofiVerification],
   ['FRONTEND_ORIGIN', process.env.FRONTEND_ORIGIN || 'https://grahapath-web.vercel.app']
 ];
