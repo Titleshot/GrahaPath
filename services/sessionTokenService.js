@@ -99,7 +99,11 @@ function parseCookies(req) {
 
 function readSessionTokenFromRequest(req) {
   const cookies = parseCookies(req);
-  return cookies[TOKEN_NAME] || '';
+  const fromCookie = cookies[TOKEN_NAME] || '';
+  if (fromCookie) return fromCookie;
+  const authHeader = String(req.headers?.['authorization'] || '').trim();
+  if (authHeader.startsWith('Bearer ')) return authHeader.slice(7).trim();
+  return String(req.headers?.['x-gp-session'] || '').trim();
 }
 
 function readDeviceTokenFromRequest(req) {

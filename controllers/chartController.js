@@ -446,6 +446,7 @@ async function generateChart(req, res, next) {
       });
     }
 
+    chart.sessionToken = sessionToken;
     return res.json(chart);
   } catch (error) {
     return handleChartError(error, res, next);

@@ -219,7 +219,8 @@ export default function ChartGrahaChat({
       headers: {
         'Content-Type': 'application/json',
         'x-gp-client-fp': getClientFingerprint(),
-        'x-gp-demo-premium': forceUnlocked || premiumDemoUnlocked ? 'true' : 'false'
+        'x-gp-demo-premium': forceUnlocked || premiumDemoUnlocked ? 'true' : 'false',
+        ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
       },
       body: JSON.stringify({
         chart,
@@ -305,7 +306,8 @@ export default function ChartGrahaChat({
           'Content-Type': 'application/json',
           'x-gp-client-fp': getClientFingerprint(),
           'x-gp-demo-premium': forceUnlocked || premiumDemoUnlocked ? 'true' : 'false',
-          ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {})
+          ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {}),
+          ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
         },
         body: JSON.stringify({
           chart,
