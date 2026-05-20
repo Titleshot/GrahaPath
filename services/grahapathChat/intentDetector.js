@@ -54,7 +54,7 @@ function detectIntent(rawText) {
   }
 
   if (
-    /(career|job|profession|startup|business|promotion|10th\s*house|tenth\s*house|which\s+profession|mero\s+career)/i.test(
+    /(career|job|profession|startup|business|promotion|10th\s*house|tenth\s*house|which\s+profession|mero\s+career|public\s+recognition|mass\s+recognition|fame|famous|celebrity|visibility|reputation|प्रशंसा|चर्चा|चर्चित)/i.test(
       lower
     )
   ) {

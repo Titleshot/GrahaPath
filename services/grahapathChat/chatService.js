@@ -8,7 +8,12 @@ const {
   tokenAndTemperatureForIntent,
   normalizePlan
 } = require('./promptBuilder');
-const { formatAnswer, looksLikeReportOrLifePhaseJson } = require('./responseFormatter');
+const {
+  formatAnswer,
+  looksLikeReportOrLifePhaseJson,
+  BIRTH_DETAILS_REDIRECT,
+  proseFallback
+} = require('./responseFormatter');
 const { buildDailyGrahaWeatherFromTransit } = require('../dailyGrahaWeatherService');
 const { DateTime } = require('luxon');
 const { buildPanchangaForDate, buildPanchangaRange } = require('../currentAstronomyService');
@@ -290,7 +295,25 @@ async function runMessage({
     });
   }
 
-  const answer = formatAnswer(raw, message);
+  let answer = formatAnswer(raw, message);
+  if (answer === BIRTH_DETAILS_REDIRECT) {
+    const retrySystem =
+      systemText +
+      '\n\nCRITICAL: CHART_CONTEXT_JSON is already loaded. Do NOT ask for birth date, time, or place. ' +
+      'Answer the user question directly using houses, planets, dasha, and transits from context. ' +
+      'For timing/fame/recognition questions, give phase-based age windows (not exact guarantees).';
+    raw = await invokeModel({
+      systemText: retrySystem,
+      userMessage: message,
+      conversationHistory: conversationHistory || [],
+      maxTokens,
+      temperature: Math.min(0.72, temperature + 0.04)
+    });
+    answer = formatAnswer(raw, message);
+    if (answer === BIRTH_DETAILS_REDIRECT) {
+      answer = proseFallback(message);
+    }
+  }
   const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
   return { mode, intent, answer };
 }
