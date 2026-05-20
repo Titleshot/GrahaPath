@@ -16,6 +16,10 @@ const SIGN_LORD = {
   Pisces: 'Jupiter'
 };
 
+const FIRST_BREAKOUT_AGE_MIN = 10;
+const FIRST_BREAKOUT_AGE_MAX = 32;
+const SEGMENT_SCAN_MAX_AGE = 55;
+
 function parseIsoDate(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
   const dt = DateTime.fromISO(value, { setZone: true });
@@ -54,11 +58,22 @@ function houseLordMap(chart) {
     'Pisces'
   ].indexOf(asc);
   if (ascIdx < 0) return out;
+  const signs = [
+    'Aries',
+    'Taurus',
+    'Gemini',
+    'Cancer',
+    'Leo',
+    'Virgo',
+    'Libra',
+    'Scorpio',
+    'Sagittarius',
+    'Capricorn',
+    'Aquarius',
+    'Pisces'
+  ];
   for (let house = 1; house <= 12; house += 1) {
-    const sign = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'][
-      (ascIdx + house - 1) % 12
-    ];
-    out[house] = SIGN_LORD[sign] || null;
+    out[house] = SIGN_LORD[signs[(ascIdx + house - 1) % 12]] || null;
   }
   return out;
 }
@@ -67,31 +82,114 @@ function planetsInHouse(chart, houseNum) {
   return (chart?.planets || []).filter((p) => p?.house === houseNum).map((p) => p.name);
 }
 
+function detectFameQueryMode(userMessage) {
+  const t = String(userMessage || '').toLowerCase();
+  if (
+    /(first|begin|beginning|start|started|debut|breakout|break\s*through|initial|when\s+did|at\s+what\s+age)/i.test(t) &&
+    /(recognition|famous|fame|success|public|visibility|mass)/i.test(t)
+  ) {
+    return 'first_breakout';
+  }
+  if (/(successful|succeeded|got\s+famous|success\s+at|which\s+age|ages?\s+\d|,\s*\d|\bor\b\s*\d)/i.test(t)) {
+    return 'compare_ages';
+  }
+  return 'general';
+}
+
+/**
+ * Life-event anchors → age at event + boost for recognition scoring.
+ */
+function lifeEventAgeBoosts(chart) {
+  const ver = chart?.lifeEventVerification;
+  const events = Array.isArray(ver?.events) ? ver.events : [];
+  const birth = birthDateTime(chart);
+  if (!birth?.isValid || !events.length) return [];
+
+  const careerTypes = new Set(['career', 'job', 'finance', 'other']);
+  const boosts = [];
+
+  for (const evt of events) {
+    const anchor = evt?.anchor;
+    if (!anchor || evt.timeAccuracyMatch == null) continue;
+    const when = parseIsoDate(anchor.length === 7 ? `${anchor}-15` : anchor);
+    if (!when?.isValid) continue;
+    const age = ageOnDate(birth, when);
+    if (age == null) continue;
+    const category = String(evt?.category || evt?.type || '').toLowerCase();
+    const isCareerish = careerTypes.has(category) || /career|job|fame|public/i.test(category);
+    const match01 = Number(evt.timeAccuracyMatch) || 0;
+    let boost = 8 + Math.round(match01 * 22);
+    if (isCareerish) boost += 10;
+    if (match01 >= 0.52) boost += 6;
+    boosts.push({
+      age: Math.round(age * 10) / 10,
+      calendarYear: when.year,
+      anchor,
+      boost: Math.min(35, boost),
+      mahadashaLord: evt.mahadashaLord || null,
+      antarLord: evt.antarLord || null,
+      note: evt.note || evt.type || category
+    });
+  }
+  return boosts;
+}
+
+function boostForAge(age, boosts) {
+  if (age == null || !boosts.length) return 0;
+  let extra = 0;
+  for (const b of boosts) {
+    if (Math.abs(b.age - age) <= 1.25) extra = Math.max(extra, b.boost);
+    else if (Math.abs(b.age - age) <= 2.5) extra = Math.max(extra, Math.round(b.boost * 0.45));
+  }
+  return extra;
+}
+
 /**
  * 0–100 visibility / public-recognition activation for a dasha pair.
  */
-function scoreRecognitionActivation(chart, mahaDasha, antarDasha) {
+function scoreRecognitionActivation(chart, mahaDasha, antarDasha, age = null) {
   const lords = houseLordMap(chart);
   const tenthLord = lords[10] || null;
   const eleventhLord = lords[11] || null;
-  let score = 28;
+  const sun = (chart?.planets || []).find((p) => p.name === 'Sun');
+  const sunHouse = sun?.house ?? null;
+  let score = 24;
 
   const md = mahaDasha || null;
   const ad = antarDasha || null;
 
-  if (md && (md === tenthLord || md === eleventhLord)) score += 22;
-  if (ad && (ad === tenthLord || ad === eleventhLord)) score += 18;
-  if (md && ['Sun', 'Jupiter', 'Venus', 'Rahu'].includes(md)) score += 12;
-  if (ad && ['Sun', 'Mercury', 'Venus', 'Rahu', 'Jupiter'].includes(ad)) score += 10;
-  if (md === 'Jupiter' && ad === 'Saturn') score += 6;
-  if (md === 'Rahu' && ['Mercury', 'Venus', 'Jupiter'].includes(ad)) score += 8;
+  if (md && (md === tenthLord || md === eleventhLord)) score += 24;
+  if (ad && (ad === tenthLord || ad === eleventhLord)) score += 20;
+  if (md && md === tenthLord && ad && ad === eleventhLord) score += 8;
+  if (md && ['Sun', 'Jupiter', 'Venus', 'Rahu'].includes(md)) score += 10;
+  if (ad && ['Sun', 'Mercury', 'Venus', 'Rahu', 'Jupiter'].includes(ad)) score += 12;
+
+  if (md === 'Rahu' && ['Mercury', 'Venus', 'Jupiter'].includes(ad)) score += 10;
+  if (md === 'Jupiter' && ['Mercury', 'Venus', 'Saturn', 'Sun'].includes(ad)) score += 8;
+  if (md === 'Jupiter' && ad === 'Saturn') score += 12;
+  if (md === 'Jupiter' && ad === 'Mercury') score += 8;
+  if (md === 'Venus' || ad === 'Venus') score += 6;
 
   const h10 = planetsInHouse(chart, 10);
   const h11 = planetsInHouse(chart, 11);
   const h1 = planetsInHouse(chart, 1);
-  if (h10.includes('Sun') || h1.includes('Sun')) score += 12;
+  if (h10.includes('Sun') || h1.includes('Sun') || sunHouse === 10 || sunHouse === 1) score += 14;
   if (h10.includes('Rahu') || h11.includes('Rahu')) score += 10;
-  if (h10.includes('Jupiter') || h11.includes('Jupiter')) score += 6;
+  if (h10.includes('Jupiter') || h11.includes('Jupiter')) score += 8;
+  if (h10.includes('Mercury') || h11.includes('Mercury')) score += 6;
+
+  const cw = chart?.careerWealth;
+  if (cw?.career?.points != null && cw.career.points >= 58) score += 6;
+  if (cw?.visibility?.points != null && cw.visibility.points >= 55) score += 5;
+
+  if (age != null && age >= FIRST_BREAKOUT_AGE_MIN && age <= FIRST_BREAKOUT_AGE_MAX) {
+    if (['Rahu', 'Jupiter', 'Venus', 'Mercury', 'Sun'].includes(md) || ['Rahu', 'Jupiter', 'Venus', 'Mercury', 'Sun'].includes(ad)) {
+      score += 8;
+    }
+  }
+
+  if (age != null && age > 38) score -= 12;
+  if (age != null && age > 45) score -= 8;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -103,22 +201,128 @@ function ageOnDate(birth, when) {
   return Math.max(0, Math.round(years * 10) / 10);
 }
 
-function buildAgeTimingRow(chart, ageYears) {
+function iterAntardashaSegments(chart, maxAge = SEGMENT_SCAN_MAX_AGE) {
+  const birth = birthDateTime(chart);
+  if (!birth?.isValid) return [];
+  const timeline = getVimshottariTimeline(chart);
+  const endLimit = birth.plus({ years: maxAge });
+  const segments = [];
+
+  for (const maha of timeline) {
+    const antars = Array.isArray(maha.antardasha) ? maha.antardasha : [];
+    for (const antar of antars) {
+      const start = parseIsoDate(antar.startDateApprox);
+      const end = parseIsoDate(antar.endDateApprox);
+      if (!start?.isValid || !end?.isValid) continue;
+      if (end < birth || start > endLimit) continue;
+      const mid = start.plus({ milliseconds: Math.floor(end.diff(start).milliseconds / 2) });
+      if (mid < birth) continue;
+      const ageMid = ageOnDate(birth, mid);
+      const ageStart = ageOnDate(birth, start);
+      const ageEnd = ageOnDate(birth, end);
+      if (ageMid == null || ageMid > maxAge) continue;
+      const baseScore = scoreRecognitionActivation(chart, maha.planet, antar.antarLord, ageMid);
+      segments.push({
+        age: ageMid,
+        ageStart,
+        ageEnd,
+        calendarDate: mid.toISODate(),
+        calendarYear: mid.year,
+        calendarYearStart: start.year,
+        calendarYearEnd: end.year,
+        mahaDasha: maha.planet || null,
+        antarDasha: antar.antarLord || null,
+        antarStart: antar.startDateApprox,
+        antarEnd: antar.endDateApprox,
+        recognitionScore: baseScore
+      });
+    }
+  }
+  return segments;
+}
+
+function applyBoostsToSegments(segments, boosts) {
+  return segments.map((row) => {
+    const midBoost = boostForAge(row.age, boosts);
+    const startBoost = row.ageStart != null ? boostForAge(row.ageStart, boosts) : 0;
+    const endBoost = row.ageEnd != null ? boostForAge(row.ageEnd, boosts) : 0;
+    const eventBoost = Math.max(midBoost, startBoost, endBoost);
+    return {
+      ...row,
+      recognitionScore: Math.min(100, row.recognitionScore + eventBoost),
+      lifeEventBoost: eventBoost
+    };
+  });
+}
+
+function formatAgeRangeLabel(ageStart, ageEnd) {
+  const a = ageStart != null ? Math.floor(ageStart) : null;
+  const b = ageEnd != null ? Math.floor(ageEnd) : null;
+  if (a == null && b == null) return null;
+  if (a != null && b != null) {
+    if (a === b) return String(a);
+    if (Math.abs(b - a) <= 3) return `${a}–${b}`;
+    return `${a}–${b}`;
+  }
+  return String(a ?? b);
+}
+
+function formatYearRange(row) {
+  const ys = row.calendarYearStart;
+  const ye = row.calendarYearEnd;
+  if (ys && ye && ys !== ye) return `${ys}–${ye}`;
+  return String(row.calendarYear || ys || ye || '');
+}
+
+function segmentCoversAge(segment, age) {
+  if (segment.ageStart != null && segment.ageEnd != null) {
+    return age >= segment.ageStart - 0.1 && age <= segment.ageEnd + 0.1;
+  }
+  return Math.abs(segment.age - age) <= 2;
+}
+
+function peakTimingForAge(chart, ageYears, segments, boosts) {
+  const covering = segments.filter((s) => segmentCoversAge(s, ageYears));
+  const pool = covering.length ? covering : segments.filter((s) => Math.abs(s.age - ageYears) <= 2.5);
+  if (pool.length) {
+    const best = pool.reduce((a, b) => (a.recognitionScore >= b.recognitionScore ? a : b));
+    return {
+      age: ageYears,
+      ageRangeLabel: formatAgeRangeLabel(best.ageStart, best.ageEnd),
+      calendarDate: best.calendarDate,
+      calendarYear: best.calendarYear,
+      calendarYears: formatYearRange(best),
+      mahaDasha: best.mahaDasha,
+      antarDasha: best.antarDasha,
+      antarStart: best.antarStart,
+      antarEnd: best.antarEnd,
+      recognitionScore: best.recognitionScore,
+      scoredFrom: 'antar_window_peak'
+    };
+  }
   const birth = birthDateTime(chart);
   if (!birth?.isValid) return null;
   const when = birth.plus({ years: ageYears });
   const dasha = calculateDashaAtDate(chart, when, { preferEngine: true });
-  const score = scoreRecognitionActivation(chart, dasha.mahaDasha, dasha.antarDasha);
+  let score = scoreRecognitionActivation(chart, dasha.mahaDasha, dasha.antarDasha, ageYears);
+  score = Math.min(100, score + boostForAge(ageYears, boosts));
   return {
     age: ageYears,
+    ageRangeLabel: String(ageYears),
     calendarDate: when.toISODate(),
     calendarYear: when.year,
+    calendarYears: String(when.year),
     mahaDasha: dasha.mahaDasha,
     antarDasha: dasha.antarDasha,
     antarStart: dasha.startDate,
     antarEnd: dasha.endDate,
-    recognitionScore: score
+    recognitionScore: score,
+    scoredFrom: 'birthday_snapshot'
   };
+}
+
+function buildAgeTimingRow(chart, ageYears, segments, boosts) {
+  return peakTimingForAge(chart, ageYears, segments, boosts);
 }
 
 function extractAgesFromMessage(text) {
@@ -146,47 +350,43 @@ function extractAgesFromMessage(text) {
   return [...ages].sort((a, b) => a - b);
 }
 
-function iterAntardashaSegments(chart, maxAge = 55) {
-  const birth = birthDateTime(chart);
-  if (!birth?.isValid) return [];
-  const timeline = getVimshottariTimeline(chart);
-  const endLimit = birth.plus({ years: maxAge });
-  const segments = [];
-
-  for (const maha of timeline) {
-    const antars = Array.isArray(maha.antardasha) ? maha.antardasha : [];
-    for (const antar of antars) {
-      const start = parseIsoDate(antar.startDateApprox);
-      const end = parseIsoDate(antar.endDateApprox);
-      if (!start?.isValid || !end?.isValid) continue;
-      if (end < birth || start > endLimit) continue;
-      const mid = start.plus({ milliseconds: Math.floor(end.diff(start).milliseconds / 2) });
-      if (mid < birth || mid > endLimit) continue;
-      const age = ageOnDate(birth, mid);
-      if (age == null || age > maxAge) continue;
-      segments.push({
-        age,
-        calendarDate: mid.toISODate(),
-        calendarYear: mid.year,
-        mahaDasha: maha.planet || null,
-        antarDasha: antar.antarLord || null,
-        antarStart: antar.startDateApprox,
-        antarEnd: antar.endDateApprox,
-        recognitionScore: scoreRecognitionActivation(chart, maha.planet, antar.antarLord)
-      });
-    }
-  }
-  return segments;
+function effectiveScore(row, queryMode) {
+  let s = row.recognitionScore;
+  if (queryMode !== 'first_breakout') return s;
+  if (row.age >= 14 && row.age <= 20) s += 14;
+  else if (row.age >= 21 && row.age <= 24) s += 4;
+  return s;
 }
 
-function buildTopRecognitionWindows(chart, limit = 5) {
-  const segments = iterAntardashaSegments(chart, 55);
-  const ranked = [...segments].sort((a, b) => b.recognitionScore - a.recognitionScore);
+function pickPrimaryWindow(segments, queryMode) {
+  let pool = [...segments];
+  if (queryMode === 'first_breakout') {
+    pool = pool.filter((s) => s.age >= FIRST_BREAKOUT_AGE_MIN && s.age <= FIRST_BREAKOUT_AGE_MAX);
+  }
+  if (!pool.length) pool = [...segments].filter((s) => s.age <= 40);
+  if (!pool.length) pool = [...segments];
+  pool.sort((a, b) => effectiveScore(b, queryMode) - effectiveScore(a, queryMode));
+  return pool[0] || null;
+}
+
+function buildTopRecognitionWindows(chart, options = {}) {
+  const limit = options.limit ?? 5;
+  const queryMode = options.queryMode ?? 'general';
+  const boosts = options.boosts ?? lifeEventAgeBoosts(chart);
+  let segments = applyBoostsToSegments(iterAntardashaSegments(chart, SEGMENT_SCAN_MAX_AGE), boosts);
+
+  if (queryMode === 'first_breakout') {
+    segments = segments.filter((s) => s.age >= FIRST_BREAKOUT_AGE_MIN && s.age <= FIRST_BREAKOUT_AGE_MAX);
+  }
+
+  const ranked = [...segments].sort(
+    (a, b) => effectiveScore(b, queryMode) - effectiveScore(a, queryMode) || b.recognitionScore - a.recognitionScore
+  );
   const picked = [];
   const used = new Set();
 
   for (const row of ranked) {
-    const key = `${row.mahaDasha}|${row.antarDasha}|${Math.floor(row.age)}`;
+    const key = `${row.mahaDasha}|${row.antarDasha}|${row.antarStart}`;
     if (used.has(key)) continue;
     used.add(key);
     picked.push(row);
@@ -196,21 +396,36 @@ function buildTopRecognitionWindows(chart, limit = 5) {
   return picked.map((row, index) => ({
     rank: index + 1,
     age: row.age,
-    ageLabel: `${Math.floor(row.age)}`,
+    ageRangeLabel: formatAgeRangeLabel(row.ageStart, row.ageEnd),
     calendarYear: row.calendarYear,
+    calendarYears: formatYearRange(row),
     calendarDate: row.calendarDate,
     mahaDasha: row.mahaDasha,
     antarDasha: row.antarDasha,
     antarWindow: `${row.antarStart || '?'} – ${row.antarEnd || '?'}`,
-    recognitionScore: row.recognitionScore
+    recognitionScore: row.recognitionScore,
+    lifeEventBoost: row.lifeEventBoost || 0
   }));
 }
 
 function matchLabel(score, topScore) {
   if (topScore == null || score == null) return 'unknown';
-  if (score >= topScore - 8) return 'strong_match';
-  if (score >= topScore - 20) return 'partial_match';
+  if (score >= topScore - 10) return 'strong_match';
+  if (score >= topScore - 22) return 'partial_match';
   return 'weak_match';
+}
+
+function mapPrimary(row) {
+  if (!row) return null;
+  return {
+    age: row.age,
+    ageRangeLabel: row.ageRangeLabel || formatAgeRangeLabel(row.ageStart, row.ageEnd) || String(Math.floor(row.age)),
+    calendarYears: row.calendarYears || formatYearRange(row) || String(row.calendarYear),
+    mahaDasha: row.mahaDasha,
+    antarDasha: row.antarDasha,
+    recognitionScore: row.recognitionScore,
+    antarWindow: row.antarWindow || `${row.antarStart || '?'} – ${row.antarEnd || '?'}`
+  };
 }
 
 /**
@@ -219,55 +434,95 @@ function matchLabel(score, topScore) {
 function buildFameTimingContext(chart, userMessage = '') {
   const birth = birthDateTime(chart);
   const lords = houseLordMap(chart);
-  const currentOnly = calculateDashaAtDate(chart, DateTime.now(), { preferEngine: true });
+  const queryMode = detectFameQueryMode(userMessage);
+  const boosts = lifeEventAgeBoosts(chart);
+  const rawSegments = applyBoostsToSegments(iterAntardashaSegments(chart, SEGMENT_SCAN_MAX_AGE), boosts);
 
-  const topWindows = buildTopRecognitionWindows(chart, 5);
-  const topScore = topWindows[0]?.recognitionScore ?? null;
+  const topWindows = buildTopRecognitionWindows(chart, { limit: 6, queryMode, boosts });
+  const primaryRow = pickPrimaryWindow(rawSegments, queryMode);
+  const primaryFromList = topWindows[0] || null;
+  const primary = mapPrimary(
+    primaryRow && primaryRow.recognitionScore >= (primaryFromList?.recognitionScore ?? 0) - 3
+      ? {
+          ...primaryRow,
+          ageRangeLabel: formatAgeRangeLabel(primaryRow.ageStart, primaryRow.ageEnd),
+          calendarYears: formatYearRange(primaryRow),
+          antarWindow: `${primaryRow.antarStart || '?'} – ${primaryRow.antarEnd || '?'}`
+        }
+      : primaryFromList
+  );
+
+  const topScore = primary?.recognitionScore ?? topWindows[0]?.recognitionScore ?? null;
 
   const defaultAges = [7, 9, 16, 18, 25, 30];
   const fromMsg = extractAgesFromMessage(userMessage);
-  const ageList = fromMsg.length ? fromMsg : defaultAges;
+  const ageList = fromMsg.length ? fromMsg : queryMode === 'compare_ages' ? defaultAges : [];
 
   const queriedAges = ageList
-    .map((age) => buildAgeTimingRow(chart, age))
+    .map((age) => buildAgeTimingRow(chart, age, rawSegments, boosts))
     .filter(Boolean)
     .map((row) => ({
       ...row,
       matchVsTopWindow: matchLabel(row.recognitionScore, topScore)
-    }));
+    }))
+    .sort((a, b) => b.recognitionScore - a.recognitionScore);
 
-  const primary = topWindows[0] || null;
+  const bestAmongQueried = queriedAges[0] || null;
+
+  const lifeEventHints =
+    boosts.length > 0
+      ? boosts.map((b) => ({
+          age: b.age,
+          year: b.calendarYear,
+          boost: b.boost,
+          dasha: [b.mahadashaLord, b.antarLord].filter(Boolean).join('–'),
+          note: b.note
+        }))
+      : [];
 
   return {
+    queryMode,
     birthYear: birth?.isValid ? birth.year : null,
     tenthLord: lords[10] || null,
     eleventhLord: lords[11] || null,
     sunHouse: (chart?.planets || []).find((p) => p.name === 'Sun')?.house ?? null,
     currentDashaOnly: {
       note: 'For TODAY only — never use for childhood or past-age questions',
-      mahaDasha: currentOnly.mahaDasha,
-      antarDasha: currentOnly.antarDasha,
-      startDate: currentOnly.startDate,
-      endDate: currentOnly.endDate
+      ...(() => {
+        const d = calculateDashaAtDate(chart, DateTime.now(), { preferEngine: true });
+        return {
+          mahaDasha: d.mahaDasha,
+          antarDasha: d.antarDasha,
+          startDate: d.startDate,
+          endDate: d.endDate
+        };
+      })()
     },
-    primaryRecognitionWindow: primary
+    primaryRecognitionWindow: primary,
+    topRecognitionWindows: topWindows.slice(0, 5),
+    queriedAges,
+    bestAmongQueried,
+    lifeEventHints,
+    lifeEventVerification: chart?.lifeEventVerification
       ? {
-          age: primary.age,
-          calendarYears: String(primary.calendarYear),
-          mahaDasha: primary.mahaDasha,
-          antarDasha: primary.antarDasha,
-          recognitionScore: primary.recognitionScore,
-          antarWindow: primary.antarWindow
+          badge: chart.lifeEventVerification.verificationBadge,
+          aggregateScore100: chart.lifeEventVerification.aggregateScore100,
+          eventCount: chart.lifeEventVerification.validEventCount
         }
       : null,
-    topRecognitionWindows: topWindows,
-    queriedAges,
+    answerTemplate:
+      queryMode === 'first_breakout'
+        ? 'Lead with primaryRecognitionWindow.ageRangeLabel + calendarYears + mahaDasha–antarDasha + score. One paragraph max, then optional 2nd window.'
+        : 'Lead with primaryRecognitionWindow; if queriedAges present, rank them with scores and match labels.',
     rules: [
-      'Answer past ages using queriedAges and topRecognitionWindows only.',
-      'Never assign currentDashaOnly to a past age.',
-      'If user names a success age, compare recognitionScore and matchVsTopWindow — do not invent a new story.',
-      'Give one primary age or narrow window (e.g. 17–19) when asked "tell me the age".'
-    ]
+      'Use only precomputed tables for past ages — never currentDashaOnly.',
+      'When user states a success age, use queriedAges or add that age to comparison; report matchVsTopWindow honestly.',
+      'Do not agree with user correction if recognitionScore is weak_match.',
+      'Cite mahaDasha and antarDasha from the table for each age.',
+      queryMode === 'first_breakout'
+        ? 'For first public recognition, prefer primaryRecognitionWindow in age band 10–32, not later life peaks.'
+        : null
+    ].filter(Boolean)
   };
 }
 
@@ -276,5 +531,7 @@ module.exports = {
   buildAgeTimingRow,
   extractAgesFromMessage,
   scoreRecognitionActivation,
-  buildTopRecognitionWindows
+  buildTopRecognitionWindows,
+  detectFameQueryMode,
+  lifeEventAgeBoosts
 };

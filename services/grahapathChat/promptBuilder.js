@@ -113,10 +113,11 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
       break;
     case 'fame_timing':
       intentBlock =
-        'Intent: FAME_TIMING / PUBLIC RECOGNITION BY AGE. CHART_CONTEXT_JSON includes fameTiming with precomputed Vimshottari ages — USE ONLY THAT for past ages. ' +
-        'Start with primaryRecognitionWindow (one age or narrow year range). If user lists ages (7, 16, 25…), rank them using queriedAges.recognitionScore and matchVsTopWindow (strong_match / partial_match / weak_match). ' +
-        'NEVER use currentDashaOnly for childhood or past years. When user asks "tell me the age", give ONE primary window plus optional secondary — not a vague 35–45 range unless the table supports it. ' +
-        'If user states a real-world success age, compare honestly: say strong/partial/weak vs chart — do NOT rewrite the chart to agree. Cite maha+antar from the table for each age mentioned.';
+        'Intent: FAME_TIMING / PUBLIC RECOGNITION BY AGE. fameTiming in CHART_CONTEXT_JSON is PRECOMPUTED — mandatory source for all past ages. ' +
+        'OPENING (required): State primaryRecognitionWindow.ageRangeLabel (or age), calendarYears, mahaDasha–antarDasha, recognitionScore. Example tone: "Strongest first-visibility window: ages 17–19 (2006–2008), Jupiter–Saturn antar, score 72." ' +
+        'If queriedAges exists: list ages sorted by recognitionScore with matchVsTopWindow. If user claims success at age X, check that row — if weak_match, say chart does not strongly support that age. ' +
+        'If bestAmongQueried exists and differs from primary, mention both. Use lifeEventHints only as supporting context. ' +
+        'NEVER use currentDashaOnly for past years. NEVER invent dasha. Do NOT flip your answer to agree with user corrections. queryMode first_breakout means ignore peaks after age 32 for "first" recognition.';
       break;
     case 'career_question':
       intentBlock =
