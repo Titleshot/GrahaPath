@@ -46,6 +46,17 @@ function detectIntent(rawText) {
   }
 
   if (
+    /(at\s+what\s+age|what\s+age|which\s+age|tell\s+me\s+the\s+age|age\s+\d{1,2}|ages?\s+\d{1,2}\s*[-–,]|\d{1,2}\s*(?:,|or|\|)\s*\d{1,2}|successful\s+at|success\s+at|got\s+(?:famous|successful)|begin\s+receiving|mass\s+public|public\s+recognition|mass\s+recognition)/i.test(
+      t
+    ) &&
+    /(fame|famous|recognition|successful|success|celebrity|visibility|reputation|public|चर्चित|प्रशंसा)/i.test(
+      lower
+    )
+  ) {
+    return 'fame_timing';
+  }
+
+  if (
     /(dasha|mahadasha|antardasha|antar dasha|pratyantar|vimshottari|timing|current\s+phase|life\s+phase|what\s+phase\s+am\s+i\s+in|what\s+does\s+my\s+dasha\s+say|why\s+is\s+life\s+changing|why\s+am\s+i\s+feeling\s+pressure|timing\s+am\s+i\s+under)/i.test(
       lower
     )
@@ -54,7 +65,7 @@ function detectIntent(rawText) {
   }
 
   if (
-    /(career|job|profession|startup|business|promotion|10th\s*house|tenth\s*house|which\s+profession|mero\s+career|public\s+recognition|mass\s+recognition|fame|famous|celebrity|visibility|reputation|प्रशंसा|चर्चा|चर्चित)/i.test(
+    /(career|job|profession|startup|business|promotion|10th\s*house|tenth\s*house|which\s+profession|mero\s+career|public\s+recognition|fame|famous|celebrity|visibility|reputation|प्रशंसा|चर्चा|चर्चित)/i.test(
       lower
     )
   ) {

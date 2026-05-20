@@ -15,6 +15,7 @@ const {
   planetsNamed
 } = require('../geminiContextBuilder');
 const { buildDashaContext } = require('../dasha/dashaContextBuilder');
+const { buildFameTimingContext } = require('../dasha/ageTimingService');
 
 const SIGNS = [
   'Aries',
@@ -72,7 +73,7 @@ function dominantDriverLabels(chart, cap = 3) {
 /**
  * Slim STRICT_USER_DATA for chat — never includes life-phase report schema.
  */
-async function buildChatContext(chart, intent, { dailyWeather, userPlan, premiumUnlocked } = {}) {
+async function buildChatContext(chart, intent, { dailyWeather, userPlan, premiumUnlocked, userMessage = '' } = {}) {
   if (!chart || typeof chart !== 'object') {
     return { error: 'invalid_chart' };
   }
@@ -126,6 +127,19 @@ async function buildChatContext(chart, intent, { dailyWeather, userPlan, premium
         moon: planetsCompactRows(planetsNamed(chart.planets, ['Moon'])),
         saturnMercury: planetsCompactRows(planetsNamed(chart.planets, ['Saturn', 'Mercury'])),
         Current_Live_Transit: await currentLiveTransit(chart)
+      };
+    case 'fame_timing':
+      return {
+        ...base,
+        fameTiming: buildFameTimingContext(chart, userMessage),
+        cw: careerSliceTight(chart.careerWealth),
+        dasha: dashaContext,
+        h10: planetsCompactRows(planetsInHouses(chart.planets, [10])),
+        h11: planetsCompactRows(planetsInHouses(chart.planets, [11])),
+        sunMercSatJup: planetsCompactRows(
+          planetsNamed(chart.planets, ['Sun', 'Mercury', 'Saturn', 'Jupiter', 'Rahu'])
+        ),
+        ab: { sum: summaryForGemini(chart), dom: dominantPlanetsShort(chart) }
       };
     case 'career_question':
       return {

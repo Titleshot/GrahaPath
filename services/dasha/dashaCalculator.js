@@ -92,20 +92,75 @@ function fromEngine(chart, now) {
 
 function calculateCurrentDasha(chart, options = {}) {
   const now = options.now ? DateTime.fromISO(String(options.now), { setZone: true }) : DateTime.now();
-  const base = fromAstroBrain(chart, now) || fromEngine(chart, now);
-  if (!base) {
+  return calculateDashaAtDate(chart, now, options);
+}
+
+function getVimshottariTimeline(chart) {
+  const timelineData = generateDashaTimeline(chart || {});
+  return Array.isArray(timelineData?.timeline) ? timelineData.timeline : [];
+}
+
+/**
+ * Vimshottari maha + antar active on a specific calendar date (not "now").
+ */
+function calculateDashaAtDate(chart, at, options = {}) {
+  const when =
+    at instanceof Date
+      ? DateTime.fromJSDate(at)
+      : typeof at === 'string'
+        ? DateTime.fromISO(at, { setZone: true })
+        : DateTime.isDateTime(at)
+          ? at
+          : null;
+
+  if (!when || !when.isValid) {
     return {
       mahaDasha: null,
       antarDasha: null,
       startDate: null,
       endDate: null,
       yearsRemaining: null,
-      source: 'unavailable'
+      source: 'invalid_date'
     };
   }
-  return base;
+
+  const preferEngine = options.preferEngine === true;
+  if (!preferEngine) {
+    const ab = fromAstroBrain(chart, when);
+    if (ab && ab.source === 'astroBrain') {
+      return { ...ab, queriedDate: when.toISODate() };
+    }
+  }
+
+  const timeline = getVimshottariTimeline(chart);
+  const active = findCurrentFromTimeline(timeline, when);
+  if (!active.maha) {
+    return {
+      mahaDasha: null,
+      antarDasha: null,
+      startDate: null,
+      endDate: null,
+      yearsRemaining: null,
+      source: 'unavailable',
+      queriedDate: when.toISODate()
+    };
+  }
+
+  const end = parseIsoDate(active.antar?.endDateApprox || active.maha.endDateApprox);
+  return {
+    mahaDasha: active.maha.planet || null,
+    antarDasha: active.antar?.antarLord || null,
+    startDate: active.antar?.startDateApprox || active.maha.startDateApprox || null,
+    endDate: active.antar?.endDateApprox || active.maha.endDateApprox || null,
+    yearsRemaining: yearsBetween(when, end),
+    source: 'vimshottari_engine',
+    nextMahaDasha: active.next?.planet || null,
+    queriedDate: when.toISODate()
+  };
 }
 
 module.exports = {
-  calculateCurrentDasha
+  calculateCurrentDasha,
+  calculateDashaAtDate,
+  getVimshottariTimeline
 };

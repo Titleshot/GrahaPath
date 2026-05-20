@@ -111,6 +111,13 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
       intentBlock =
         'Intent: NATAL_RASHI. User asked rashifal/zodiac identity. Use natal Moon sign (rashi) and Lagna as primary; Sun as secondary context. Give personality-oriented tendencies and broad life pattern framing. Do NOT answer with daily Panchanga unless user explicitly asks for today/daily.';
       break;
+    case 'fame_timing':
+      intentBlock =
+        'Intent: FAME_TIMING / PUBLIC RECOGNITION BY AGE. CHART_CONTEXT_JSON includes fameTiming with precomputed Vimshottari ages — USE ONLY THAT for past ages. ' +
+        'Start with primaryRecognitionWindow (one age or narrow year range). If user lists ages (7, 16, 25…), rank them using queriedAges.recognitionScore and matchVsTopWindow (strong_match / partial_match / weak_match). ' +
+        'NEVER use currentDashaOnly for childhood or past years. When user asks "tell me the age", give ONE primary window plus optional secondary — not a vague 35–45 range unless the table supports it. ' +
+        'If user states a real-world success age, compare honestly: say strong/partial/weak vs chart — do NOT rewrite the chart to agree. Cite maha+antar from the table for each age mentioned.';
+      break;
     case 'career_question':
       intentBlock =
         'Intent: CAREER. Use career / 10th-axis context. Practical direction; no guaranteed outcomes; cap explicit citations to 1–2 in free tier.';
@@ -169,6 +176,9 @@ function buildGreetingSystemPrompt({ userPlan, premiumUnlocked }) {
 
 function tokenAndTemperatureForIntent(intent, plan) {
   const p = normalizePlan(plan);
+  if (intent === 'fame_timing') {
+    return { maxTokens: p === 'full' ? 900 : 650, temperature: 0.62 };
+  }
   if (intent === 'deep_analysis' && p === 'full') {
     return { maxTokens: 1100, temperature: 0.65 };
   }

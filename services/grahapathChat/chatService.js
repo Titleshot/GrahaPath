@@ -258,7 +258,12 @@ async function runMessage({
   const intent =
     surfaceMode === 'daily_transit' ? 'daily_forecast' : detectIntent(message);
   const dw = await maybeDailyWeather(chart, intent);
-  const ctx = await buildChatContext(chart, intent, { dailyWeather: dw, userPlan, premiumUnlocked });
+  const ctx = await buildChatContext(chart, intent, {
+    dailyWeather: dw,
+    userPlan,
+    premiumUnlocked,
+    userMessage: message
+  });
   if (ctx.error === 'invalid_chart') {
     const err = new Error('Invalid chart data');
     err.statusCode = 400;
