@@ -2,6 +2,8 @@ const axios = require('axios');
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const PHOTON_URL = 'https://photon.komoot.io/api';
+const OPEN_METEO_GEOCODE_URL = 'https://geocoding-api.open-meteo.com/v1/search';
+const GEOCODE_TIMEOUT_MS = 15000;
 const MIN_IMPORTANCE = 0.02;
 const MIN_TOKEN_OVERLAP = 0.35;
 const STRONG_TOKEN_OVERLAP = 0.6;
@@ -86,6 +88,15 @@ async function geocodePlace(place) {
   }
 
   if (!match) {
+    try {
+      const openMeteoResult = await geocodePlaceOpenMeteo(normalizedPlace);
+      if (openMeteoResult) return openMeteoResult;
+    } catch (error) {
+      console.warn(`[GrahaPath] Open-Meteo geocode fallback failed: ${error?.message || error}`);
+    }
+  }
+
+  if (!match) {
     throw new GeocodingError(
       `Geocoding failed for: ${normalizedPlace}. Try a more specific place like "Kathmandu, Nepal".`,
       'GEOCODE_PROVIDER_FAILED'
@@ -114,6 +125,10 @@ async function searchPlaceSuggestions(query, limit = 6) {
   }
 
   const requestedLimit = Math.max(1, Math.min(SUGGESTION_LIMIT, limit));
+
+  // Photon tolerates cloud/datacenter IPs better than Nominatim — try it first for suggestions.
+  const photonResults = await searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
+  let merged = photonResults;
 
   if (isNominatimAvailable()) {
     try {
@@ -159,7 +174,9 @@ async function searchPlaceSuggestions(query, limit = 6) {
           longitude: row.longitude
         }));
 
-      if (nominatimResults.length > 0) return nominatimResults;
+      if (nominatimResults.length > 0) {
+        merged = mergeSuggestionLists(nominatimResults, merged, requestedLimit);
+      }
     } catch (error) {
       const status = error?.response?.status;
       const code = error?.code;
@@ -170,48 +187,101 @@ async function searchPlaceSuggestions(query, limit = 6) {
     }
   }
 
-  return searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
+  if (merged.length >= requestedLimit) {
+    return merged;
+  }
+
+  const openMeteoResults = await searchPlaceSuggestionsOpenMeteo(normalizedQuery, requestedLimit);
+  return mergeSuggestionLists(merged, openMeteoResults, requestedLimit);
+}
+
+function mergeSuggestionLists(primary, secondary, limit) {
+  const seen = new Set();
+  const merged = [];
+  for (const row of [...primary, ...secondary]) {
+    if (!row || !Number.isFinite(row.latitude) || !Number.isFinite(row.longitude)) continue;
+    const key = `${row.displayName}|${row.latitude.toFixed(4)}|${row.longitude.toFixed(4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
+    if (merged.length >= limit) break;
+  }
+  return merged;
 }
 
 async function geocodePlacePhoton(place) {
-  try {
-    const response = await axios.get(PHOTON_URL, {
-      params: { q: place, limit: 3, lang: 'en' },
-      headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation; radheradhe742@proton.me)' },
-      timeout: 10000
-    });
-    const features = response.data?.features || [];
-    for (const f of features) {
-      const coords = f.geometry?.coordinates;
-      if (!Array.isArray(coords) || coords.length < 2) continue;
-      const lat = coords[1];
-      const lon = coords[0];
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const p = f.properties || {};
-      const parts = [p.name, p.state, p.country].filter(Boolean);
-      return {
-        place,
-        displayName: parts.join(', ') || p.label || place,
-        latitude: lat,
-        longitude: lon
-      };
-    }
-    return null;
-  } catch (error) {
-    console.warn(`[GrahaPath] Photon geocode error: ${error?.message || error}`);
+  const response = await requestWithRetries(
+    () =>
+      axios.get(PHOTON_URL, {
+        params: { q: place, limit: 3, lang: 'en' },
+        headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation; radheradhe742@proton.me)' },
+        timeout: GEOCODE_TIMEOUT_MS
+      }),
+    2
+  );
+  const features = response.data?.features || [];
+  for (const f of features) {
+    const coords = f.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+    const lat = coords[1];
+    const lon = coords[0];
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const p = f.properties || {};
+    const parts = [p.name, p.state, p.country].filter(Boolean);
+    return {
+      place,
+      displayName: parts.join(', ') || p.label || place,
+      latitude: lat,
+      longitude: lon
+    };
+  }
+  return null;
+}
+
+async function geocodePlaceOpenMeteo(place) {
+  const response = await requestWithRetries(
+    () =>
+      axios.get(OPEN_METEO_GEOCODE_URL, {
+        params: { name: place, count: 5, language: 'en', format: 'json' },
+        timeout: GEOCODE_TIMEOUT_MS
+      }),
+    1
+  );
+  const results = Array.isArray(response.data?.results) ? response.data.results : [];
+  if (!results.length) return null;
+
+  const ranked = results
+    .map((row) => ({
+      row,
+      overlap: tokenOverlapScore(place, formatOpenMeteoDisplayName(row))
+    }))
+    .sort((a, b) => b.overlap - a.overlap);
+  const best = ranked[0]?.row;
+  if (!best || !Number.isFinite(best.latitude) || !Number.isFinite(best.longitude)) {
     return null;
   }
+
+  return {
+    place,
+    displayName: formatOpenMeteoDisplayName(best),
+    latitude: best.latitude,
+    longitude: best.longitude
+  };
 }
 
 async function searchPlaceSuggestionsPhoton(query, limit = 6) {
   const normalizedQuery = typeof query === 'string' ? query.trim() : '';
   if (normalizedQuery.length < 3) return [];
   try {
-    const response = await axios.get(PHOTON_URL, {
-      params: { q: normalizedQuery, limit: Math.min(10, limit), lang: 'en' },
-      headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation)' },
-      timeout: 10000
-    });
+    const response = await requestWithRetries(
+      () =>
+        axios.get(PHOTON_URL, {
+          params: { q: normalizedQuery, limit: Math.min(10, limit), lang: 'en' },
+          headers: { 'User-Agent': 'GrahaPath/1.0 (birth-chart-calculation)' },
+          timeout: GEOCODE_TIMEOUT_MS
+        }),
+      2
+    );
     const features = response.data?.features || [];
     return features
       .map((f) => {
@@ -233,11 +303,44 @@ async function searchPlaceSuggestionsPhoton(query, limit = 6) {
   }
 }
 
+async function searchPlaceSuggestionsOpenMeteo(query, limit = 6) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  if (normalizedQuery.length < 3) return [];
+  try {
+    const response = await requestWithRetries(
+      () =>
+        axios.get(OPEN_METEO_GEOCODE_URL, {
+          params: { name: normalizedQuery, count: Math.min(10, limit), language: 'en', format: 'json' },
+          timeout: GEOCODE_TIMEOUT_MS
+        }),
+      1
+    );
+    const results = Array.isArray(response.data?.results) ? response.data.results : [];
+    return results
+      .map((row) => ({
+        displayName: formatOpenMeteoDisplayName(row),
+        latitude: row.latitude,
+        longitude: row.longitude
+      }))
+      .filter((r) => r.displayName && Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+      .slice(0, Math.max(1, limit));
+  } catch (error) {
+    console.warn(`[GrahaPath] Open-Meteo fallback failed: ${error?.message || error}`);
+    return [];
+  }
+}
+
+function formatOpenMeteoDisplayName(row) {
+  if (!row || typeof row !== 'object') return '';
+  const parts = [row.name, row.admin1, row.country].filter(Boolean);
+  return parts.join(', ');
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isRetryableNominatimError(error) {
+function isRetryableNetworkError(error) {
   const status = Number(error?.response?.status || 0);
   const code = String(error?.code || '').toLowerCase();
   return (
@@ -245,8 +348,29 @@ function isRetryableNominatimError(error) {
     status >= 500 ||
     code === 'etimedout' ||
     code === 'econnaborted' ||
-    code === 'econnreset'
+    code === 'econnreset' ||
+    code === 'econnrefused'
   );
+}
+
+async function requestWithRetries(requestFn, retries = 1) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableNetworkError(error) || attempt === retries) {
+        throw error;
+      }
+      await sleep(400 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableNominatimError(error) {
+  return isRetryableNetworkError(error);
 }
 
 async function requestNominatim(params, retries = 0) {

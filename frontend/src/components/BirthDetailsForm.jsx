@@ -190,11 +190,21 @@ function BirthDetailsForm({
           signal: controller.signal,
           credentials: 'omit'
         });
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          setPlaceSuggestions([]);
+          setPlaceSuggestError(
+            import.meta.env.DEV
+              ? 'Place search returned HTML instead of JSON — use the Vite dev server (npm run dev in frontend/) so /api is proxied to port 3000.'
+              : 'Place search is misconfigured on this deployment (API route returned HTML). Redeploy the frontend with the latest vercel.json API proxy, or set VITE_API_BASE_URL to your Render API URL at build time.'
+          );
+          return;
+        }
         let payload;
         try {
           payload = await response.json();
         } catch (error) {
-          payload = [];
+          payload = { suggestions: [] };
         }
         if (!response.ok) {
           setPlaceSuggestions([]);
