@@ -126,11 +126,20 @@ async function searchPlaceSuggestions(query, limit = 6) {
 
   const requestedLimit = Math.max(1, Math.min(SUGGESTION_LIMIT, limit));
 
-  // Photon tolerates cloud/datacenter IPs better than Nominatim — try it first for suggestions.
-  const photonResults = await searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
-  let merged = photonResults;
+  // Open-Meteo is the most reliable from cloud hosts (Render); Photon/Nominatim enrich when available.
+  const openMeteoResults = await searchPlaceSuggestionsOpenMeteo(normalizedQuery, requestedLimit);
+  let merged = openMeteoResults;
 
-  if (isNominatimAvailable()) {
+  const onRender = String(process.env.RENDER || '').toLowerCase() === 'true';
+  if (!onRender) {
+    const photonResults = await searchPlaceSuggestionsPhoton(normalizedQuery, requestedLimit);
+    merged = mergeSuggestionLists(merged, photonResults, requestedLimit);
+    if (merged.length >= requestedLimit) {
+      return merged;
+    }
+  }
+
+  if (isNominatimAvailable() && !onRender) {
     try {
       const response = await requestNominatim({
         q: normalizedQuery,
@@ -187,12 +196,7 @@ async function searchPlaceSuggestions(query, limit = 6) {
     }
   }
 
-  if (merged.length >= requestedLimit) {
-    return merged;
-  }
-
-  const openMeteoResults = await searchPlaceSuggestionsOpenMeteo(normalizedQuery, requestedLimit);
-  return mergeSuggestionLists(merged, openMeteoResults, requestedLimit);
+  return merged;
 }
 
 function mergeSuggestionLists(primary, secondary, limit) {
@@ -239,15 +243,24 @@ async function geocodePlacePhoton(place) {
 }
 
 async function geocodePlaceOpenMeteo(place) {
-  const response = await requestWithRetries(
-    () =>
-      axios.get(OPEN_METEO_GEOCODE_URL, {
-        params: { name: place, count: 5, language: 'en', format: 'json' },
-        timeout: GEOCODE_TIMEOUT_MS
-      }),
-    1
-  );
-  const results = Array.isArray(response.data?.results) ? response.data.results : [];
+  const variants = openMeteoQueryVariants(place);
+  let results = [];
+  for (const variant of variants) {
+    try {
+      const response = await requestWithRetries(
+        () =>
+          axios.get(OPEN_METEO_GEOCODE_URL, {
+            params: { name: variant, count: 5, language: 'en', format: 'json' },
+            timeout: GEOCODE_TIMEOUT_MS
+          }),
+        1
+      );
+      results = Array.isArray(response.data?.results) ? response.data.results : [];
+      if (results.length) break;
+    } catch (error) {
+      console.warn(`[GrahaPath] Open-Meteo geocode failed (${variant}): ${error?.message || error}`);
+    }
+  }
   if (!results.length) return null;
 
   const ranked = results
@@ -303,31 +316,51 @@ async function searchPlaceSuggestionsPhoton(query, limit = 6) {
   }
 }
 
-async function searchPlaceSuggestionsOpenMeteo(query, limit = 6) {
-  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-  if (normalizedQuery.length < 3) return [];
-  try {
-    const response = await requestWithRetries(
-      () =>
-        axios.get(OPEN_METEO_GEOCODE_URL, {
-          params: { name: normalizedQuery, count: Math.min(10, limit), language: 'en', format: 'json' },
-          timeout: GEOCODE_TIMEOUT_MS
-        }),
-      1
-    );
-    const results = Array.isArray(response.data?.results) ? response.data.results : [];
-    return results
-      .map((row) => ({
-        displayName: formatOpenMeteoDisplayName(row),
-        latitude: row.latitude,
-        longitude: row.longitude
-      }))
-      .filter((r) => r.displayName && Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
-      .slice(0, Math.max(1, limit));
-  } catch (error) {
-    console.warn(`[GrahaPath] Open-Meteo fallback failed: ${error?.message || error}`);
-    return [];
+function openMeteoQueryVariants(query) {
+  const trimmed = typeof query === 'string' ? query.trim() : '';
+  if (!trimmed) return [];
+  const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  const variants = [trimmed];
+  if (parts.length >= 2) {
+    variants.push(parts[0]);
+    variants.push(`${parts[0]}, ${parts[parts.length - 1]}`);
+    if (parts.length >= 3) {
+      variants.push(`${parts[0]}, ${parts[1]}, ${parts[parts.length - 1]}`);
+    }
   }
+  return [...new Set(variants.filter((v) => v.length >= 3))];
+}
+
+async function searchPlaceSuggestionsOpenMeteo(query, limit = 6) {
+  const variants = openMeteoQueryVariants(query);
+  if (!variants.length) return [];
+
+  for (const variant of variants) {
+    try {
+      const response = await requestWithRetries(
+        () =>
+          axios.get(OPEN_METEO_GEOCODE_URL, {
+            params: { name: variant, count: Math.min(10, limit), language: 'en', format: 'json' },
+            timeout: GEOCODE_TIMEOUT_MS
+          }),
+        1
+      );
+      const results = Array.isArray(response.data?.results) ? response.data.results : [];
+      const mapped = results
+        .map((row) => ({
+          displayName: formatOpenMeteoDisplayName(row),
+          latitude: row.latitude,
+          longitude: row.longitude
+        }))
+        .filter((r) => r.displayName && Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
+      if (mapped.length > 0) {
+        return mapped.slice(0, Math.max(1, limit));
+      }
+    } catch (error) {
+      console.warn(`[GrahaPath] Open-Meteo fallback failed (${variant}): ${error?.message || error}`);
+    }
+  }
+  return [];
 }
 
 function formatOpenMeteoDisplayName(row) {
