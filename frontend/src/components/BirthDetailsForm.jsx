@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiFetch, withApiBase } from '../lib/apiBase';
+import { fetchOpenMeteoPlaceSuggestions } from '../lib/openMeteoGeocode';
 
 const inputClass =
   'w-full rounded-2xl border border-gold-400/20 bg-black/40 px-4 py-3 text-sm text-ivory-100 outline-none transition placeholder:text-ivory-100/30 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20';
@@ -215,7 +216,19 @@ function BirthDetailsForm({
           );
           return;
         }
-        const suggestions = payload.suggestions || [];
+        let suggestions = payload.suggestions || [];
+        if (suggestions.length === 0 && place.length >= 3) {
+          try {
+            const openMeteoSuggestions = await fetchOpenMeteoPlaceSuggestions(place, 6, controller.signal);
+            if (openMeteoSuggestions.length > 0) {
+              suggestions = openMeteoSuggestions;
+            }
+          } catch (fallbackError) {
+            if (fallbackError?.name !== 'AbortError') {
+              // keep primary error messaging below
+            }
+          }
+        }
         if (suggestions.length > 0) {
           placeCacheRef.current.set(cacheKey, suggestions);
         }
