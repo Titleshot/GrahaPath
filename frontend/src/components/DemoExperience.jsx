@@ -4,7 +4,6 @@ import ChartIdentityStrip from './ChartIdentityStrip';
 import KundaliWheel from './KundaliWheel';
 import LifePhaseValidation from './LifePhaseValidation';
 import ValidationResult from './ValidationResult';
-import LockedPreview from './LockedPreview';
 import ChartGrahaChat from './ChartGrahaChat';
 import { getClientFingerprint } from '../lib/clientFingerprint';
 import { apiFetch, withApiBase } from '../lib/apiBase';
@@ -179,7 +178,7 @@ function extendPhaseTitle(title, ageRange) {
   return raw || 'Life Phase';
 }
 
-export default function DemoExperience({ chart, onUnlock }) {
+export default function DemoExperience({ chart }) {
   const [responses, setResponses] = useState({});
   const [aiPhases, setAiPhases] = useState([]);
   const [aiCoreInsight, setAiCoreInsight] = useState('');
@@ -198,7 +197,8 @@ export default function DemoExperience({ chart, onUnlock }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-gp-client-fp': getClientFingerprint()
+        'x-gp-client-fp': getClientFingerprint(),
+        'x-gp-demo-premium': 'true'
       },
       body: JSON.stringify({
         chart,
@@ -256,9 +256,9 @@ export default function DemoExperience({ chart, onUnlock }) {
       <section id="gp-wheel" className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gold/10 pb-2">
           <h2 className="text-xs uppercase tracking-[0.32em] text-gold/70">Interactive kundali wheel</h2>
-          <p className="text-[11px] text-ivory/42">Tap planets for basic placement cards</p>
+          <p className="text-[11px] text-ivory/42">Tap planets for full placement cards</p>
         </div>
-        <KundaliWheel chart={chart} mode="free" />
+        <KundaliWheel chart={chart} forceDeepData mode="paid" />
       </section>
 
       <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-gold/20 bg-black/25 p-5">
@@ -267,12 +267,7 @@ export default function DemoExperience({ chart, onUnlock }) {
         {aiCoreReason && <p className="mt-2 text-[11px] text-gold-200/75">Astro reason: {aiCoreReason}</p>}
       </motion.section>
 
-      <ChartGrahaChat
-        chart={chart}
-        teaserMode
-        teaserQuestionLimit={2}
-        onTeaserLock={onUnlock}
-      />
+      <ChartGrahaChat chart={chart} forceUnlocked initialInsights={50} />
 
       <LifePhaseValidation
         phases={phases}
@@ -281,8 +276,6 @@ export default function DemoExperience({ chart, onUnlock }) {
         isValidating={phaseLoading}
       />
       {Object.keys(responses).length === phases.length ? <ValidationResult phases={phases} responses={responses} /> : null}
-
-      <LockedPreview onUnlock={onUnlock} />
     </div>
   );
 }

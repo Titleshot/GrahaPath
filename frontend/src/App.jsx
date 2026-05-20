@@ -368,7 +368,8 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-gp-client-fp': getClientFingerprint()
+          'x-gp-client-fp': getClientFingerprint(),
+          'x-gp-demo-premium': 'true'
         },
         body: JSON.stringify(payload),
         signal: chartAbort.signal
