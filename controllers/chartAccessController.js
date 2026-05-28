@@ -4,8 +4,10 @@ const {
   createChartProfile,
   getProfileByToken,
   getProfileById,
+  recordLegalAcceptance,
   consumeProfileInsight
 } = require('../services/chartProfileService');
+const { validateLegalAcceptance } = require('../services/legalVersions');
 const {
   issueChartAccessToken,
   buildChartAccessCookie,
@@ -55,6 +57,13 @@ function redeemViewToken(req, res) {
   if (!token) {
     return res.status(400).json({ error: 'BadRequest', message: 'Token is required.' });
   }
+  if (!validateLegalAcceptance(req.body || {})) {
+    return res.status(403).json({
+      error: 'ConsentRequired',
+      message:
+        'You must accept the Terms & Conditions, Privacy Policy, and Disclaimer before opening this chart link.'
+    });
+  }
   const profile = getProfileByToken(token);
   if (!profile || profile.revoked) {
     return res.status(404).json({ error: 'NotFound', message: 'Invalid or expired chart token.' });
@@ -62,6 +71,12 @@ function redeemViewToken(req, res) {
   if (profile.expiresAt && new Date(profile.expiresAt).getTime() < Date.now()) {
     return res.status(410).json({ error: 'Expired', message: 'This chart link has expired.' });
   }
+  recordLegalAcceptance(profile.id, {
+    termsVersion: req.body?.termsVersion,
+    privacyVersion: req.body?.privacyVersion,
+    disclaimerVersion: req.body?.disclaimerVersion,
+    userAgent: req.headers['user-agent']
+  });
   const accessToken = issueChartAccessToken({ chartProfileId: profile.id, kind: 'chart_profile_view' });
   res.setHeader('Set-Cookie', buildChartAccessCookie(accessToken));
   return res.json({

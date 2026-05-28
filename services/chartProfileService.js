@@ -97,6 +97,27 @@ function getProfileById(id) {
   return row ? sanitizeRecord(row) : null;
 }
 
+function recordLegalAcceptance(profileId, meta = {}) {
+  const id = String(profileId || '').trim();
+  if (!id) return false;
+  const store = readStore();
+  const row = store.records[id];
+  if (!row) return false;
+  const entry = {
+    at: nowIso(),
+    termsVersion: String(meta.termsVersion || '').trim() || null,
+    privacyVersion: String(meta.privacyVersion || '').trim() || null,
+    disclaimerVersion: String(meta.disclaimerVersion || '').trim() || null,
+    userAgent: String(meta.userAgent || '').slice(0, 280) || null
+  };
+  const list = Array.isArray(row.legalAcceptances) ? row.legalAcceptances : [];
+  list.push(entry);
+  row.legalAcceptances = list.slice(-20);
+  store.records[id] = row;
+  writeStore(store);
+  return true;
+}
+
 function consumeProfileInsight(profileId) {
   const id = String(profileId || '').trim();
   if (!id) return { allowed: false, reason: 'invalid_profile' };
@@ -126,5 +147,6 @@ module.exports = {
   createChartProfile,
   getProfileByToken,
   getProfileById,
+  recordLegalAcceptance,
   consumeProfileInsight
 };

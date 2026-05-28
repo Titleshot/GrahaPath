@@ -10,6 +10,7 @@ import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
 import InviteAccessPanel from './components/InviteAccessPanel';
 import AuthLoginGate from './components/AuthLoginGate';
+import MagicLinkConsentGate from './components/MagicLinkConsentGate';
 import { getClientFingerprint } from './lib/clientFingerprint';
 import { API_BASE, apiFetch, withApiBase } from './lib/apiBase';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
@@ -186,39 +187,31 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!String(routePath || '').startsWith('/view/')) return;
+    if (!String(routePath || '').startsWith('/view/')) {
+      if (!tokenSessionMode) setPendingViewToken('');
+      return;
+    }
     const token = String(routePath || '').replace('/view/', '').trim();
     if (!token) return;
-    let cancelled = false;
-    setIsLoading(true);
+    setPendingViewToken(token);
     setError('');
-    apiFetch(`${VIEW_TOKEN_API_PREFIX}/${encodeURIComponent(token)}`)
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) throw new Error(data?.message || `Token view failed (${res.status})`);
-        if (data?.chart && typeof data.chart === 'object') {
-          setChart(data.chart);
-          setPaidUnlocked(true);
-          setTokenSessionMode(true);
-          const remaining = Number(data?.insights?.remaining);
-          if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
-          window.history.replaceState(window.history.state || {}, '', '/');
-          setRoutePath('/');
-        } else {
-          throw new Error('Assigned chart could not be loaded for this token.');
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e?.message || 'Could not open shared chart link.');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [routePath]);
+    setIsLoading(false);
+  }, [routePath, tokenSessionMode]);
+
+  function handleMagicLinkRedeemed(data) {
+    if (!data?.chart || typeof data.chart !== 'object') {
+      setError('Assigned chart could not be loaded for this token.');
+      return;
+    }
+    setChart(data.chart);
+    setPaidUnlocked(true);
+    setTokenSessionMode(true);
+    const remaining = Number(data?.insights?.remaining);
+    if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
+    setPendingViewToken('');
+    window.history.replaceState(window.history.state || {}, '', '/');
+    setRoutePath('/');
+  }
 
   useEffect(() => {
     trackPageView(routePath || '/');
@@ -294,6 +287,7 @@ export default function App() {
   const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
   const [adminMagicLink, setAdminMagicLink] = useState('');
   const [tokenSessionMode, setTokenSessionMode] = useState(false);
+  const [pendingViewToken, setPendingViewToken] = useState('');
   const [shareStatus, setShareStatus] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState('');
   const [premiumStatus, setPremiumStatus] = useState('');
@@ -877,6 +871,21 @@ export default function App() {
         onNavigate={navigateTo}
         restorePremiumNow={restorePremiumNow}
         savePendingKofiRestore={savePendingKofiRestore}
+      />
+    );
+  }
+
+  if (pendingViewToken && !tokenSessionMode) {
+    return (
+      <MagicLinkConsentGate
+        accessToken={pendingViewToken}
+        onRedeemed={handleMagicLinkRedeemed}
+        onCancel={() => {
+          setPendingViewToken('');
+          setError('');
+          window.history.replaceState(window.history.state || {}, '', '/');
+          setRoutePath('/');
+        }}
       />
     );
   }

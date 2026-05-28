@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
-import { useEffect } from 'react';
+import { LEGAL_LAST_UPDATED } from '../lib/legalVersions';
 
-const LAST_UPDATED = 'May 11, 2026';
+const LAST_UPDATED = LEGAL_LAST_UPDATED;
 const CONTACT_EMAIL = 'radheradhe742@proton.me';
 
 const DOCS = {
@@ -22,6 +22,16 @@ const DOCS = {
         heading: 'Access Rules',
         body:
           'You must provide accurate details for chart generation. You are responsible for your use of the platform and for maintaining appropriate use of your account/session access.'
+      },
+      {
+        heading: 'Private Chart Links',
+        body:
+          'Charts shared through a private magic link are issued for the intended recipient only. You may not share, resell, publish, or redistribute link access, chart outputs, or AI transcripts without written permission from GrahaPath.'
+      },
+      {
+        heading: 'Assigned Client Access',
+        body:
+          'Where access is provided by an administrator or consultant, you acknowledge that GrahaPath supplies software and interpretive tools only. Any personal consultation, pricing, or advice outside the platform is solely between you and the person who shared your link.'
       },
       {
         heading: 'Free and Paid Access',
@@ -74,7 +84,17 @@ const DOCS = {
       {
         heading: 'Data We Collect',
         body:
-          'Depending on usage, GrahaPath may collect email address, chart nickname, birth chart inputs (date, time, place/location), premium plan status, purchase timestamp, and remaining insight balance.'
+          'Depending on usage, GrahaPath may collect email address, chart nickname, birth chart inputs (date, time, place/location), premium plan status, purchase timestamp, remaining insight balance, secure-link access events, policy acceptance timestamps, and technical session metadata used for security.'
+      },
+      {
+        heading: 'Sensitive Birth Information',
+        body:
+          'Birth date, time, and place are sensitive personal data used to calculate charts and personalize AI responses. Provide only information you are comfortable processing for this purpose.'
+      },
+      {
+        heading: 'Private Link Sessions',
+        body:
+          'When you open a private chart link, we may store a secure session cookie, record that you accepted our policies, and bind chat access to the chart assigned to that link.'
       },
       {
         heading: 'Why We Collect Data',
@@ -147,6 +167,11 @@ const DOCS = {
       {
         heading: 'User Responsibility',
         body: 'Users are responsible for their own decisions and actions.'
+      },
+      {
+        heading: 'Private Chart Links',
+        body:
+          'Outputs from a private chart link are for personal reflection only. Do not treat them as certainty about future events, nor as a substitute for licensed professional help.'
       },
       {
         heading: 'Remedies and Mantras',
