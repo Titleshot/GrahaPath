@@ -117,6 +117,104 @@ export default function App() {
     typeof window !== 'undefined' ? window.location.pathname : '/'
   );
 
+  const [formData, setFormData] = useState({
+    name: '',
+    dateType: 'AD',
+    date: '',
+    dateDisplay: '',
+    bsDate: {
+      year: '2053',
+      month: '12',
+      day: '19'
+    },
+    timeParts: {
+      hour: '04',
+      minute: '30',
+      meridiem: 'AM'
+    },
+    place: '',
+    location: null,
+    lifeEvents: [],
+    lifeEventsExpanded: false
+  });
+  const [chart, setChart] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [paidUnlocked, setPaidUnlocked] = useState(false);
+  const [selectedTier, setSelectedTier] = useState('full');
+  const [premiumEmail, setPremiumEmail] = useState('');
+  const [premiumInsights, setPremiumInsights] = useState(null);
+  const [showPaymentPreview, setShowPaymentPreview] = useState(false);
+  const [demoUsed, setDemoUsed] = useState(false);
+  const [chartFingerprint, setChartFingerprint] = useState(null);
+  const [adminAssignAccessId, setAdminAssignAccessId] = useState('');
+  const [adminAssignPassword, setAdminAssignPassword] = useState('');
+  const [adminShareMode, setAdminShareMode] = useState('credentials');
+  const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
+  const [adminMagicLink, setAdminMagicLink] = useState('');
+  const [tokenSessionMode, setTokenSessionMode] = useState(false);
+  const [chartProfileId, setChartProfileId] = useState('');
+  const [pendingViewToken, setPendingViewToken] = useState('');
+  const [shareStatus, setShareStatus] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState('');
+  const [premiumStatus, setPremiumStatus] = useState('');
+  const [premiumStatusTone, setPremiumStatusTone] = useState('success');
+  const [checkoutRetryMode, setCheckoutRetryMode] = useState(false);
+  const [pendingKofiRestore, setPendingKofiRestore] = useState(null);
+  const [isAutoRestoringKofi, setIsAutoRestoringKofi] = useState(false);
+  const resultsRef = useRef(null);
+
+  const insightsScope = useMemo(
+    () =>
+      buildInsightsScope({
+        tokenSession: tokenSessionMode,
+        profileId: chartProfileId,
+        accessId: authUser?.accessId,
+        premiumEmail,
+        chartFingerprint
+      }),
+    [tokenSessionMode, chartProfileId, authUser?.accessId, premiumEmail, chartFingerprint]
+  );
+
+  const applyInsightsBalance = useCallback(
+    (remaining) => {
+      if (!Number.isFinite(Number(remaining))) return;
+      const normalized = Math.max(0, Math.trunc(Number(remaining)));
+      setPremiumInsights(normalized);
+      if (insightsScope) writeCachedInsights(insightsScope, normalized);
+    },
+    [insightsScope]
+  );
+
+  const refreshInsightsBalance = useCallback(async () => {
+    if (!chart && !paidUnlocked && !tokenSessionMode) return null;
+    if (AUTH_LOGIN_ENABLED && authUser?.role === 'admin') return null;
+
+    if (insightsScope) {
+      const cached = readCachedInsights(insightsScope);
+      if (cached != null) applyInsightsBalance(cached);
+    }
+
+    try {
+      let url = null;
+      if (tokenSessionMode) url = CHART_SESSION_URL;
+      else if (AUTH_LOGIN_ENABLED && authUser && authUser.role !== 'admin') url = AUTH_CHART_URL;
+      if (!url) return null;
+
+      const res = await apiFetch(url, { method: 'GET' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return null;
+      const remaining = insightsFromPayload(data);
+      if (remaining != null) {
+        applyInsightsBalance(remaining);
+        if (data?.profileId) setChartProfileId(String(data.profileId));
+      }
+      return remaining;
+    } catch {
+      return null;
+    }
+  }, [chart, paidUnlocked, tokenSessionMode, insightsScope, authUser, applyInsightsBalance]);
+
   // Lightweight client-side routing (no react-router) so navigation
   // keeps app state + restores scroll on back/forward.
   useEffect(() => {
@@ -228,6 +326,18 @@ export default function App() {
     trackPageView(routePath || '/');
   }, [routePath]);
 
+  useEffect(() => {
+    if (routePath !== '/' || !chart) return;
+    refreshInsightsBalance();
+  }, [routePath, chart, refreshInsightsBalance]);
+
+  useEffect(() => {
+    if (!chart || premiumInsights != null) return;
+    if (!insightsScope) return;
+    const cached = readCachedInsights(insightsScope);
+    if (cached != null) setPremiumInsights(cached);
+  }, [chart, premiumInsights, insightsScope]);
+
   const navigateTo = (path) => {
     if (typeof window === 'undefined') return;
     const next = path || '/';
@@ -261,125 +371,6 @@ export default function App() {
     }
     navigateTo('/');
   };
-
-  const [formData, setFormData] = useState({
-    name: '',
-    dateType: 'AD',
-    date: '',
-    dateDisplay: '',
-    bsDate: {
-      year: '2053',
-      month: '12',
-      day: '19',
-    },
-    timeParts: {
-      hour: '04',
-      minute: '30',
-      meridiem: 'AM',
-    },
-    place: '',
-    location: null,
-    lifeEvents: [],
-    lifeEventsExpanded: false,
-  });
-  const [chart, setChart] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [paidUnlocked, setPaidUnlocked] = useState(false);
-  const [selectedTier, setSelectedTier] = useState('full');
-  const [premiumEmail, setPremiumEmail] = useState('');
-  const [premiumInsights, setPremiumInsights] = useState(null);
-  const [showPaymentPreview, setShowPaymentPreview] = useState(false);
-  const [demoUsed, setDemoUsed] = useState(false);
-  const [chartFingerprint, setChartFingerprint] = useState(null);
-  const [adminAssignAccessId, setAdminAssignAccessId] = useState('');
-  const [adminAssignPassword, setAdminAssignPassword] = useState('');
-  const [adminShareMode, setAdminShareMode] = useState('credentials');
-  const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
-  const [adminMagicLink, setAdminMagicLink] = useState('');
-  const [tokenSessionMode, setTokenSessionMode] = useState(false);
-  const [chartProfileId, setChartProfileId] = useState('');
-  const [pendingViewToken, setPendingViewToken] = useState('');
-  const [shareStatus, setShareStatus] = useState('');
-  const [feedbackStatus, setFeedbackStatus] = useState('');
-  const [premiumStatus, setPremiumStatus] = useState('');
-  const [premiumStatusTone, setPremiumStatusTone] = useState('success');
-  const [checkoutRetryMode, setCheckoutRetryMode] = useState(false);
-  const [pendingKofiRestore, setPendingKofiRestore] = useState(null);
-  const [isAutoRestoringKofi, setIsAutoRestoringKofi] = useState(false);
-  const resultsRef = useRef(null);
-
-  const insightsScope = useMemo(
-    () =>
-      buildInsightsScope({
-        tokenSession: tokenSessionMode,
-        profileId: chartProfileId,
-        accessId: authUser?.accessId,
-        premiumEmail,
-        chartFingerprint
-      }),
-    [tokenSessionMode, chartProfileId, authUser?.accessId, premiumEmail, chartFingerprint]
-  );
-
-  const applyInsightsBalance = useCallback(
-    (remaining) => {
-      if (!Number.isFinite(Number(remaining))) return;
-      const normalized = Math.max(0, Math.trunc(Number(remaining)));
-      setPremiumInsights(normalized);
-      if (insightsScope) writeCachedInsights(insightsScope, normalized);
-    },
-    [insightsScope]
-  );
-
-  const refreshInsightsBalance = useCallback(async () => {
-    if (!chart && !paidUnlocked && !tokenSessionMode) return null;
-    if (AUTH_LOGIN_ENABLED && authUser?.role === 'admin') return null;
-
-    if (insightsScope) {
-      const cached = readCachedInsights(insightsScope);
-      if (cached != null) applyInsightsBalance(cached);
-    }
-
-    try {
-      let url = null;
-      if (tokenSessionMode) url = CHART_SESSION_URL;
-      else if (AUTH_LOGIN_ENABLED && authUser && authUser.role !== 'admin') url = AUTH_CHART_URL;
-      if (!url) return null;
-
-      const res = await apiFetch(url, { method: 'GET' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return null;
-      const remaining = insightsFromPayload(data);
-      if (remaining != null) {
-        applyInsightsBalance(remaining);
-        if (data?.profileId) setChartProfileId(String(data.profileId));
-      }
-      return remaining;
-    } catch {
-      return null;
-    }
-  }, [
-    chart,
-    paidUnlocked,
-    tokenSessionMode,
-    insightsScope,
-    authUser,
-    premiumEmail,
-    chartFingerprint,
-    applyInsightsBalance
-  ]);
-
-  useEffect(() => {
-    if (routePath !== '/' || !chart) return;
-    refreshInsightsBalance();
-  }, [routePath, chart, refreshInsightsBalance]);
-
-  useEffect(() => {
-    if (!chart || premiumInsights != null) return;
-    if (!insightsScope) return;
-    const cached = readCachedInsights(insightsScope);
-    if (cached != null) setPremiumInsights(cached);
-  }, [chart, premiumInsights, insightsScope]);
 
   useEffect(() => {
     if (!chart) return;
