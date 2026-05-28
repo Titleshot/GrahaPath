@@ -23,8 +23,6 @@ const {
 } = require('../currentAstronomyService');
 const { buildTransitSnapshotAtUtc } = require('../astrologyService');
 const { buildKathmanduDatePayload } = require('../nepaliDateService');
-const { buildChartTruth, truthResponseForMessage } = require('./truthResponder');
-
 function resolveAscendantAbsoluteDegree(chart) {
   const n = Number(chart?.ascendantAbsoluteDegree);
   if (Number.isFinite(n)) return n;
@@ -398,16 +396,6 @@ async function runMessage({
   conversationHistory,
   surfaceMode
 }) {
-  const chartTruth = buildChartTruth(chart);
-
-  // Route chart-structure questions first so words like "चन्द्रमा/राशि" inside
-  // a house/yuti question do not get hijacked by daily panchanga shortcut.
-  const truthAnswer = truthResponseForMessage(message, chartTruth);
-  if (truthAnswer) {
-    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
-    return { mode, intent: 'chart_truth', answer: truthAnswer };
-  }
-
   if (isTomorrowPanchangaRequest(message)) {
     const tomorrow = DateTime.now().setZone('Asia/Kathmandu').plus({ days: 1 }).toISODate();
     const row = await buildPanchangaForDate(tomorrow);
@@ -517,24 +505,20 @@ async function runMessage({
   const finalHouseConflicts = extractHouseClaimConflicts(answer, ctx.immutableChartState);
   const finalLordshipConflicts = extractLordshipConflicts(answer, ctx.immutableSignLordship);
   if (finalHouseConflicts.length > 0 || finalLordshipConflicts.length > 0) {
-    const placementFact = truthResponseForMessage(message, chartTruth);
-    if (placementFact) {
-      answer = `${placementFact}\n\n${answer}`;
-    } else {
-      const retrySystem =
-        systemText +
-        '\n\nFINAL CORRECTION: Rewrite as natural prose. Use only immutableChartState for house placements. ' +
-        `Do not contradict: houses=${JSON.stringify(finalHouseConflicts)} lordship=${JSON.stringify(finalLordshipConflicts)}.`;
-      raw = await invokeModel({
-        systemText: retrySystem,
-        userMessage: message,
-        conversationHistory: conversationHistory || [],
-        maxTokens,
-        temperature: 0.55
-      });
-      answer = formatAnswer(raw, message);
-      if (answer === BIRTH_DETAILS_REDIRECT) answer = proseFallback(message);
-    }
+    const retrySystem =
+      systemText +
+      '\n\nFINAL CORRECTION: Rewrite as natural conversational prose (not a placement dump). ' +
+      'Use only immutableChartState for house placements. ' +
+      `Do not contradict: houses=${JSON.stringify(finalHouseConflicts)} lordship=${JSON.stringify(finalLordshipConflicts)}.`;
+    raw = await invokeModel({
+      systemText: retrySystem,
+      userMessage: message,
+      conversationHistory: conversationHistory || [],
+      maxTokens,
+      temperature: 0.55
+    });
+    answer = formatAnswer(raw, message);
+    if (answer === BIRTH_DETAILS_REDIRECT) answer = proseFallback(message);
   }
 
   const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
