@@ -151,14 +151,58 @@ function formatHouseOccupants(items) {
   return items.map((x) => `${x.name}${x.sign ? ` (${x.sign})` : ''}`).join(', ');
 }
 
-function shouldUseTruthResponse(message) {
+/**
+ * Only short, factual placement lookups use the truth shortcut.
+ * Interpretive, life-story, timing, and "how/why" questions go to the main AI.
+ */
+function isInterpretiveOrLifeQuestion(message) {
   const t = normalizeText(message);
-  return (
-    /house|घर|yuti|conjunction|युति|planet|graha|ग्रह|lagna|moon sign|rashi|राशि|saturn|shani|शनि|where is|कुन घर|lordship|sign lord|rashi malik|राशिको मालिक|मालिक ग्रह/.test(
+  if (
+    /\b(how|why|what does|what would|what will|mean|meaning|handle|handles|handling|affect|affects|impact|longevity|survival|crisis|crises|near-death|death|marriage|career|wealth|love|relationship|predict|future|will i|should i|can i|tell me about|explain|analyze|analysis|fame|recognition|remedy|remedies)\b/.test(
       t
-    ) &&
-    !/today|आज|daily|दैनिक|tithi|nakshatra|पञ्चाङ्ग|panchanga/.test(t)
-  );
+    )
+  ) {
+    return true;
+  }
+  if (/(कसरी|किन|अर्थ|प्रभाव|मतलब|व्याख्या|बाँच|जीवन|मृत्यु|विवाह|पेशा|भविष्य|के हुन्छ|बताउ|वर्णन)/.test(t)) {
+    return true;
+  }
+  if (
+    /\b(kidnap|ransom|terror|attack|survived|escaped|famous|famously|unharmed|mumbai|taj hotel|assassination|accident|trauma|biography|he |his |she |her |they |their )\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  if (t.length > 120 && /\b(house|saturn|mars|moon)\b/.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+function isPlacementLookupOnly(message) {
+  if (isInterpretiveOrLifeQuestion(message)) return false;
+  const t = normalizeText(message);
+  if (/today|आज|daily|दैनिक|tithi|nakshatra|पञ्चाङ्ग|panchanga/.test(t)) return false;
+
+  const hasChartSubject =
+    /house|घर|planet|graha|ग्रह|lagna|ascendant|yuti|conjunction|युति|lordship|malik|राशि|rashi|sign lord|sun|moon|mars|mercury|jupiter|venus|saturn|rahu|ketu|सूर्य|चन्द्र|शनि|राहु|केतु/.test(
+      t
+    ) || detectPlanetFromMessage(message) != null || detectHouseFromMessage(message) != null;
+  if (!hasChartSubject) return false;
+
+  const lookupPhrase =
+    /\b(where is|which house is|what house is|what house|which house|what planets|which planets|who is in|list the|placement of|position of|located in|in my chart|in this chart|kun ghara|कुन घर|के छ|के-के छ|हरू छ)/.test(
+      t
+    ) || /^(what|which|where|list)\s+/i.test(t.trim());
+
+  const shortFactual = t.length <= 85 && /\b(house|घर)\b/.test(t) && /\b(what|which|where|list|कुन|के)\b/.test(t);
+
+  return lookupPhrase || shortFactual;
+}
+
+function shouldUseTruthResponse(message) {
+  return isPlacementLookupOnly(message);
 }
 
 function truthResponseForMessage(message, chartTruth) {
@@ -172,31 +216,28 @@ function truthResponseForMessage(message, chartTruth) {
 
   if (asksLordship && sign) {
     const lord = SIGN_LORDSHIP[sign];
-    if (lord) {
-      return `Sign lordship matrix अनुसार ${sign} राशिको मालिक ${lord} हो। यो fixed classical mapping हो (non-negotiable).`;
-    }
+    if (lord) return `${sign} is ruled by ${lord} (classical sign-lordship).`;
   }
 
   if (asksLordship) {
     const rows = Object.entries(SIGN_LORDSHIP).map(([s, l]) => `${s}→${l}`);
-    return `Fixed Sign Lordship Matrix: ${rows.join(', ')}. यसै matrix अनुसार मात्र व्याख्या गर्नुपर्छ।`;
+    return `Classical sign lords: ${rows.join(', ')}.`;
   }
 
   if (house) {
     const occupants = chartTruth.houses[house] || [];
-    const conjunction = occupants.length >= 2
-      ? ` ${houseLabel(house)} house ma yuti: ${occupants.map((x) => x.name).join(' + ')}.`
-      : '';
-    return `Chart truth अनुसार ${houseLabel(house)} house मा ${formatHouseOccupants(occupants)} छन्.${conjunction} Yo answer direct chart mapping बाट आएको हो.`;
+    const base = `In this chart, the ${houseLabel(house)} house contains ${formatHouseOccupants(occupants)}.`;
+    if (occupants.length >= 2 && asksConjunction) {
+      return `${base} Conjunction (same house): ${occupants.map((x) => x.name).join(' + ')}.`;
+    }
+    return base;
   }
 
   if (planet) {
     const ph = chartTruth.planetHouse[planet];
-    if (!ph) {
-      return `${planet} को house placement यो chart payload मा उपलब्ध छैन।`;
-    }
-    const sign = (chartTruth.houses[ph] || []).find((x) => x.name === planet)?.sign || 'unknown sign';
-    return `Chart truth अनुसार ${planet} ${houseLabel(ph)} house मा छ (${sign}). यो direct chart-position mapping हो.`;
+    if (!ph) return `${planet} placement is not available in this chart payload.`;
+    const signName = (chartTruth.houses[ph] || []).find((x) => x.name === planet)?.sign || 'unknown sign';
+    return `In this chart, ${planet} is in the ${houseLabel(ph)} house (${signName}).`;
   }
 
   if (asksConjunction) {
@@ -205,14 +246,16 @@ function truthResponseForMessage(message, chartTruth) {
       const occ = chartTruth.houses[i] || [];
       if (occ.length >= 2) rows.push(`${houseLabel(i)}: ${occ.map((x) => x.name).join(' + ')}`);
     }
-    if (!rows.length) return 'यो chart मा multi-planet yuti (same house) भेटिएन।';
-    return `Chart अनुसार प्रमुख yuti हरू: ${rows.join(' | ')}.`;
+    if (!rows.length) return 'This chart has no multi-planet conjunctions (same-house pairs) in the major grahas.';
+    return `Conjunctions in this chart: ${rows.join(' | ')}.`;
   }
 
-  return `Chart truth: Lagna ${chartTruth.lagna || '—'}, Moon ${chartTruth.moonSign || '—'}, Sun ${chartTruth.sunSign || '—'}. Specific house/planet सोध्नुभयो भने exact mapping दिन्छु.`;
+  return `Chart snapshot: Lagna ${chartTruth.lagna || '—'}, Moon sign ${chartTruth.moonSign || '—'}, Sun sign ${chartTruth.sunSign || '—'}. Ask a specific house or planet for exact placement.`;
 }
 
 module.exports = {
   buildChartTruth,
+  isPlacementLookupOnly,
+  isInterpretiveOrLifeQuestion,
   truthResponseForMessage
 };

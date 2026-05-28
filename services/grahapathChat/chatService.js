@@ -517,13 +517,24 @@ async function runMessage({
   const finalHouseConflicts = extractHouseClaimConflicts(answer, ctx.immutableChartState);
   const finalLordshipConflicts = extractLordshipConflicts(answer, ctx.immutableSignLordship);
   if (finalHouseConflicts.length > 0 || finalLordshipConflicts.length > 0) {
-    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
-    return {
-      mode,
-      intent,
-      answer:
-        'I could not safely finalize this reply because it conflicted with the chart truth map. Please ask again in a shorter form (house/planet/lordship), and I will answer strictly from chart facts.'
-    };
+    const placementFact = truthResponseForMessage(message, chartTruth);
+    if (placementFact) {
+      answer = `${placementFact}\n\n${answer}`;
+    } else {
+      const retrySystem =
+        systemText +
+        '\n\nFINAL CORRECTION: Rewrite as natural prose. Use only immutableChartState for house placements. ' +
+        `Do not contradict: houses=${JSON.stringify(finalHouseConflicts)} lordship=${JSON.stringify(finalLordshipConflicts)}.`;
+      raw = await invokeModel({
+        systemText: retrySystem,
+        userMessage: message,
+        conversationHistory: conversationHistory || [],
+        maxTokens,
+        temperature: 0.55
+      });
+      answer = formatAnswer(raw, message);
+      if (answer === BIRTH_DETAILS_REDIRECT) answer = proseFallback(message);
+    }
   }
 
   const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
