@@ -7,10 +7,11 @@ export default function PaidUnlockedExperience({
   selectedTier = 'full',
   premiumEmail = '',
   remainingInsights = null,
-  sessionChatMode = false
+  sessionChatMode = false,
+  onInsightsChange = null
 }) {
   const isQuick = selectedTier === 'quick';
-  const fallbackInsights = isQuick ? 12 : 50;
+  const fallbackInsights = isQuick ? 12 : sessionChatMode ? 55 : 50;
   const initialInsights =
     typeof remainingInsights === 'number' && Number.isFinite(remainingInsights)
       ? Math.max(0, Math.trunc(remainingInsights))
@@ -35,6 +36,7 @@ export default function PaidUnlockedExperience({
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
             sessionChatMode={sessionChatMode}
+            onInsightsChange={onInsightsChange}
           />
         </>
       ) : (
@@ -46,6 +48,7 @@ export default function PaidUnlockedExperience({
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
             sessionChatMode={sessionChatMode}
+            onInsightsChange={onInsightsChange}
           />
         </>
       )}

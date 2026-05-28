@@ -102,14 +102,17 @@ function me(req, res) {
   if (!user) {
     return res.status(404).json({ error: 'NotFound', message: 'User not found.' });
   }
+  const insightsLimit = user.insightsLimit || 55;
+  const insightsUsed = user.insightsUsed || 0;
   return res.json({
     ok: true,
     user: {
       accessId: String(verified.payload.accessId),
       role: user.role || 'user',
       assignedProfileHash: user.assignedProfileHash || null,
-      insightsUsed: user.insightsUsed || 0,
-      insightsLimit: user.insightsLimit || 55
+      insightsUsed,
+      insightsLimit,
+      insightsRemaining: Math.max(0, insightsLimit - insightsUsed)
     }
   });
 }

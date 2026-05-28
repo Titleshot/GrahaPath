@@ -178,7 +178,12 @@ function extendPhaseTitle(title, ageRange) {
   return raw || 'Life Phase';
 }
 
-export default function DemoExperience({ chart, sessionChatMode = false }) {
+export default function DemoExperience({
+  chart,
+  sessionChatMode = false,
+  remainingInsights = null,
+  onInsightsChange = null
+}) {
   const [responses, setResponses] = useState({});
   const [aiPhases, setAiPhases] = useState([]);
   const [aiCoreInsight, setAiCoreInsight] = useState('');
@@ -267,7 +272,19 @@ export default function DemoExperience({ chart, sessionChatMode = false }) {
         {aiCoreReason && <p className="mt-2 text-[11px] text-gold-200/75">Astro reason: {aiCoreReason}</p>}
       </motion.section>
 
-      <ChartGrahaChat chart={chart} forceUnlocked initialInsights={50} sessionChatMode={sessionChatMode} />
+      <ChartGrahaChat
+        chart={chart}
+        forceUnlocked
+        initialInsights={
+          typeof remainingInsights === 'number' && Number.isFinite(remainingInsights)
+            ? Math.max(0, Math.trunc(remainingInsights))
+            : sessionChatMode
+              ? 55
+              : 50
+        }
+        sessionChatMode={sessionChatMode}
+        onInsightsChange={onInsightsChange}
+      />
 
       <LifePhaseValidation
         phases={phases}

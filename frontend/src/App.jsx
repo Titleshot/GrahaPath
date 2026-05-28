@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BirthDetailsForm from './components/BirthDetailsForm';
 import LoadingSequence from './components/LoadingSequence';
@@ -21,6 +21,12 @@ import {
   getStoredChartData,
   storeChartData 
 } from './lib/chartFingerprint';
+import {
+  buildInsightsScope,
+  readCachedInsights,
+  writeCachedInsights,
+  insightsFromPayload
+} from './lib/insightsBalance';
 
 const API_URL = withApiBase('/api/generate-chart');
 const ADMIN_GENERATE_TOKEN_URL = withApiBase('/api/admin/charts/generate');
@@ -34,6 +40,7 @@ const AUTH_LOGIN_ENABLED =
 const AUTH_ME_URL = withApiBase('/api/auth/me');
 const AUTH_CHART_URL = withApiBase('/api/auth/chart');
 const VIEW_TOKEN_API_PREFIX = withApiBase('/api/view');
+const CHART_SESSION_URL = withApiBase('/api/chart/session');
 
 /** Vercel/static hosts have no `/api` proxy unless you set API base URL at build time. */
 const showProdApiMisconfig =
@@ -140,8 +147,11 @@ export default function App() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (res.ok && data?.user) setAuthUser(data.user);
-        else setAuthUser(null);
+        if (res.ok && data?.user) {
+          setAuthUser(data.user);
+          const remaining = insightsFromPayload({ user: data.user });
+          if (remaining != null) setPremiumInsights(remaining);
+        } else setAuthUser(null);
       })
       .catch(() => {
         if (!cancelled) setAuthUser(null);
@@ -165,8 +175,8 @@ export default function App() {
         if (res.ok && data?.chart && typeof data.chart === 'object') {
           setChart(data.chart);
           setPaidUnlocked(true);
-          const remaining = Number(data?.insights?.remaining);
-          if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
+          const remaining = insightsFromPayload(data);
+          if (remaining != null) applyInsightsBalance(remaining);
         } else {
           setChart(null);
           setError(
@@ -183,7 +193,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [authUser]);
+  }, [authUser, applyInsightsBalance]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -206,8 +216,9 @@ export default function App() {
     setChart(data.chart);
     setPaidUnlocked(true);
     setTokenSessionMode(true);
-    const remaining = Number(data?.insights?.remaining);
-    if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
+    if (data?.profileId) setChartProfileId(String(data.profileId));
+    const remaining = insightsFromPayload(data);
+    if (remaining != null) applyInsightsBalance(remaining);
     setPendingViewToken('');
     window.history.replaceState(window.history.state || {}, '', '/');
     setRoutePath('/');
@@ -287,6 +298,7 @@ export default function App() {
   const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
   const [adminMagicLink, setAdminMagicLink] = useState('');
   const [tokenSessionMode, setTokenSessionMode] = useState(false);
+  const [chartProfileId, setChartProfileId] = useState('');
   const [pendingViewToken, setPendingViewToken] = useState('');
   const [shareStatus, setShareStatus] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState('');
@@ -296,6 +308,78 @@ export default function App() {
   const [pendingKofiRestore, setPendingKofiRestore] = useState(null);
   const [isAutoRestoringKofi, setIsAutoRestoringKofi] = useState(false);
   const resultsRef = useRef(null);
+
+  const insightsScope = useMemo(
+    () =>
+      buildInsightsScope({
+        tokenSession: tokenSessionMode,
+        profileId: chartProfileId,
+        accessId: authUser?.accessId,
+        premiumEmail,
+        chartFingerprint
+      }),
+    [tokenSessionMode, chartProfileId, authUser?.accessId, premiumEmail, chartFingerprint]
+  );
+
+  const applyInsightsBalance = useCallback(
+    (remaining) => {
+      if (!Number.isFinite(Number(remaining))) return;
+      const normalized = Math.max(0, Math.trunc(Number(remaining)));
+      setPremiumInsights(normalized);
+      if (insightsScope) writeCachedInsights(insightsScope, normalized);
+    },
+    [insightsScope]
+  );
+
+  const refreshInsightsBalance = useCallback(async () => {
+    if (!chart && !paidUnlocked && !tokenSessionMode) return null;
+    if (AUTH_LOGIN_ENABLED && authUser?.role === 'admin') return null;
+
+    if (insightsScope) {
+      const cached = readCachedInsights(insightsScope);
+      if (cached != null) applyInsightsBalance(cached);
+    }
+
+    try {
+      let url = null;
+      if (tokenSessionMode) url = CHART_SESSION_URL;
+      else if (AUTH_LOGIN_ENABLED && authUser && authUser.role !== 'admin') url = AUTH_CHART_URL;
+      if (!url) return null;
+
+      const res = await apiFetch(url, { method: 'GET' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return null;
+      const remaining = insightsFromPayload(data);
+      if (remaining != null) {
+        applyInsightsBalance(remaining);
+        if (data?.profileId) setChartProfileId(String(data.profileId));
+      }
+      return remaining;
+    } catch {
+      return null;
+    }
+  }, [
+    chart,
+    paidUnlocked,
+    tokenSessionMode,
+    insightsScope,
+    authUser,
+    premiumEmail,
+    chartFingerprint,
+    applyInsightsBalance
+  ]);
+
+  useEffect(() => {
+    if (routePath !== '/' || !chart) return;
+    refreshInsightsBalance();
+  }, [routePath, chart, refreshInsightsBalance]);
+
+  useEffect(() => {
+    if (!chart || premiumInsights != null) return;
+    if (!insightsScope) return;
+    const cached = readCachedInsights(insightsScope);
+    if (cached != null) setPremiumInsights(cached);
+  }, [chart, premiumInsights, insightsScope]);
 
   useEffect(() => {
     if (!chart) return;
@@ -692,8 +776,12 @@ export default function App() {
     setSelectedTier(plan);
     setPaidUnlocked(true);
     setPremiumEmail(sanitizeEmail(data?.premium?.email || fallbackEmail || ''));
-    const nextInsights = Number(data?.premium?.remainingInsights ?? data?.premium?.remaining_insights);
-    setPremiumInsights(Number.isFinite(nextInsights) ? nextInsights : plan === 'quick' ? 12 : 50);
+    const nextInsights = insightsFromPayload(data);
+    if (nextInsights != null) {
+      applyInsightsBalance(nextInsights);
+    } else {
+      setPremiumInsights(plan === 'quick' ? 12 : 50);
+    }
     const restoredFingerprint = data?.premium?.chartFingerprint || data?.premium?.chart_fingerprint || null;
     if (restoredFingerprint) {
       setChartFingerprint(restoredFingerprint);
@@ -898,7 +986,16 @@ export default function App() {
         </main>
       );
     }
-    return <AuthLoginGate onLoginSuccess={(user) => setAuthUser(user || { accessId: 'user' })} />;
+    return (
+      <AuthLoginGate
+        onLoginSuccess={(user) => {
+          const nextUser = user || { accessId: 'user' };
+          setAuthUser(nextUser);
+          const remaining = insightsFromPayload({ user: nextUser });
+          if (remaining != null) setPremiumInsights(remaining);
+        }}
+      />
+    );
   }
 
   return (
@@ -1124,6 +1221,7 @@ export default function App() {
                         premiumEmail={premiumEmail}
                         remainingInsights={premiumInsights}
                         sessionChatMode={tokenSessionMode}
+                        onInsightsChange={applyInsightsBalance}
                       />
                     ) : demoUsed ? (
                       <motion.div
@@ -1150,6 +1248,8 @@ export default function App() {
                         <DemoExperience
                           chart={chart}
                           sessionChatMode={tokenSessionMode}
+                          remainingInsights={premiumInsights}
+                          onInsightsChange={applyInsightsBalance}
                           onUnlock={() => {
                             if (!AUTH_LOGIN_ENABLED) setShowPaymentPreview(true);
                           }}
@@ -1159,6 +1259,8 @@ export default function App() {
                       <DemoExperience
                         chart={chart}
                         sessionChatMode={tokenSessionMode}
+                        remainingInsights={premiumInsights}
+                        onInsightsChange={applyInsightsBalance}
                         onUnlock={() => {
                           if (!AUTH_LOGIN_ENABLED) setShowPaymentPreview(true);
                         }}

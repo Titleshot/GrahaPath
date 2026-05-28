@@ -89,7 +89,8 @@ export default function ChartGrahaChat({
   teaserMode = false,
   teaserQuestionLimit = 2,
   onTeaserLock,
-  sessionChatMode = false
+  sessionChatMode = false,
+  onInsightsChange = null
 }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -113,6 +114,30 @@ export default function ChartGrahaChat({
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, []);
+
+  const applyInsightsLeft = useCallback(
+    (next) => {
+      const normalized = Math.max(0, Math.trunc(Number(next)));
+      setInsightsLeft(normalized);
+      if (typeof onInsightsChange === 'function') {
+        onInsightsChange(normalized);
+      }
+    },
+    [onInsightsChange]
+  );
+
+  const applyInsightsDelta = useCallback(
+    (delta) => {
+      setInsightsLeft((prev) => {
+        const normalized = Math.max(0, Math.trunc(prev + Number(delta)));
+        if (typeof onInsightsChange === 'function') {
+          onInsightsChange(normalized);
+        }
+        return normalized;
+      });
+    },
+    [onInsightsChange]
+  );
 
   useEffect(() => {
     scrollToBottom();
@@ -181,11 +206,11 @@ export default function ChartGrahaChat({
 
   useEffect(() => {
     if (typeof initialInsights === 'number' && Number.isFinite(initialInsights)) {
-      setInsightsLeft(Math.max(0, Math.trunc(initialInsights)));
+      applyInsightsLeft(initialInsights);
       return;
     }
-    setInsightsLeft(teaserMode ? teaserQuestionLimit : forceUnlocked ? 999 : 3);
-  }, [chartKey, teaserMode, teaserQuestionLimit, forceUnlocked, initialInsights]);
+    applyInsightsLeft(teaserMode ? teaserQuestionLimit : forceUnlocked ? 999 : 3);
+  }, [chartKey, teaserMode, teaserQuestionLimit, forceUnlocked, initialInsights, applyInsightsLeft]);
 
   useEffect(() => {
     if (!chart) return;
@@ -252,9 +277,13 @@ export default function ChartGrahaChat({
             ? data.answer.trim()
             : 'Your chart is ready. Ask about houses, daśā timing, or career structure.';
         setMessages([{ role: 'assistant', content: text }]);
-        if (typeof data.remainingInsights === 'number' && !forceUnlocked && !premiumDemoUnlocked) {
+        if (typeof data.remainingInsights === 'number') {
           const remaining = Math.max(0, data.remainingInsights);
-          setInsightsLeft(teaserMode ? Math.min(teaserQuestionLimit, remaining) : remaining);
+          if (!forceUnlocked && !premiumDemoUnlocked) {
+            applyInsightsLeft(teaserMode ? Math.min(teaserQuestionLimit, remaining) : remaining);
+          } else if (sessionChatMode || hasBoundedUnlockBudget) {
+            applyInsightsLeft(remaining);
+          }
         }
       })
       .catch((err) => {
@@ -365,12 +394,14 @@ export default function ChartGrahaChat({
         if (hasBoundedUnlockBudget && normalizedServerRemaining >= 900) {
           // Backend "demo premium" fallback uses 999 for unlimited mode.
           // Keep the UI's bounded pack (e.g. 10/30/50) when no premium account email is bound.
-          setInsightsLeft((prev) => Math.max(0, prev - 1));
+          applyInsightsDelta(-1);
         } else {
-          setInsightsLeft(normalizedServerRemaining);
+          applyInsightsLeft(normalizedServerRemaining);
         }
       } else if (!forceUnlocked && !premiumDemoUnlocked) {
-        setInsightsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+        applyInsightsDelta(-1);
+      } else if (sessionChatMode || (forceUnlocked && hasBoundedUnlockBudget)) {
+        applyInsightsDelta(-1);
       }
       setInsightPulse(true);
     } catch (err) {
