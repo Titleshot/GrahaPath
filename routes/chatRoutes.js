@@ -5,15 +5,13 @@ const { requireInviteAccess } = require('../middlewares/requireInviteAccess');
 const { requireUserAuth } = require('../middlewares/requireUserAuth');
 
 const router = express.Router();
+const protectedChat = [requireUserAuth, requireInviteAccess];
 
-router.use(requireUserAuth);
-router.use(requireInviteAccess);
-
-router.post('/chat-v2', grahaPathChatV2);
+router.post('/chat-v2', ...protectedChat, grahaPathChatV2);
 // Some proxies forward the /api prefix to Node unchanged — register both paths.
-router.post('/api/chat-v2', grahaPathChatV2);
-router.post('/chat', grahaPathChat);
-router.post('/life-phase-validation', lifePhaseValidationHandler);
-router.post('/payment-proof', paymentProofStub);
+router.post('/api/chat-v2', ...protectedChat, grahaPathChatV2);
+router.post('/chat', ...protectedChat, grahaPathChat);
+router.post('/life-phase-validation', ...protectedChat, lifePhaseValidationHandler);
+router.post('/payment-proof', ...protectedChat, paymentProofStub);
 
 module.exports = router;

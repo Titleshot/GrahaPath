@@ -4,15 +4,13 @@ const { requireInviteAccess } = require('../middlewares/requireInviteAccess');
 const { requireUserAuth } = require('../middlewares/requireUserAuth');
 
 const router = express.Router();
+const protectedChart = [requireUserAuth, requireInviteAccess];
 
-router.use(requireUserAuth);
-router.use(requireInviteAccess);
-
-router.post('/generate-chart', generateChart);
-router.post('/debug-chart', debugChart);
-router.post('/validate-life-phases', validateLifePhases);
-router.post('/daily-weather', dailyWeather);
-router.get('/panchanga', panchanga);
-router.get('/place-suggestions', placeSuggestions);
+router.post('/generate-chart', ...protectedChart, generateChart);
+router.post('/debug-chart', ...protectedChart, debugChart);
+router.post('/validate-life-phases', ...protectedChart, validateLifePhases);
+router.post('/daily-weather', ...protectedChart, dailyWeather);
+router.get('/panchanga', ...protectedChart, panchanga);
+router.get('/place-suggestions', ...protectedChart, placeSuggestions);
 
 module.exports = router;

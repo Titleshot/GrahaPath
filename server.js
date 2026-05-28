@@ -136,14 +136,15 @@ app.get('/health/gemini/stats', (_req, res) => {
   });
 });
 
+// Public auth + token routes must mount before chart/chat routers (those apply requireUserAuth to all /api paths).
+app.use('/api', authRoutes);
+app.use('/api', chartAccessRoutes);
+app.use('/api', accessRoutes);
 app.use('/api', chartRoutes);
 app.use('/api', chatRoutes);
 app.use('/api', feedbackRoutes);
 app.use('/api', securityRoutes);
 app.use('/api', premiumRoutes);
-app.use('/api', accessRoutes);
-app.use('/api', authRoutes);
-app.use('/api', chartAccessRoutes);
 
 if (!premiumRouterMounted(premiumRoutes)) {
   console.warn(
