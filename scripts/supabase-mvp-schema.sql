@@ -41,3 +41,26 @@ create table if not exists public.payments (
 
 create index if not exists payments_user_id_created_at_idx
   on public.payments(user_id, created_at desc);
+
+create table if not exists public.access_requests (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  name text null,
+  phone text null,
+  note text null,
+  status text not null default 'pending',
+  requested_at timestamptz not null default now(),
+  reviewed_at timestamptz null,
+  reviewed_by text null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.access_allowlist (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  approved boolean not null default false,
+  approved_at timestamptz null,
+  approved_by text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);

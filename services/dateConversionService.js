@@ -100,7 +100,9 @@ function convertAdToBs(adDateIso, zone = 'Asia/Kathmandu') {
     throw new Error('AD date must be in YYYY-MM-DD format.');
   }
 
-  const dt = DateTime.fromISO(adDateIso, { zone, setZone: true });
+  // Use midday in the requested zone to avoid day-boundary drift when converted
+  // to JS Date on servers running in a different local timezone.
+  const dt = DateTime.fromISO(`${adDateIso}T12:00:00`, { zone, setZone: true });
   if (!dt.isValid) {
     throw new Error(`Invalid AD date: ${adDateIso}`);
   }

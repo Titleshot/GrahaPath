@@ -249,10 +249,19 @@ function isDeterministicAstroFactRequest(text) {
   const hasBsDateMismatchMarker =
     /(2076|२०७६|2083|२०८३)/.test(t) && /(मिति|date|bs|bikram|baisakh|बैशाख)/i.test(t);
   return (
-    /(तिथि|नक्षत्र|राशि|चन्द्र|चन्द्रमा|आजको\s*तिथि|आजको\s*नक्षत्र|चन्द्र\s*राशि)/u.test(t) ||
+    /(आजको\s*तिथि|आजको\s*नक्षत्र|चन्द्र\s*राशि|आजको\s*मिति|नेपाली\s*मिति)/u.test(t) ||
     /(tithi|nakshatra|current\s*tithi|current\s*nakshatra)/i.test(t) ||
     (hasDailyMarker && (/(चन्द्र\s*राशि|moon\s*sign|rashi|राशि)/i.test(t) || /(आजको\s*मिति|नेपाली\s*मिति|today'?s?\s*date)/i.test(t))) ||
     hasBsDateMismatchMarker
+  );
+}
+
+function isExplicitDailyAstroQuery(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return false;
+  return (
+    /(आज|आजको|today|current|now|daily|dinko|दिनको|aaja|aajko)/i.test(t) &&
+    /(मिति|date|तिथि|tithi|नक्षत्र|nakshatra|चन्द्र\s*राशि|moon\s*sign|panchanga|पञ्चाङ्ग)/i.test(t)
   );
 }
 
@@ -286,13 +295,21 @@ function deterministicTodayDateReply() {
 
 async function deterministicAstroFactsReply(chart) {
   const { DateTime } = require('luxon');
-  const today = DateTime.now().setZone('Asia/Kathmandu').toISODate();
-  const day = await buildPanchangaForDate(today);
-  if (!day?.bsDateNepali || !day?.tithi || !day?.nakshatra || !day?.moonSign) {
+  const nowKtm = DateTime.now().setZone('Asia/Kathmandu');
+  const asc = Number.isFinite(Number(chart?.ascendantAbsoluteDegree))
+    ? Number(chart.ascendantAbsoluteDegree)
+    : 15;
+  const snapshot = await buildTransitSnapshotAtUtc(nowKtm.toUTC().toISO(), asc);
+  const astro = buildDeterministicAstroContextFromTransit(snapshot);
+  const nepali = buildKathmanduDatePayload();
+  if (!nepali?.bsDateNepali || !astro?.currentNakshatra || !astro?.moonSign) {
     return 'अहिलेको तिथि/नक्षत्र/मिति निकाल्न मिलेन, कृपया फेरि प्रयास गर्नुहोस्।';
   }
-  const tithi = day.tithiNepali && day.pakshaNepali ? `${day.pakshaNepali} ${day.tithiNepali}` : day.tithi;
-  return `आजको मिति ${day.bsDateNepali} गते हो। आजको तिथि ${tithi} हो, नक्षत्र ${day.nakshatra} हो, र चन्द्र राशि ${day.moonSign} हो।`;
+  const tithi = astro.currentTithiNepali && astro.currentTithiPakshaNepali
+    ? `${astro.currentTithiPakshaNepali} ${astro.currentTithiNepali}`
+    : astro.currentTithi || '—';
+  const timeLabel = nowKtm.toFormat('hh:mm a');
+  return `अहिले ${timeLabel} (नेपाल समय) अनुसार आजको मिति ${nepali.bsDateNepali} गते हो। तिथि ${tithi}, नक्षत्र ${astro.currentNakshatra || '—'}, र चन्द्र राशि ${astro.moonSign || '—'} हो।`;
 }
 
 function renderPanchangaLine(row) {
@@ -888,11 +905,11 @@ async function generateReply(chart, messages, userMessage, mode = 'message', opt
       ? 'Give today-focused transit guidance grounded in Current_Live_Transit and natal context.'
       : '');
 
-  if (!lifePhaseActive && isTodayDateRequest(userContent)) {
+  if (!lifePhaseActive && isExplicitDailyAstroQuery(userContent) && isTodayDateRequest(userContent)) {
     runtimeStats.replySuccess += 1;
     return deterministicTodayDateReply();
   }
-  if (!lifePhaseActive && isDeterministicAstroFactRequest(userContent)) {
+  if (!lifePhaseActive && isExplicitDailyAstroQuery(userContent) && isDeterministicAstroFactRequest(userContent)) {
     runtimeStats.replySuccess += 1;
     try {
       return await deterministicAstroFactsReply(chart);

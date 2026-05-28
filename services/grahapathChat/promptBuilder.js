@@ -1,9 +1,19 @@
 function todayContext() {
   const now = new Date();
+  const ktmParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kathmandu',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const y = ktmParts.find((p) => p.type === 'year')?.value;
+  const m = ktmParts.find((p) => p.type === 'month')?.value;
+  const d = ktmParts.find((p) => p.type === 'day')?.value;
+  const todayISO = y && m && d ? `${y}-${m}-${d}` : now.toISOString().slice(0, 10);
   return {
-    todayISO: now.toISOString().slice(0, 10),
+    todayISO,
     nowUTC: now.toISOString(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    timezone: 'Asia/Kathmandu'
   };
 }
 
@@ -55,7 +65,11 @@ function buildSystemPrompt({ intent, userPlan, premiumUnlocked, conversationHist
     'No fatalistic certainty; not a doctor or lawyer. ' +
     'FORBIDDEN: raw JSON objects, { "coreInsight" }, "phases" arrays, report export format. ' +
     'Chart context is already loaded — NEVER ask for birth date/time/place. ' +
-    'Use plain text or light markdown only. ';
+    'Use plain text or light markdown only. ' +
+    'STRICT CHART STATE RULE: CHART_CONTEXT_JSON.immutableChartState is authoritative and immutable. ' +
+    'Do not invent planetary positions. If a planet is listed in one house there, do not place it in another house in your response. ' +
+    'STRICT LORDSHIP RULE: CHART_CONTEXT_JSON.immutableSignLordship is authoritative. ' +
+    'Do not invent sign lords or swap them. If asked about rashi malik / sign lordship, use that matrix exactly.';
 
   const demoPsychology = plan === 'free' && !premiumUnlocked ? `
 DEMO RESPONSE PSYCHOLOGY — THIS IS CRITICAL:
@@ -105,7 +119,10 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
       break;
     case 'dasha_question':
       intentBlock =
-        'Intent: DASHA_TIMING. Explain current mahadasha-antardasha as active timing layer (phase-based, not personality-only). Include practical focus, emotional tone, and strategic caution. Use non-deterministic language ("tends to", "often", "may reward").';
+        'Intent: DASHA_TIMING. Explain current mahadasha-antardasha as active timing layer (phase-based, not personality-only). Include practical focus, emotional tone, and strategic caution. Use non-deterministic language ("tends to", "often", "may reward"). ' +
+        'CRITICAL TIMING LABEL RULE: In CHART_CONTEXT_JSON.v, mahadashaWindow and antardashaWindow are different scopes. ' +
+        'If you mention a 2-4 year window (example 2023-2026), label it as ANTARDASHA under the running MAHADASHA. ' +
+        'Never call antardashaWindow dates the mahadasha range.';
       break;
     case 'natal_rashi_question':
       intentBlock =
@@ -117,7 +134,8 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
         'OPENING (required): State primaryRecognitionWindow.ageRangeLabel (or age), calendarYears, mahaDasha–antarDasha, recognitionScore. Example tone: "Strongest first-visibility window: ages 17–19 (2006–2008), Jupiter–Saturn antar, score 72." ' +
         'If queriedAges exists: list ages sorted by recognitionScore with matchVsTopWindow. If user claims success at age X, check that row — if weak_match, say chart does not strongly support that age. ' +
         'If bestAmongQueried exists and differs from primary, mention both. Use lifeEventHints only as supporting context. ' +
-        'NEVER use currentDashaOnly for past years. NEVER invent dasha. Do NOT flip your answer to agree with user corrections. queryMode first_breakout means ignore peaks after age 32 for "first" recognition.';
+        'NEVER use currentDashaOnly for past years. NEVER invent dasha. Do NOT flip your answer to agree with user corrections. queryMode first_breakout means ignore peaks after age 32 for "first" recognition. ' +
+        'If fameTiming.timingDataStatus is "unavailable", say timing tables are missing and ask user to regenerate chart — do NOT claim the chart has no recognition potential.';
       break;
     case 'career_question':
       intentBlock =

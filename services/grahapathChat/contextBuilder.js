@@ -32,6 +32,50 @@ const SIGNS = [
   'Pisces'
 ];
 
+const SIGN_LORDSHIP_MATRIX = Object.freeze({
+  Aries: 'Mars',
+  Taurus: 'Venus',
+  Gemini: 'Mercury',
+  Cancer: 'Moon',
+  Leo: 'Sun',
+  Virgo: 'Mercury',
+  Libra: 'Venus',
+  Scorpio: 'Mars',
+  Sagittarius: 'Jupiter',
+  Capricorn: 'Saturn',
+  Aquarius: 'Saturn',
+  Pisces: 'Jupiter'
+});
+
+function normalizePlanetLabel(planet) {
+  if (!planet?.name) return null;
+  const parts = [String(planet.name)];
+  if (planet?.retrograde === true) parts.push('Retrograde');
+  if (String(planet?.name || '') === 'Saturn' && String(planet?.sign || '') === 'Libra') {
+    parts.push('Exalted');
+  }
+  return parts.join('_');
+}
+
+function buildImmutableChartState(chart) {
+  const lagna = chart?.ascendant || null;
+  const map = { Lagna: lagna || 'Unknown' };
+  const houseKey = (n) => {
+    if (n === 1) return '1st_House';
+    if (n === 2) return '2nd_House';
+    if (n === 3) return '3rd_House';
+    return `${n}th_House`;
+  };
+  for (let house = 1; house <= 12; house += 1) {
+    const rows = (chart?.planets || [])
+      .filter((p) => Number(p?.house) === house)
+      .map((p) => normalizePlanetLabel(p))
+      .filter(Boolean);
+    map[houseKey(house)] = rows;
+  }
+  return map;
+}
+
 function resolveAscendantAbs(chart) {
   const n = Number(chart?.ascendantAbsoluteDegree);
   if (Number.isFinite(n)) return n;
@@ -79,11 +123,14 @@ async function buildChatContext(chart, intent, { dailyWeather, userPlan, premium
   }
 
   const vim = vimNowFromChart(chart);
+  const immutableChartState = buildImmutableChartState(chart);
   const base = {
     _: 'gp_chat_v2',
     intent,
     nm: firstNameOnly(chart),
-    v: { md: vim.mahadasha, ad: vim.antardasha, pt: vim.pratyantar }
+    v: { md: vim.mahadasha, ad: vim.antardasha, pt: vim.pratyantar },
+    immutableChartState,
+    immutableSignLordship: SIGN_LORDSHIP_MATRIX
   };
   const dashaContext = buildDashaContext(chart, { userPlan, premiumUnlocked });
 

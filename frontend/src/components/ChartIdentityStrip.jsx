@@ -37,6 +37,12 @@ function ChartFact({ label, value }) {
   );
 }
 
+function formatCoord(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return n.toFixed(6);
+}
+
 function formatAdDateLong(date) {
   if (!date) return '';
   return new Intl.DateTimeFormat('en-GB', {
@@ -97,6 +103,7 @@ function ChartBirthDate({ chart }) {
 export default function ChartIdentityStrip({ chart, forceDeepData = false, anchorId = 'chart-calculated-start' }) {
   if (!chart) return null;
   const [showSystemComparison, setShowSystemComparison] = useState(false);
+  const [showCalculationDebug, setShowCalculationDebug] = useState(false);
 
   const deepOk = hasDeepChartData(chart, forceDeepData);
   const vimParts = deepOk ? vimshottariSnapshotParts(chart) : null;
@@ -237,6 +244,59 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
           <p>✓ house placements + graha relations</p>
           <p>✓ current timing cycle context</p>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-blue-300/20 bg-blue-500/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.24em] text-blue-200/80">Calculation Debug</p>
+            <p className="mt-1 text-[11px] text-ivory/52">Transparent calculation inputs and engine settings.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCalculationDebug((prev) => !prev)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${
+              showCalculationDebug ? 'border-blue-300/70 bg-blue-300/20' : 'border-blue-300/30 bg-black/35'
+            }`}
+            aria-label="Toggle calculation debug panel"
+            aria-pressed={showCalculationDebug}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-blue-200 shadow transition ${
+                showCalculationDebug ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        {showCalculationDebug && (
+          <div className="mt-3 grid gap-3 text-[11px] text-cream/82 sm:grid-cols-2">
+            <div className="rounded-xl border border-blue-200/20 bg-black/30 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-blue-200/75">Inputs Used</p>
+              <p className="mt-1.5">AD Date: {chart.birthDateAD || '—'}</p>
+              <p>Local DateTime: {chart.localDateTime || '—'}</p>
+              <p>Timezone: {chart.timezone || '—'}</p>
+              <p>UTC DateTime: {chart.utcDateTime || '—'}</p>
+              <p>
+                Coordinates: {formatCoord(chart?.location?.latitude)}, {formatCoord(chart?.location?.longitude)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-blue-200/20 bg-black/30 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-blue-200/75">Engine Settings</p>
+              <p>Ephemeris: {chart?.calculationNotes?.ephemeris || 'Swiss Ephemeris'}</p>
+              <p>Zodiac: {chart?.calculationNotes?.zodiac || chart?.ayanamsa || 'Sidereal'}</p>
+              <p>
+                Ayanamsa: {chart?.calculationNotes?.ayanamsa || chart?.ayanamsa || 'Lahiri'}{' '}
+                {Number.isFinite(Number(chart?.ayanamsaDegree))
+                  ? `(${Number(chart.ayanamsaDegree).toFixed(6)}°)`
+                  : ''}
+              </p>
+              <p>House System: {chart?.calculationNotes?.houseSystem || chart?.houseSystem || 'Whole Sign'}</p>
+              <p>Node Type: {chart?.calculationNotes?.nodeType || chart?.nodeType || 'True Node'}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-gold-100/45">

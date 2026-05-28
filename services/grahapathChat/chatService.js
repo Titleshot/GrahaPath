@@ -16,7 +16,14 @@ const {
 } = require('./responseFormatter');
 const { buildDailyGrahaWeatherFromTransit } = require('../dailyGrahaWeatherService');
 const { DateTime } = require('luxon');
-const { buildPanchangaForDate, buildPanchangaRange } = require('../currentAstronomyService');
+const {
+  buildPanchangaForDate,
+  buildPanchangaRange,
+  buildDeterministicAstroContextFromTransit
+} = require('../currentAstronomyService');
+const { buildTransitSnapshotAtUtc } = require('../astrologyService');
+const { buildKathmanduDatePayload } = require('../nepaliDateService');
+const { buildChartTruth, truthResponseForMessage } = require('./truthResponder');
 
 function resolveAscendantAbsoluteDegree(chart) {
   const n = Number(chart?.ascendantAbsoluteDegree);
@@ -33,10 +40,19 @@ function isDeterministicAstroFactRequest(text) {
   const hasBsDateMismatchMarker =
     /(2076|२०७६|2083|२०८३)/.test(t) && /(मिति|date|bs|bikram|baisakh|बैशाख)/i.test(t);
   return (
-    /(तिथि|नक्षत्र|राशि|चन्द्र|चन्द्रमा|आजको\s*तिथि|आजको\s*नक्षत्र|चन्द्र\s*राशि|आजको\s*मिति|नेपाली\s*मिति)/u.test(t) ||
+    /(आजको\s*तिथि|आजको\s*नक्षत्र|चन्द्र\s*राशि|आजको\s*मिति|नेपाली\s*मिति)/u.test(t) ||
     /(tithi|nakshatra|current\s*tithi|current\s*nakshatra)/i.test(t) ||
     (hasDailyMarker && (/(चन्द्र\s*राशि|moon\s*sign|rashi|राशि)/i.test(t) || /(आजको\s*मिति|नेपाली\s*मिति|today'?s?\s*date)/i.test(t))) ||
     hasBsDateMismatchMarker
+  );
+}
+
+function isExplicitDailyAstroQuery(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return false;
+  return (
+    /(आज|आजको|today|current|now|daily|dinko|दिनको|aaja|aajko)/i.test(t) &&
+    /(मिति|date|तिथि|tithi|नक्षत्र|nakshatra|चन्द्र\s*राशि|moon\s*sign|panchanga|पञ्चाङ्ग)/i.test(t)
   );
 }
 
@@ -55,11 +71,153 @@ function renderPanchangaLine(row) {
   return `${row.bsDateNepali} गते · तिथि ${tithi} · नक्षत्र ${row.nakshatra || '—'} · योग ${row.yoga || '—'} · करण ${row.karana || '—'} · चन्द्र राशि ${row.moonSign || '—'}`;
 }
 
+function buildFameTimingDeterministicReply(fameTiming, userMessage) {
+  const ft = fameTiming || {};
+  if (ft.timingDataStatus !== 'ok' || !ft.primaryRecognitionWindow) {
+    return 'Past-age timing table is unavailable for this chart payload. Please regenerate the chart from birth details and try again.';
+  }
+
+  const primary = ft.primaryRecognitionWindow;
+  const open = `Strongest recognition window from your chart timing is age ${primary.ageRangeLabel || primary.age} (${primary.calendarYears || 'year unavailable'}), ${primary.mahaDasha || '—'}–${primary.antarDasha || '—'} with score ${primary.recognitionScore}.`;
+  const rows = Array.isArray(ft.queriedAges) ? ft.queriedAges : [];
+  if (!rows.length) {
+    const second = Array.isArray(ft.topRecognitionWindows) ? ft.topRecognitionWindows[1] : null;
+    if (second) {
+      return `${open} Next strong window: age ${second.ageRangeLabel || second.age} (${second.calendarYears || 'year unavailable'}), ${second.mahaDasha || '—'}–${second.antarDasha || '—'}, score ${second.recognitionScore}.`;
+    }
+    return open;
+  }
+
+  const asked = String(userMessage || '');
+  const ranked = [...rows].sort((a, b) => Number(b.recognitionScore || 0) - Number(a.recognitionScore || 0));
+  const lines = ranked
+    .slice(0, 5)
+    .map((r) => {
+      const ageLabel = r.ageRangeLabel || r.age;
+      const years = r.calendarYears || r.calendarYear || 'year unavailable';
+      return `Age ${ageLabel} (${years}) → ${r.mahaDasha || '—'}–${r.antarDasha || '—'}, score ${r.recognitionScore}, ${r.matchVsTopWindow || 'unknown'}.`;
+    });
+
+  const best = ft.bestAmongQueried;
+  const bestLine = best
+    ? `Best among your asked ages: ${best.ageRangeLabel || best.age} (${best.calendarYears || best.calendarYear || 'year unavailable'}) with ${best.mahaDasha || '—'}–${best.antarDasha || '—'} score ${best.recognitionScore}.`
+    : '';
+  const guard =
+    /first|begin|start|breakout|debut|पहिलो|सुरु/i.test(asked) && primary.ageRangeLabel
+      ? `For first recognition, prioritize ${primary.ageRangeLabel} (${primary.calendarYears || 'year unavailable'}) over later peaks.`
+      : '';
+
+  return [open, bestLine, lines.join(' '), guard].filter(Boolean).join(' ');
+}
+
+function extractHouseClaimConflicts(answerText, immutableChartState) {
+  const text = String(answerText || '');
+  const map = immutableChartState || {};
+  if (!text.trim() || !map || typeof map !== 'object') return [];
+
+  const expectedHouseByPlanet = {};
+  for (let house = 1; house <= 12; house += 1) {
+    const key =
+      house === 1 ? '1st_House' : house === 2 ? '2nd_House' : house === 3 ? '3rd_House' : `${house}th_House`;
+    const rows = Array.isArray(map[key]) ? map[key] : [];
+    for (const label of rows) {
+      const planet = String(label || '').split('_')[0];
+      if (!planet) continue;
+      expectedHouseByPlanet[planet.toLowerCase()] = house;
+    }
+  }
+
+  const planets = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
+  const conflicts = [];
+  for (const planet of planets) {
+    const expected = expectedHouseByPlanet[planet.toLowerCase()];
+    if (!Number.isFinite(expected)) continue;
+    const re = new RegExp(`\\b${planet}\\b[^\\n.]{0,48}?\\b(?:in|at)\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s+house\\b`, 'gi');
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      const claimed = Number(match[1]);
+      if (claimed >= 1 && claimed <= 12 && claimed !== expected) {
+        conflicts.push({
+          planet,
+          expectedHouse: expected,
+          claimedHouse: claimed
+        });
+      }
+    }
+  }
+  return conflicts;
+}
+
+function extractLordshipConflicts(answerText, immutableSignLordship) {
+  const text = String(answerText || '');
+  const map = immutableSignLordship && typeof immutableSignLordship === 'object' ? immutableSignLordship : null;
+  if (!text.trim() || !map) return [];
+
+  const planets = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
+  const signs = [
+    'Aries',
+    'Taurus',
+    'Gemini',
+    'Cancer',
+    'Leo',
+    'Virgo',
+    'Libra',
+    'Scorpio',
+    'Sagittarius',
+    'Capricorn',
+    'Aquarius',
+    'Pisces'
+  ];
+
+  const planetByLower = Object.fromEntries(planets.map((p) => [p.toLowerCase(), p]));
+  const signByLower = Object.fromEntries(signs.map((s) => [s.toLowerCase(), s]));
+  const conflicts = [];
+
+  const addConflict = (signRaw, claimedPlanetRaw) => {
+    const sign = signByLower[String(signRaw || '').toLowerCase()];
+    const claimedPlanet = planetByLower[String(claimedPlanetRaw || '').toLowerCase()];
+    if (!sign || !claimedPlanet) return;
+    const expectedPlanet = map[sign];
+    if (!expectedPlanet) return;
+    if (String(expectedPlanet).toLowerCase() !== String(claimedPlanet).toLowerCase()) {
+      conflicts.push({
+        sign,
+        expectedLord: expectedPlanet,
+        claimedLord: claimedPlanet
+      });
+    }
+  };
+
+  // "Mercury is lord of Cancer"
+  const p1 = /\b(Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)\b[^.\n]{0,40}?\b(?:is|as)\b[^.\n]{0,20}?\b(?:lord|owner)\b[^.\n]{0,20}?\bof\b[^.\n]{0,10}?\b(Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)\b/gi;
+  let m1;
+  while ((m1 = p1.exec(text)) !== null) {
+    addConflict(m1[2], m1[1]);
+  }
+
+  // "lord of Cancer is Mercury"
+  const p2 = /\blord\b[^.\n]{0,10}?\bof\b[^.\n]{0,10}?\b(Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)\b[^.\n]{0,30}?\b(?:is|:)\b[^.\n]{0,10}?\b(Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)\b/gi;
+  let m2;
+  while ((m2 = p2.exec(text)) !== null) {
+    addConflict(m2[1], m2[2]);
+  }
+
+  return conflicts;
+}
+
 async function deterministicAstroFactsReply(chart) {
-  const today = DateTime.now().setZone('Asia/Kathmandu').toISODate();
-  const day = await buildPanchangaForDate(today);
-  const tithi = day.tithiNepali && day.pakshaNepali ? `${day.pakshaNepali} ${day.tithiNepali}` : day.tithi;
-  return `आजको मिति ${day.bsDateNepali} गते हो। आजको तिथि ${tithi} हो, नक्षत्र ${day.nakshatra} हो, र चन्द्र राशि ${day.moonSign} हो।`;
+  // Use real-time Nepal snapshot (not fixed 6:00 AM daily anchor) so
+  // "right now" questions don't feel stale around intraday transitions.
+  const nowKtm = DateTime.now().setZone('Asia/Kathmandu');
+  const ascForTransit = resolveAscendantAbsoluteDegree(chart);
+  const snapshot = await buildTransitSnapshotAtUtc(nowKtm.toUTC().toISO(), ascForTransit);
+  const astro = buildDeterministicAstroContextFromTransit(snapshot);
+  const nepali = buildKathmanduDatePayload();
+  const tithi = astro.currentTithiNepali && astro.currentTithiPakshaNepali
+    ? `${astro.currentTithiPakshaNepali} ${astro.currentTithiNepali}`
+    : astro.currentTithi || '—';
+  const timeLabel = nowKtm.toFormat('hh:mm a');
+  return `अहिले ${timeLabel} (नेपाल समय) अनुसार आजको मिति ${nepali.bsDateNepali} गते हो। तिथि ${tithi}, नक्षत्र ${astro.currentNakshatra || '—'}, र चन्द्र राशि ${astro.moonSign || '—'} हो। यो उत्तर real-time खगोलीय snapshot बाट निकालिएको हो।`;
 }
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
@@ -240,6 +398,16 @@ async function runMessage({
   conversationHistory,
   surfaceMode
 }) {
+  const chartTruth = buildChartTruth(chart);
+
+  // Route chart-structure questions first so words like "चन्द्रमा/राशि" inside
+  // a house/yuti question do not get hijacked by daily panchanga shortcut.
+  const truthAnswer = truthResponseForMessage(message, chartTruth);
+  if (truthAnswer) {
+    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
+    return { mode, intent: 'chart_truth', answer: truthAnswer };
+  }
+
   if (isTomorrowPanchangaRequest(message)) {
     const tomorrow = DateTime.now().setZone('Asia/Kathmandu').plus({ days: 1 }).toISODate();
     const row = await buildPanchangaForDate(tomorrow);
@@ -251,7 +419,7 @@ async function runMessage({
     const lines = rows.map((r, i) => `${i + 1}. ${renderPanchangaLine(r)}`);
     return { mode: 'message', intent: 'deterministic_panchanga', answer: `यो हप्ताको पञ्चाङ्ग (७ दिन):\n${lines.join('\n')}` };
   }
-  if (isDeterministicAstroFactRequest(message)) {
+  if (isExplicitDailyAstroQuery(message) && isDeterministicAstroFactRequest(message)) {
     return { mode: 'message', intent: 'deterministic_panchanga', answer: await deterministicAstroFactsReply(chart) };
   }
 
@@ -268,6 +436,14 @@ async function runMessage({
     const err = new Error('Invalid chart data');
     err.statusCode = 400;
     throw err;
+  }
+
+  // Hard guard: fame/past-age timing must come from precomputed table, not
+  // model improvisation that can accidentally use "current" dasha/transit.
+  if (intent === 'fame_timing') {
+    const answer = buildFameTimingDeterministicReply(ctx.fameTiming, message);
+    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
+    return { mode, intent, answer };
   }
 
   const systemBase = buildSystemPrompt({
@@ -319,6 +495,37 @@ async function runMessage({
       answer = proseFallback(message);
     }
   }
+
+  const conflicts = extractHouseClaimConflicts(answer, ctx.immutableChartState);
+  const lordshipConflicts = extractLordshipConflicts(answer, ctx.immutableSignLordship);
+  if (conflicts.length > 0 || lordshipConflicts.length > 0) {
+    const retrySystem =
+      systemText +
+      '\n\nCRITICAL CORRECTION: Your previous answer contradicted immutableChartState planet-house mapping. ' +
+      `House conflicts: ${JSON.stringify(conflicts)}. Lordship conflicts: ${JSON.stringify(lordshipConflicts)}. ` +
+      'Rewrite the answer and keep every planet in its exact immutable house. Also keep sign lordship exactly as immutableSignLordship.';
+    raw = await invokeModel({
+      systemText: retrySystem,
+      userMessage: message,
+      conversationHistory: conversationHistory || [],
+      maxTokens,
+      temperature: Math.min(0.68, temperature)
+    });
+    answer = formatAnswer(raw, message);
+  }
+
+  const finalHouseConflicts = extractHouseClaimConflicts(answer, ctx.immutableChartState);
+  const finalLordshipConflicts = extractLordshipConflicts(answer, ctx.immutableSignLordship);
+  if (finalHouseConflicts.length > 0 || finalLordshipConflicts.length > 0) {
+    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
+    return {
+      mode,
+      intent,
+      answer:
+        'I could not safely finalize this reply because it conflicted with the chart truth map. Please ask again in a shorter form (house/planet/lordship), and I will answer strictly from chart facts.'
+    };
+  }
+
   const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
   return { mode, intent, answer };
 }

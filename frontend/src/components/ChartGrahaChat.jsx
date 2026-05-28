@@ -6,15 +6,9 @@ import { readPremiumDemoUnlock, writePremiumDemoUnlock } from '../lib/chartAcces
 import { apiFetch, withApiBase } from '../lib/apiBase';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
+const API_CHAT_SESSION = withApiBase('/api/v1/chat-query');
 const AUTO_GREETING_ENABLED =
   (import.meta.env.VITE_GRAHAPATH_AUTO_GREETING ?? (import.meta.env.DEV ? 'false' : 'true')) === 'true';
-const DAILY_FOCUS_PROMPTS = [
-  'What does today suggest for me?',
-  'What energy should I avoid today?',
-  'What timing feels strongest today?',
-  'What emotional pattern is active today?',
-  'What should I focus on today?'
-];
 
 function prettifyAssistantText(raw) {
   const text = String(raw || '').trim();
@@ -94,7 +88,8 @@ export default function ChartGrahaChat({
   initialInsights = null,
   teaserMode = false,
   teaserQuestionLimit = 2,
-  onTeaserLock
+  onTeaserLock,
+  sessionChatMode = false
 }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -109,10 +104,12 @@ export default function ChartGrahaChat({
   const bottomRef = useRef(null);
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetIdRef = useRef(null);
-  const suggestedPrompts = useMemo(() => {
-    if (forceUnlocked && !teaserMode) return DAILY_FOCUS_PROMPTS;
-    return buildContextualPrompts(chart, messages);
-  }, [chart, messages, forceUnlocked, teaserMode]);
+  const suggestedPrompts = useMemo(() => buildContextualPrompts(chart, messages), [chart, messages]);
+  const hasBoundedUnlockBudget =
+    (forceUnlocked || premiumDemoUnlocked) &&
+    Number.isFinite(Number(initialInsights)) &&
+    Number(initialInsights) < 900 &&
+    String(premiumEmail || '').trim().length === 0;
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, []);
@@ -195,6 +192,19 @@ export default function ChartGrahaChat({
     setMessages([]);
     setInput('');
 
+    if (sessionChatMode) {
+      const lagna = chart?.ascendant || 'your';
+      const moon = chart?.moonSign || 'chart';
+      setMessages([
+        {
+          role: 'assistant',
+          content: `Your assigned ${lagna}-${moon} chart is loaded. Ask directly about houses, dasha timing, relationship patterns, or remedies.`
+        }
+      ]);
+      setGreetingLoading(false);
+      return () => {};
+    }
+
     let cancelled = false;
     if (!AUTO_GREETING_ENABLED) {
       const lagna = chart?.ascendant || 'your';
@@ -270,7 +280,7 @@ export default function ChartGrahaChat({
     return () => {
       cancelled = true;
     };
-  }, [chartKey, chart]);
+  }, [chartKey, chart, sessionChatMode]);
 
   async function sendChat(mode = 'message') {
     const lockedInTeaser = teaserMode && !forceUnlocked && insightsLeft <= 0 && mode !== 'greeting';
@@ -300,7 +310,22 @@ export default function ChartGrahaChat({
     const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : teaserMode ? 'free' : 'free';
 
     try {
-      const res = await apiFetch(API_CHAT_V2, {
+      const endpoint = sessionChatMode ? API_CHAT_SESSION : API_CHAT_V2;
+      const payload = sessionChatMode
+        ? {
+            message: text,
+            conversationHistory: historyForApi
+          }
+        : {
+            chart,
+            message: text,
+            userPlan,
+            premiumEmail: premiumEmail || undefined,
+            conversationHistory: historyForApi,
+            surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
+            challengeToken: challengeToken || undefined
+          };
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -309,15 +334,7 @@ export default function ChartGrahaChat({
           ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {}),
           ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
         },
-        body: JSON.stringify({
-          chart,
-          message: text,
-          userPlan,
-          premiumEmail: premiumEmail || undefined,
-          conversationHistory: historyForApi,
-          surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
-          challengeToken: challengeToken || undefined
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -344,7 +361,14 @@ export default function ChartGrahaChat({
       const reply = typeof data.answer === 'string' ? data.answer.trim() : '';
       setMessages((prev) => [...prev, { role: 'assistant', content: prettifyAssistantText(reply || '…') }]);
       if (typeof data.remainingInsights === 'number') {
-        setInsightsLeft(Math.max(0, data.remainingInsights));
+        const normalizedServerRemaining = Math.max(0, Number(data.remainingInsights));
+        if (hasBoundedUnlockBudget && normalizedServerRemaining >= 900) {
+          // Backend "demo premium" fallback uses 999 for unlimited mode.
+          // Keep the UI's bounded pack (e.g. 10/30/50) when no premium account email is bound.
+          setInsightsLeft((prev) => Math.max(0, prev - 1));
+        } else {
+          setInsightsLeft(normalizedServerRemaining);
+        }
       } else if (!forceUnlocked && !premiumDemoUnlocked) {
         setInsightsLeft((prev) => (prev > 0 ? prev - 1 : 0));
       }
@@ -386,6 +410,7 @@ export default function ChartGrahaChat({
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-violet-300/70 sm:tracking-[0.38em]">GrahaPath AI</p>
           <h3 className="mt-1 font-serif text-lg text-cream sm:text-xl">Ask your chart</h3>
+          <p className="mt-1 text-[11px] text-ivory/45">GrahaPath AI can make mistakes. Verify important details.</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <p className="text-[11px] text-ivory/45">{teaserMode ? 'Free demo teaser mode' : 'Live Chart Intelligence'}</p>

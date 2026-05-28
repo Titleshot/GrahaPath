@@ -8,6 +8,8 @@ import PaymentPreviewModal from './components/PaymentPreviewModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
 import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
+import InviteAccessPanel from './components/InviteAccessPanel';
+import AuthLoginGate from './components/AuthLoginGate';
 import { getClientFingerprint } from './lib/clientFingerprint';
 import { API_BASE, apiFetch, withApiBase } from './lib/apiBase';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
@@ -20,9 +22,17 @@ import {
 } from './lib/chartFingerprint';
 
 const API_URL = withApiBase('/api/generate-chart');
+const ADMIN_GENERATE_TOKEN_URL = withApiBase('/api/admin/charts/generate');
 const PREMIUM_CHECKOUT_URL = withApiBase('/api/premium/checkout-session');
 const PREMIUM_RESTORE_URL = withApiBase('/api/premium/restore');
 const KOFI_PENDING_KEY = 'grahapath:kofi-pending';
+const INVITE_GATE_ENABLED =
+  String(import.meta.env.VITE_ACCESS_GATING_ENABLED || '').toLowerCase() === 'true';
+const AUTH_LOGIN_ENABLED =
+  String(import.meta.env.VITE_ACCESS_AUTH_ENABLED || '').toLowerCase() === 'true';
+const AUTH_ME_URL = withApiBase('/api/auth/me');
+const AUTH_CHART_URL = withApiBase('/api/auth/chart');
+const VIEW_TOKEN_API_PREFIX = withApiBase('/api/view');
 
 /** Vercel/static hosts have no `/api` proxy unless you set API base URL at build time. */
 const showProdApiMisconfig =
@@ -93,6 +103,8 @@ function normalizeBirthTime(displayTime) {
 }
 
 export default function App() {
+  const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(!AUTH_LOGIN_ENABLED);
   const [routePath, setRoutePath] = useState(() =>
     typeof window !== 'undefined' ? window.location.pathname : '/'
   );
@@ -119,6 +131,94 @@ export default function App() {
   useEffect(() => {
     initAnalytics();
   }, []);
+
+  useEffect(() => {
+    if (!AUTH_LOGIN_ENABLED) return;
+    let cancelled = false;
+    apiFetch(AUTH_ME_URL)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data?.user) setAuthUser(data.user);
+        else setAuthUser(null);
+      })
+      .catch(() => {
+        if (!cancelled) setAuthUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!AUTH_LOGIN_ENABLED) return;
+    if (!authUser || authUser.role === 'admin') return;
+    let cancelled = false;
+    apiFetch(AUTH_CHART_URL)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data?.chart && typeof data.chart === 'object') {
+          setChart(data.chart);
+          setPaidUnlocked(true);
+          const remaining = Number(data?.insights?.remaining);
+          if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
+        } else {
+          setChart(null);
+          setError(
+            'No chart assigned to this account yet. Please contact admin to assign your chart first.'
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setChart(null);
+          setError('Could not load assigned chart. Please try again.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!String(routePath || '').startsWith('/view/')) return;
+    const token = String(routePath || '').replace('/view/', '').trim();
+    if (!token) return;
+    let cancelled = false;
+    setIsLoading(true);
+    setError('');
+    apiFetch(`${VIEW_TOKEN_API_PREFIX}/${encodeURIComponent(token)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data?.message || `Token view failed (${res.status})`);
+        if (data?.chart && typeof data.chart === 'object') {
+          setChart(data.chart);
+          setPaidUnlocked(true);
+          setTokenSessionMode(true);
+          const remaining = Number(data?.insights?.remaining);
+          if (Number.isFinite(remaining)) setPremiumInsights(Math.max(0, remaining));
+          window.history.replaceState(window.history.state || {}, '', '/');
+          setRoutePath('/');
+        } else {
+          throw new Error('Assigned chart could not be loaded for this token.');
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message || 'Could not open shared chart link.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [routePath]);
 
   useEffect(() => {
     trackPageView(routePath || '/');
@@ -188,6 +288,12 @@ export default function App() {
   const [showPaymentPreview, setShowPaymentPreview] = useState(false);
   const [demoUsed, setDemoUsed] = useState(false);
   const [chartFingerprint, setChartFingerprint] = useState(null);
+  const [adminAssignAccessId, setAdminAssignAccessId] = useState('');
+  const [adminAssignPassword, setAdminAssignPassword] = useState('');
+  const [adminShareMode, setAdminShareMode] = useState('credentials');
+  const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
+  const [adminMagicLink, setAdminMagicLink] = useState('');
+  const [tokenSessionMode, setTokenSessionMode] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState('');
   const [premiumStatus, setPremiumStatus] = useState('');
@@ -293,6 +399,7 @@ export default function App() {
     setSelectedTier('full');
     setPremiumEmail('');
     setPremiumInsights(null);
+    setAdminMagicLink('');
 
     let chartRequestTimer;
     try {
@@ -318,6 +425,15 @@ export default function App() {
                   ? { displayName: formData.location.displayName }
                   : {})
               }
+            }
+          : {}),
+        ...(AUTH_LOGIN_ENABLED &&
+        authUser?.role === 'admin' &&
+        adminShareMode === 'credentials' &&
+        String(adminAssignAccessId || '').trim()
+          ? {
+              assignAccessId: String(adminAssignAccessId).trim().toLowerCase(),
+              assignPassword: String(adminAssignPassword || '').trim() || undefined
             }
           : {}),
       };
@@ -364,7 +480,15 @@ export default function App() {
       const chartAbort = new AbortController();
       chartRequestTimer = window.setTimeout(() => chartAbort.abort(), 120000);
 
-      const response = await apiFetch(API_URL, {
+      const useMagicLinkFlow =
+        AUTH_LOGIN_ENABLED && authUser?.role === 'admin' && String(adminShareMode || '').toLowerCase() === 'magic';
+      const endpoint = useMagicLinkFlow ? ADMIN_GENERATE_TOKEN_URL : API_URL;
+      if (useMagicLinkFlow) {
+        payload.clientName = String(formData.name || '').trim();
+        const limit = Math.max(1, Math.trunc(Number(adminInsightsLimit) || 55));
+        payload.insightsLimit = limit;
+      }
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -386,6 +510,21 @@ export default function App() {
 
       if (!response.ok) {
         throw new Error(formatGenerateChartFailure(response, data));
+      }
+
+      if (useMagicLinkFlow) {
+        if (typeof data?.viewUrl === 'string' && data.viewUrl.trim()) {
+          setAdminMagicLink(data.viewUrl.trim());
+        }
+        if (data?.chart && typeof data.chart === 'object') {
+          setChart(data.chart);
+          setPaidUnlocked(false);
+        }
+        trackEvent('admin_chart_link_generated', {
+          has_location: Boolean(formData.location),
+          insights_limit: Number(payload.insightsLimit) || 55
+        });
+        return;
       }
 
       // Generate chart fingerprint for demo protection
@@ -497,6 +636,18 @@ export default function App() {
       setShareStatus('Could not copy automatically. Please copy from your address bar.');
     }
     window.setTimeout(() => setShareStatus(''), 2600);
+  }
+
+  async function handleCopyMagicLink() {
+    const value = String(adminMagicLink || '').trim();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setShareStatus('Magic link copied. Share it with the assigned client.');
+    } catch {
+      setShareStatus('Could not copy automatically. Please copy the link manually.');
+    }
+    window.setTimeout(() => setShareStatus(''), 2800);
   }
 
   function buildFeedbackMailto() {
@@ -730,6 +881,17 @@ export default function App() {
     );
   }
 
+  if (AUTH_LOGIN_ENABLED && !tokenSessionMode && (!authChecked || !authUser)) {
+    if (!authChecked) {
+      return (
+        <main className="min-h-screen bg-void text-ivory flex items-center justify-center">
+          <p className="text-sm text-ivory/70">Checking access...</p>
+        </main>
+      );
+    }
+    return <AuthLoginGate onLoginSuccess={(user) => setAuthUser(user || { accessId: 'user' })} />;
+  }
+
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
       {showProdApiMisconfig ? (
@@ -775,16 +937,18 @@ export default function App() {
               >
                 Explore the experience
               </a>
-              <button
-                onClick={() => setShowPaymentPreview(true)}
-                className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
-              >
-                Unlock my access
-              </button>
+              {!AUTH_LOGIN_ENABLED ? (
+                <button
+                  onClick={() => setShowPaymentPreview(true)}
+                  className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
+                >
+                  Unlock my access
+                </button>
+              ) : null}
             </div>
           </div>
         </motion.header>
-        {premiumStatus ? (
+        {!AUTH_LOGIN_ENABLED && premiumStatus ? (
           <div
             className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${
               premiumStatusTone === 'warning'
@@ -835,6 +999,8 @@ export default function App() {
           </div>
         ) : null}
 
+        {INVITE_GATE_ENABLED ? <InviteAccessPanel /> : null}
+
         <section
           className={`grid flex-1 gap-6 ${
             hasMeaningfulRightPanel
@@ -847,19 +1013,78 @@ export default function App() {
               hasMeaningfulRightPanel ? '' : 'mx-auto w-full max-w-[900px]'
             }`}
           >
-            <BirthDetailsForm
-              formData={formData}
-              onChange={handleFormChange}
-              onSubmit={handleGenerateChart}
-              isLoading={isLoading}
-              onLocationSelect={handleLocationSelect}
-              onLifeEventsToggle={handleLifeEventsToggle}
-              onLifeEventAdd={handleLifeEventAdd}
-              onLifeEventRemove={handleLifeEventRemove}
-              onLifeEventFieldChange={handleLifeEventFieldChange}
-              demoUsed={demoUsed}
-              onRestorePremium={() => setShowPaymentPreview(true)}
-            />
+            {AUTH_LOGIN_ENABLED && authUser?.role !== 'admin' ? (
+              <div className="rounded-3xl border border-gold/20 bg-black/30 p-5 text-sm text-ivory/75">
+                This account cannot generate new charts. Your assigned chart appears on the right panel.
+              </div>
+            ) : (
+              <>
+                {AUTH_LOGIN_ENABLED && authUser?.role === 'admin' ? (
+                  <div className="mb-3 rounded-2xl border border-emerald-300/25 bg-emerald-500/10 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-100/80">Admin chart assignment</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <label className="text-[11px] text-emerald-50/85">
+                        Delivery mode
+                        <select
+                          value={adminShareMode}
+                          onChange={(e) => setAdminShareMode(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-emerald-200/30 bg-black/35 px-3 py-2 text-xs text-cream outline-none"
+                        >
+                          <option value="credentials">Username + Password</option>
+                          <option value="magic">Magic link token</option>
+                        </select>
+                      </label>
+                      {adminShareMode === 'magic' ? (
+                        <label className="text-[11px] text-emerald-50/85">
+                          Insights limit
+                          <input
+                            value={adminInsightsLimit}
+                            onChange={(e) => setAdminInsightsLimit(e.target.value)}
+                            placeholder="55"
+                            className="mt-1 w-full rounded-xl border border-emerald-200/30 bg-black/35 px-3 py-2 text-xs text-cream outline-none"
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {adminShareMode === 'credentials' ? (
+                        <>
+                          <input
+                            value={adminAssignAccessId}
+                            onChange={(e) => setAdminAssignAccessId(e.target.value)}
+                            placeholder="Assign generated chart to accessId"
+                            className="w-full rounded-xl border border-emerald-200/30 bg-black/35 px-3 py-2 text-xs text-cream outline-none"
+                          />
+                          <input
+                            value={adminAssignPassword}
+                            onChange={(e) => setAdminAssignPassword(e.target.value)}
+                            placeholder="Password (optional, auto if blank)"
+                            className="w-full rounded-xl border border-emerald-200/30 bg-black/35 px-3 py-2 text-xs text-cream outline-none"
+                          />
+                        </>
+                      ) : (
+                        <p className="sm:col-span-2 text-[11px] text-emerald-100/80">
+                          In magic-link mode, credentials are not required. After generate, copy the secure link or scan QR.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+                <BirthDetailsForm
+                  formData={formData}
+                  onChange={handleFormChange}
+                  onSubmit={handleGenerateChart}
+                  isLoading={isLoading}
+                  onLocationSelect={handleLocationSelect}
+                  onLifeEventsToggle={handleLifeEventsToggle}
+                  onLifeEventAdd={handleLifeEventAdd}
+                  onLifeEventRemove={handleLifeEventRemove}
+                  onLifeEventFieldChange={handleLifeEventFieldChange}
+                  demoUsed={demoUsed}
+                  onRestorePremium={() => setShowPaymentPreview(true)}
+                />
+              </>
+            )}
           </div>
 
           {hasMeaningfulRightPanel ? (
@@ -889,6 +1114,7 @@ export default function App() {
                         selectedTier={selectedTier}
                         premiumEmail={premiumEmail}
                         remainingInsights={premiumInsights}
+                        sessionChatMode={tokenSessionMode}
                       />
                     ) : demoUsed ? (
                       <motion.div
@@ -912,11 +1138,63 @@ export default function App() {
                             Unlock Full Analysis
                           </button>
                         </div>
-                        <DemoExperience chart={chart} onUnlock={() => setShowPaymentPreview(true)} />
+                        <DemoExperience
+                          chart={chart}
+                          sessionChatMode={tokenSessionMode}
+                          onUnlock={() => {
+                            if (!AUTH_LOGIN_ENABLED) setShowPaymentPreview(true);
+                          }}
+                        />
                       </motion.div>
                     ) : (
-                      <DemoExperience chart={chart} onUnlock={() => setShowPaymentPreview(true)} />
+                      <DemoExperience
+                        chart={chart}
+                        sessionChatMode={tokenSessionMode}
+                        onUnlock={() => {
+                          if (!AUTH_LOGIN_ENABLED) setShowPaymentPreview(true);
+                        }}
+                      />
                     )}
+                    {AUTH_LOGIN_ENABLED && authUser?.role === 'admin' && chart?.adminProvisioning ? (
+                      <section className="rounded-2xl border border-emerald-300/35 bg-emerald-500/10 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">User Credentials Issued</p>
+                        <p className="mt-2 text-sm text-emerald-100/95">
+                          Username: <span className="font-mono">{chart.adminProvisioning.accessId}</span>
+                        </p>
+                        <p className="mt-1 text-sm text-emerald-100/95">
+                          Password: <span className="font-mono">{chart.adminProvisioning.issuedPassword}</span>
+                        </p>
+                        <p className="mt-2 text-xs text-emerald-100/75">
+                          Share this username and password only with the assigned user.
+                        </p>
+                      </section>
+                    ) : null}
+                    {AUTH_LOGIN_ENABLED && authUser?.role === 'admin' && adminMagicLink ? (
+                      <section className="rounded-2xl border border-sky-300/35 bg-sky-500/10 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-sky-100/80">Secure Client Link Issued</p>
+                        <p className="mt-2 break-all rounded-xl border border-sky-200/25 bg-black/25 px-3 py-2 text-xs text-sky-50/95">
+                          {adminMagicLink}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCopyMagicLink}
+                            className="rounded-full border border-sky-300/55 bg-sky-300/15 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/25"
+                          >
+                            Copy magic link
+                          </button>
+                          {shareStatus ? <span className="text-[11px] text-sky-100/85">{shareStatus}</span> : null}
+                        </div>
+                        <div className="mt-4">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(adminMagicLink)}`}
+                            alt="QR code for secure chart link"
+                            className="h-40 w-40 rounded-xl border border-sky-200/30 bg-white p-1"
+                            loading="lazy"
+                          />
+                        </div>
+                      </section>
+                    ) : null}
                     <section className="rounded-2xl border border-gold/18 bg-black/25 p-4 sm:p-5">
                       <p className="text-xs uppercase tracking-[0.22em] text-gold/70">Continue the experience</p>
                       <h3 className="mt-2 font-serif text-xl text-gold-100">Share or leave feedback</h3>
@@ -1102,11 +1380,12 @@ export default function App() {
           )}
         </section>
       </div>
-      <PaymentPreviewModal
-        open={showPaymentPreview}
-        onClose={() => setShowPaymentPreview(false)}
-        checkoutRetryMode={checkoutRetryMode}
-        onSimulateSuccess={async ({ tier, email }) => {
+      {!AUTH_LOGIN_ENABLED ? (
+        <PaymentPreviewModal
+          open={showPaymentPreview}
+          onClose={() => setShowPaymentPreview(false)}
+          checkoutRetryMode={checkoutRetryMode}
+          onSimulateSuccess={async ({ tier, email }) => {
           setPremiumStatusTone('success');
           setCheckoutRetryMode(false);
           const normalizedTier = tier === 'quick' ? 'quick' : 'full';
@@ -1185,8 +1464,9 @@ export default function App() {
           }, 120);
           return { message };
         }}
-        suggestedRestoreEmail={pendingKofiRestore?.email || ''}
-      />
+          suggestedRestoreEmail={pendingKofiRestore?.email || ''}
+        />
+      ) : null}
       <footer className="relative z-10 mx-auto mt-4 w-full max-w-[1400px] px-4 pb-8 text-center text-xs text-ivory/55 sm:px-6 lg:px-10">
         <a
           className="hover:text-gold"

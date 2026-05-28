@@ -6,7 +6,8 @@ export default function PaidUnlockedExperience({
   chart,
   selectedTier = 'full',
   premiumEmail = '',
-  remainingInsights = null
+  remainingInsights = null,
+  sessionChatMode = false
 }) {
   const isQuick = selectedTier === 'quick';
   const fallbackInsights = isQuick ? 12 : 50;
@@ -33,6 +34,7 @@ export default function PaidUnlockedExperience({
             premiumLabel={premiumLabel}
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
+            sessionChatMode={sessionChatMode}
           />
         </>
       ) : (
@@ -43,6 +45,7 @@ export default function PaidUnlockedExperience({
             premiumLabel={premiumLabel}
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
+            sessionChatMode={sessionChatMode}
           />
         </>
       )}

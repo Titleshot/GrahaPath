@@ -1,8 +1,13 @@
 const express = require('express');
 const { grahaPathChat, lifePhaseValidationHandler, paymentProofStub } = require('../controllers/chatController');
 const { grahaPathChatV2 } = require('../controllers/chatV2Controller');
+const { requireInviteAccess } = require('../middlewares/requireInviteAccess');
+const { requireUserAuth } = require('../middlewares/requireUserAuth');
 
 const router = express.Router();
+
+router.use(requireUserAuth);
+router.use(requireInviteAccess);
 
 router.post('/chat-v2', grahaPathChatV2);
 // Some proxies forward the /api prefix to Node unchanged — register both paths.

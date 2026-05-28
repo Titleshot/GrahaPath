@@ -1,5 +1,6 @@
 const { processChatV2Request } = require('../services/grahapathChat/chatService');
 const { findPremiumByEmail, consumePremiumInsight } = require('../services/premiumAccessService');
+const { consumeInsight } = require('../services/authUserService');
 const {
   consumeUserRateToken,
   buildCacheKey,
@@ -82,6 +83,7 @@ function isDeterministicPanchangaQuery(message) {
  */
 function grahaPathChatV2(req, res, next) {
   (async () => {
+    const authEnabled = String(process.env.ACCESS_AUTH_ENABLED || '').toLowerCase() === 'true';
     const provider = String(process.env.CHAT_PROVIDER || 'local').trim().toLowerCase();
     const offlineAi = process.env.GEMINI_OFFLINE_AI === 'true';
     const hasGemini = Boolean(process.env.GEMINI_API_KEY);
@@ -142,6 +144,13 @@ function grahaPathChatV2(req, res, next) {
       clientFingerprint
     );
     const sessionProfileHash = chart?.profileHash || profileHash;
+    const assignedProfileHash = String(req.authUser?.assignedProfileHash || '').trim();
+    if (assignedProfileHash && sessionProfileHash !== assignedProfileHash) {
+      return res.status(403).json({
+        error: 'ProfileAccessDenied',
+        message: 'This login is bound to a different chart profile.'
+      });
+    }
 
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
@@ -201,7 +210,16 @@ function grahaPathChatV2(req, res, next) {
           mode: 'greeting',
           intent: 'greeting',
           answer: cached,
-          remainingInsights: demoPremium ? 999 : freeLimit,
+          remainingInsights: authEnabled
+            ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
+            : demoPremium
+              ? 999
+              : freeLimit,
+          insightPhase: authEnabled
+            ? Number(req.authUser?.insightsUsed || 0) < 5
+              ? 'test'
+              : 'full'
+            : null,
           cached: true
         });
       }
@@ -236,7 +254,18 @@ function grahaPathChatV2(req, res, next) {
         mode: 'greeting',
         intent: 'greeting',
         answer,
-        remainingInsights: premiumCounter ? premiumCounter.remainingInsights : demoPremium ? 999 : freeLimit,
+        remainingInsights: authEnabled
+          ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
+          : premiumCounter
+            ? premiumCounter.remainingInsights
+            : demoPremium
+              ? 999
+              : freeLimit,
+        insightPhase: authEnabled
+          ? Number(req.authUser?.insightsUsed || 0) < 5
+            ? 'test'
+            : 'full'
+          : null,
         cached: false
       });
     }
@@ -264,7 +293,7 @@ function grahaPathChatV2(req, res, next) {
       });
     }
 
-    if (premiumEmail) {
+    if (!authEnabled && premiumEmail) {
       premiumCounter = await consumePremiumInsight(premiumEmail);
       if (!premiumCounter.allowed) {
         return res.status(402).json({
@@ -275,16 +304,34 @@ function grahaPathChatV2(req, res, next) {
       }
     }
 
-    const deviceToken = readDeviceTokenFromRequest(req);
-    const device = verifyDeviceToken(deviceToken);
-    const freeGate = demoPremium
-      ? { allowed: true, used: 0, limit: freeLimit }
-      : await checkAndUseFreeMessageBound({
-          profileHash,
-          ip: requester,
-          deviceId: device.valid ? device.payload.did : 'unknown-device',
-          fallbackIdentityHash: identityHash
+    let freeGate = { allowed: true, used: 0, limit: freeLimit };
+    let authInsight = null;
+    if (authEnabled) {
+      authInsight = consumeInsight(req.authUser?.accessId || '');
+      if (!authInsight.allowed) {
+        return res.status(402).json({
+          error: 'InsightsExhausted',
+          message: 'Your 55 insights are exhausted. Contact admin for renewal.',
+          remainingInsights: 0
         });
+      }
+      freeGate = {
+        allowed: true,
+        used: authInsight.insightsUsed,
+        limit: authInsight.insightsLimit
+      };
+    } else {
+      const deviceToken = readDeviceTokenFromRequest(req);
+      const device = verifyDeviceToken(deviceToken);
+      freeGate = demoPremium
+        ? { allowed: true, used: 0, limit: freeLimit }
+        : await checkAndUseFreeMessageBound({
+            profileHash,
+            ip: requester,
+            deviceId: device.valid ? device.payload.did : 'unknown-device',
+            fallbackIdentityHash: identityHash
+          });
+    }
     if (!freeGate.allowed) {
       incCounter('security.free_tier_block');
       return res.status(402).json({
@@ -306,9 +353,12 @@ function grahaPathChatV2(req, res, next) {
           answer: cached,
           remainingInsights: premiumCounter
             ? premiumCounter.remainingInsights
-            : demoPremium
-              ? 999
-              : Math.max(0, freeGate.limit - freeGate.used),
+            : authEnabled
+              ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
+              : demoPremium
+                ? 999
+                : Math.max(0, freeGate.limit - freeGate.used),
+          insightPhase: authEnabled ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full') : null,
           cached: true,
           freeUsed: freeGate.used,
           freeLimit: freeGate.limit
@@ -339,9 +389,12 @@ function grahaPathChatV2(req, res, next) {
       answer,
       remainingInsights: premiumCounter
         ? premiumCounter.remainingInsights
-        : demoPremium
-          ? 999
-          : Math.max(0, freeGate.limit - freeGate.used),
+        : authEnabled
+          ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
+          : demoPremium
+            ? 999
+              : Math.max(0, freeGate.limit - freeGate.used),
+      insightPhase: authEnabled ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full') : null,
       cached: false,
       freeUsed: freeGate.used,
       freeLimit: freeGate.limit

@@ -23,6 +23,7 @@ function devPreferViteProxy(apiBase) {
 }
 
 const API_BASE = devPreferViteProxy(import.meta.env.VITE_API_BASE_URL);
+const ACCESS_EMAIL_KEY = 'gp_access_email';
 
 export function withApiBase(path) {
   const cleanPath = String(path || '').trim();
@@ -34,8 +35,16 @@ export function withApiBase(path) {
 
 /** Fetch to GrahaPath API — always include cookies (session) when UI and API are on different hosts. */
 export function apiFetch(input, init = {}) {
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('x-gp-access-email') && typeof window !== 'undefined') {
+    const stored = String(window.localStorage.getItem(ACCESS_EMAIL_KEY) || '').trim().toLowerCase();
+    if (stored) {
+      headers.set('x-gp-access-email', stored);
+    }
+  }
   return fetch(input, {
     ...init,
+    headers,
     credentials: init.credentials ?? 'include'
   });
 }

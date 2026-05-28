@@ -32,6 +32,8 @@ function applyClientChartAccess(chart) {
 
   chart.access = { deepData: false, tier: 'basic' };
 
+  // timingCore (birth date + Moon longitude) is kept for dasha-by-age in chat — not exposed as prose.
+
   const ab = chart.astroBrain;
   if (ab && typeof ab === 'object') {
     chart.dashaSnapshot = {

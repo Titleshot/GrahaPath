@@ -27,11 +27,48 @@ function parseIsoDate(value) {
 }
 
 function birthDateTime(chart) {
-  const ad = chart?.birthDateAD;
-  if (!ad || typeof ad !== 'string') return null;
-  const zone = chart?.timezone || 'UTC';
-  const dt = DateTime.fromISO(ad, { zone });
-  return dt.isValid ? dt : DateTime.fromISO(`${ad}T12:00:00`, { zone });
+  const core = chart?.timingCore;
+  const zone = chart?.timezone || core?.timezone || 'UTC';
+  const ad = chart?.birthDateAD || core?.birthDateAD;
+  if (ad && typeof ad === 'string') {
+    const dt = DateTime.fromISO(ad, { zone });
+    if (dt.isValid) return dt;
+    const fallback = DateTime.fromISO(`${ad}T12:00:00`, { zone });
+    if (fallback.isValid) return fallback;
+  }
+  const local = chart?.localDateTime || core?.localDateTime;
+  if (local && typeof local === 'string') {
+    const dt = DateTime.fromISO(local, { setZone: true });
+    if (dt.isValid) return dt;
+  }
+  return null;
+}
+
+/**
+ * Free-tier API strips Moon absoluteDegree; timingCore restores it for Vimshottari only.
+ */
+function chartForTiming(chart) {
+  const core = chart?.timingCore;
+  if (!core) return chart;
+  const planets = Array.isArray(chart.planets)
+    ? chart.planets.map((p) => {
+        if (p?.name !== 'Moon') return p;
+        return {
+          ...p,
+          absoluteDegree: Number.isFinite(Number(p.absoluteDegree))
+            ? Number(p.absoluteDegree)
+            : core.moonAbsoluteDegree,
+          nakshatra: p.nakshatra || core.moonNakshatra
+        };
+      })
+    : [];
+  return {
+    ...chart,
+    birthDateAD: chart.birthDateAD || core.birthDateAD,
+    localDateTime: chart.localDateTime || core.localDateTime,
+    timezone: chart.timezone || core.timezone,
+    planets
+  };
 }
 
 function houseLordMap(chart) {
@@ -432,13 +469,17 @@ function mapPrimary(row) {
  * Precomputed timing facts for fame / age questions (injected into chat context).
  */
 function buildFameTimingContext(chart, userMessage = '') {
-  const birth = birthDateTime(chart);
-  const lords = houseLordMap(chart);
+  const chartCtx = chartForTiming(chart);
+  const birth = birthDateTime(chartCtx);
+  const lords = houseLordMap(chartCtx);
   const queryMode = detectFameQueryMode(userMessage);
-  const boosts = lifeEventAgeBoosts(chart);
-  const rawSegments = applyBoostsToSegments(iterAntardashaSegments(chart, SEGMENT_SCAN_MAX_AGE), boosts);
+  const boosts = lifeEventAgeBoosts(chartCtx);
+  const rawSegments = applyBoostsToSegments(iterAntardashaSegments(chartCtx, SEGMENT_SCAN_MAX_AGE), boosts);
+  const timingAvailable = rawSegments.length > 0 && birth?.isValid;
 
-  const topWindows = buildTopRecognitionWindows(chart, { limit: 6, queryMode, boosts });
+  const topWindows = timingAvailable
+    ? buildTopRecognitionWindows(chartCtx, { limit: 6, queryMode, boosts })
+    : [];
   const primaryRow = pickPrimaryWindow(rawSegments, queryMode);
   const primaryFromList = topWindows[0] || null;
   const primary = mapPrimary(
@@ -458,16 +499,19 @@ function buildFameTimingContext(chart, userMessage = '') {
   const fromMsg = extractAgesFromMessage(userMessage);
   const ageList = fromMsg.length ? fromMsg : queryMode === 'compare_ages' ? defaultAges : [];
 
-  const queriedAges = ageList
-    .map((age) => buildAgeTimingRow(chart, age, rawSegments, boosts))
-    .filter(Boolean)
+  const queriedAges = timingAvailable
+    ? ageList
+        .map((age) => buildAgeTimingRow(chartCtx, age, rawSegments, boosts))
+        .filter(Boolean)
+    : [];
+  const queriedAgesRanked = queriedAges
     .map((row) => ({
       ...row,
       matchVsTopWindow: matchLabel(row.recognitionScore, topScore)
     }))
     .sort((a, b) => b.recognitionScore - a.recognitionScore);
 
-  const bestAmongQueried = queriedAges[0] || null;
+  const bestAmongQueried = queriedAgesRanked[0] || null;
 
   const lifeEventHints =
     boosts.length > 0
@@ -481,6 +525,10 @@ function buildFameTimingContext(chart, userMessage = '') {
       : [];
 
   return {
+    timingDataStatus: timingAvailable ? 'ok' : 'unavailable',
+    timingDataNote: timingAvailable
+      ? null
+      : 'Vimshottari timeline could not be built from this chart payload (often missing timingCore or Moon data). Tell the user to regenerate the chart from birth details — do not claim there is no fame in the chart.',
     queryMode,
     birthYear: birth?.isValid ? birth.year : null,
     tenthLord: lords[10] || null,
@@ -489,7 +537,7 @@ function buildFameTimingContext(chart, userMessage = '') {
     currentDashaOnly: {
       note: 'For TODAY only — never use for childhood or past-age questions',
       ...(() => {
-        const d = calculateDashaAtDate(chart, DateTime.now(), { preferEngine: true });
+        const d = calculateDashaAtDate(chartCtx, DateTime.now(), { preferEngine: true });
         return {
           mahaDasha: d.mahaDasha,
           antarDasha: d.antarDasha,
@@ -498,9 +546,9 @@ function buildFameTimingContext(chart, userMessage = '') {
         };
       })()
     },
-    primaryRecognitionWindow: primary,
+    primaryRecognitionWindow: timingAvailable ? primary : null,
     topRecognitionWindows: topWindows.slice(0, 5),
-    queriedAges,
+    queriedAges: queriedAgesRanked,
     bestAmongQueried,
     lifeEventHints,
     lifeEventVerification: chart?.lifeEventVerification

@@ -25,11 +25,34 @@ const {
 const { applyClientChartAccess } = require('../services/chartClientRedaction');
 const { buildPanchangaForDate } = require('../services/currentAstronomyService');
 const { saveChartForEmail } = require('../services/premiumAccessService');
+const { assignChartToUser, normalizeAccessId, createOrUpdateUser } = require('../services/authUserService');
 
 const VALID_DATE_TYPES = new Set(['AD', 'BS']);
 
+function generateTempPassword(length = 12) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+
 function isDemoPremiumUnlocked(req) {
   return String(req.headers['x-gp-demo-premium'] || '').toLowerCase() === 'true';
+}
+
+/** Preserved through free-tier redaction so Vimshottari age-timing can run in chat. */
+function attachTimingCore(chart) {
+  const moon = (chart.planets || []).find((p) => p?.name === 'Moon');
+  chart.timingCore = {
+    birthDateAD: chart.birthDateAD || null,
+    localDateTime: chart.localDateTime || null,
+    timezone: chart.timezone || null,
+    moonAbsoluteDegree: Number.isFinite(Number(moon?.absoluteDegree)) ? Number(moon.absoluteDegree) : null,
+    moonNakshatra: moon?.nakshatra || null
+  };
+  return chart;
 }
 
 function isValidTimezone(zone) {
@@ -374,6 +397,14 @@ function handleChartError(error, res, next) {
 
 async function generateChart(req, res, next) {
   try {
+    if (String(process.env.ACCESS_AUTH_ENABLED || '').toLowerCase() === 'true') {
+      if (String(req.authUser?.role || 'user') !== 'admin') {
+        return res.status(403).json({
+          error: 'AdminOnlyChartGeneration',
+          message: 'Only admin can generate new charts.'
+        });
+      }
+    }
     const demoPremium = isDemoPremiumUnlocked(req);
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     const burst = await checkBurstLimit(ip);
@@ -385,6 +416,13 @@ async function generateChart(req, res, next) {
     }
     const clientFingerprint = extractClientFingerprint(req);
     const { profileHash } = buildIdentityHash(req.body || {}, clientFingerprint);
+    const assignedProfileHash = String(req.authUser?.assignedProfileHash || '').trim();
+    if (assignedProfileHash && assignedProfileHash !== profileHash) {
+      return res.status(403).json({
+        error: 'ProfileAccessDenied',
+        message: 'This login is bound to a different chart profile.'
+      });
+    }
     const profileGate = checkAndRecordNewProfile(ip, profileHash);
     const checked = await profileGate;
     if (!checked.allowed) {
@@ -433,6 +471,8 @@ async function generateChart(req, res, next) {
       };
     }
 
+    attachTimingCore(chart);
+
     if (!demoPremium) {
       applyClientChartAccess(chart);
     } else {
@@ -447,6 +487,26 @@ async function generateChart(req, res, next) {
     }
 
     chart.sessionToken = sessionToken;
+    const assignAccessId = normalizeAccessId(req.body?.assignAccessId || '');
+    if (assignAccessId && String(req.authUser?.role || '') === 'admin') {
+      const providedPassword = String(req.body?.assignPassword || '').trim();
+      const issuedPassword = providedPassword || generateTempPassword(12);
+      const displayName = String(req.body?.assignDisplayName || req.body?.name || '').trim();
+      createOrUpdateUser({
+        accessId: assignAccessId,
+        password: issuedPassword,
+        displayName,
+        assignedProfileHash: profileHash,
+        role: 'user',
+        insightsLimit: 55
+      });
+      assignChartToUser(assignAccessId, chart);
+      chart.adminProvisioning = {
+        accessId: assignAccessId,
+        issuedPassword,
+        note: 'Share these credentials with the specific user.'
+      };
+    }
     return res.json(chart);
   } catch (error) {
     return handleChartError(error, res, next);
@@ -528,6 +588,7 @@ async function panchanga(req, res) {
 }
 
 module.exports = {
+  buildChartFromRequest,
   debugChart,
   generateChart,
   placeSuggestions,

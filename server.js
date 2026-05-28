@@ -17,6 +17,9 @@ const chatRoutes = safeRequire('./routes/chatRoutes', () => express.Router());
 const feedbackRoutes = safeRequire('./routes/feedbackRoutes', () => express.Router());
 const securityRoutes = safeRequire('./routes/securityRoutes', () => express.Router());
 const premiumRoutes = safeRequire('./routes/premiumRoutes', () => express.Router());
+const accessRoutes = safeRequire('./routes/accessRoutes', () => express.Router());
+const authRoutes = safeRequire('./routes/authRoutes', () => express.Router());
+const chartAccessRoutes = safeRequire('./routes/chartAccessRoutes', () => express.Router());
 const geminiRuntime = safeRequire('./services/grahapathGeminiService', () => ({
   probeGeminiReadiness: async () => ({ ok: false, reason: 'module_unavailable' }),
   getGeminiRuntimeStats: () => ({ available: false })
@@ -138,6 +141,9 @@ app.use('/api', chatRoutes);
 app.use('/api', feedbackRoutes);
 app.use('/api', securityRoutes);
 app.use('/api', premiumRoutes);
+app.use('/api', accessRoutes);
+app.use('/api', authRoutes);
+app.use('/api', chartAccessRoutes);
 
 if (!premiumRouterMounted(premiumRoutes)) {
   console.warn(
