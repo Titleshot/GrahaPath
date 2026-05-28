@@ -22,6 +22,7 @@ const {
   verifyDeviceToken,
   readDeviceTokenFromRequest
 } = require('../services/sessionTokenService');
+const { stampChartIdentity, validatePaywallSessionForChart } = require('../services/chartIdentityService');
 const { verifySecurityChallenge } = require('../services/securityChallengeService');
 const { incCounter } = require('../services/securityMetricsService');
 
@@ -113,7 +114,7 @@ function grahaPathChat(req, res, next) {
       });
     }
 
-    const chart = req.body?.chart;
+    let chart = req.body?.chart;
     const requestedMode = req.body?.mode || 'message';
     if (!isAllowedMode(requestedMode)) {
       return res.status(400).json({
@@ -128,7 +129,6 @@ function grahaPathChat(req, res, next) {
         message: 'Request body must include a chart object.'
       });
     }
-
     if (requestedMode === 'greeting') {
       const text = await enqueueGeminiOperation(() => generateGreeting(chart));
       return res.json({ role: 'assistant', text });
@@ -182,21 +182,31 @@ function grahaPathChat(req, res, next) {
 
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     const clientFingerprint = extractClientFingerprint(req);
+    chart = stampChartIdentity(chart, clientFingerprint);
     const { identityHash, profileHash } = buildIdentityHash(
       {
         dateType: chart?.inputDateType || req.body?.dateType || 'AD',
         date: chart?.birthDateAD || req.body?.date || '',
         bsDate: req.body?.bsDate || inferBsDateObjectFromChart(chart) || null,
         time: chart?.localDateTime ? String(chart.localDateTime).slice(11, 16) : req.body?.time || '',
-        place: chart?.place || req.body?.place || '',
+        place: chart?.place || chart?.location?.displayName || req.body?.place || '',
         location: chart?.location || req.body?.location || null
       },
       clientFingerprint
     );
     const sessionProfileHash = chart?.profileHash || profileHash;
+    const paywallSession = validatePaywallSessionForChart(req, chart, profileHash);
+    if (!paywallSession.ok) {
+      if (paywallSession.status === 401) incCounter('security.session_invalid');
+      else incCounter('security.profile_mismatch');
+      return res.status(paywallSession.status).json({
+        error: paywallSession.error,
+        message: paywallSession.message
+      });
+    }
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
-    const session = verifySessionToken(sessionToken);
+    const session = paywallSession.session || verifySessionToken(sessionToken);
     const deviceToken = readDeviceTokenFromRequest(req);
     const device = verifyDeviceToken(deviceToken);
     const risk = assessAbuseRisk({
@@ -229,21 +239,6 @@ function grahaPathChat(req, res, next) {
         });
       }
     }
-    if (requireSession && !session.valid) {
-      incCounter('security.session_invalid');
-      return res.status(401).json({
-        error: 'SessionRequired',
-        message: 'Session expired or missing. Please regenerate your chart and try again.'
-      });
-    }
-    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== sessionProfileHash) {
-      incCounter('security.profile_mismatch');
-      return res.status(403).json({
-        error: 'ProfileMismatch',
-        message: 'Profile identity mismatch detected. Please regenerate your chart.'
-      });
-    }
-
     const freeGate = demoPremium
       ? { allowed: true, used: 0, limit: Number(process.env.FREE_CHAT_LIMIT || 3) }
       : await checkAndUseFreeMessageBound({

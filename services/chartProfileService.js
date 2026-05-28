@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { stampChartIdentity } = require('./chartIdentityService');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const STORE_FILE = path.join(DATA_DIR, 'chart-profiles.json');
@@ -67,7 +68,7 @@ function createChartProfile({ clientName, chart, createdBy, expiresAt = null, in
   const record = {
     id,
     clientName: String(clientName || '').trim() || null,
-    chart,
+    chart: stampChartIdentity(chart),
     accessToken,
     createdBy: String(createdBy || '').trim() || null,
     createdAt: nowIso(),

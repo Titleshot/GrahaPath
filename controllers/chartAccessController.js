@@ -8,6 +8,7 @@ const {
   consumeProfileInsight
 } = require('../services/chartProfileService');
 const { validateLegalAcceptance } = require('../services/legalVersions');
+const { stampChartIdentity } = require('../services/chartIdentityService');
 const {
   issueChartAccessToken,
   buildChartAccessCookie,
@@ -44,7 +45,7 @@ async function adminGenerateChartProfile(req, res, next) {
         accessToken: profile.accessToken,
         insightsLimit: profile.insightsLimit
       },
-      chart: profile.chart,
+      chart: stampChartIdentity(profile.chart),
       viewUrl: url
     });
   } catch (error) {
@@ -82,7 +83,7 @@ function redeemViewToken(req, res) {
   return res.json({
     ok: true,
     profileId: profile.id,
-    chart: profile.chart,
+    chart: stampChartIdentity(profile.chart),
     insights: {
       used: profile.insightsUsed,
       limit: profile.insightsLimit,
@@ -105,7 +106,7 @@ function getSessionChart(req, res) {
   return res.json({
     ok: true,
     profileId: profile.id,
-    chart: profile.chart,
+    chart: stampChartIdentity(profile.chart),
     insights: {
       used: profile.insightsUsed,
       limit: profile.insightsLimit,
@@ -139,7 +140,7 @@ async function chartBoundChatQuery(req, res, next) {
       });
     }
     const result = await processChatV2Request({
-      chart: profile.chart,
+      chart: stampChartIdentity(profile.chart),
       message,
       userPlan: 'full',
       conversationHistory: Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory : [],

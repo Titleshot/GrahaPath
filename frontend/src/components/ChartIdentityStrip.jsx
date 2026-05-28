@@ -122,6 +122,13 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       ? signFromAbsoluteDegree(moonAbsolute + ayanamsaDegree)
       : null;
 
+  const placeLabel =
+    String(chart?.place || '').trim() ||
+    String(chart?.location?.displayName || '').trim() ||
+    (Number.isFinite(Number(chart?.location?.latitude)) && Number.isFinite(Number(chart?.location?.longitude))
+      ? `${Number(chart.location.latitude).toFixed(3)}, ${Number(chart.location.longitude).toFixed(3)}`
+      : '');
+
   return (
     <header
       id={anchorId}
@@ -134,8 +141,12 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
           </p>
           <h2 className="mt-1.5 break-words font-serif text-2xl text-gold sm:text-3xl">{chart.name}</h2>
           <p className="mt-2 text-sm leading-relaxed text-ivory/68">
-            <span className="text-cream/85">{chart.place}</span>
-            <span className="text-ivory/35"> · </span>
+            {placeLabel ? (
+              <>
+                <span className="text-cream/85">{placeLabel}</span>
+                <span className="text-ivory/35"> · </span>
+              </>
+            ) : null}
             <span className="font-mono text-[13px] text-ivory/75">{chart.localDateTime}</span>
           </p>
           <p className="mt-1.5 text-xs text-ivory/48">

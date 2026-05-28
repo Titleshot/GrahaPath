@@ -26,6 +26,7 @@ const { verifySecurityChallenge } = require('../services/securityChallengeServic
 const { incCounter } = require('../services/securityMetricsService');
 const { looksLikeReportOrLifePhaseJson } = require('../services/grahapathChat/responseFormatter');
 const { detectIntent } = require('../services/grahapathChat/intentDetector');
+const { stampChartIdentity, validatePaywallSessionForChart } = require('../services/chartIdentityService');
 
 function userKeyFromRequest(req) {
   const fwd = req.headers['x-forwarded-for'];
@@ -97,13 +98,14 @@ function grahaPathChatV2(req, res, next) {
       });
     }
 
-    const chart = req.body?.chart;
+    let chart = req.body?.chart;
     if (!chart || typeof chart !== 'object') {
       return res.status(400).json({
         error: 'BadRequest',
         message: 'Request body must include chart.'
       });
     }
+    chart = stampChartIdentity(chart, extractClientFingerprint(req));
 
     const demoPremium = isDemoPremiumUnlocked(req);
     const premiumEmail =
@@ -138,7 +140,7 @@ function grahaPathChatV2(req, res, next) {
         date: chart?.birthDateAD || req.body?.date || '',
         bsDate: req.body?.bsDate || inferBsDateObjectFromChart(chart) || null,
         time: chart?.localDateTime ? String(chart.localDateTime).slice(11, 16) : req.body?.time || '',
-        place: chart?.place || req.body?.place || '',
+        place: chart?.place || chart?.location?.displayName || req.body?.place || '',
         location: chart?.location || req.body?.location || null
       },
       clientFingerprint
@@ -152,9 +154,19 @@ function grahaPathChatV2(req, res, next) {
       });
     }
 
+    const paywallSession = validatePaywallSessionForChart(req, chart, profileHash);
+    if (!paywallSession.ok) {
+      if (paywallSession.status === 401) incCounter('security.session_invalid');
+      else incCounter('security.profile_mismatch');
+      return res.status(paywallSession.status).json({
+        error: paywallSession.error,
+        message: paywallSession.message
+      });
+    }
+
     const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
     const sessionToken = readSessionTokenFromRequest(req);
-    const session = verifySessionToken(sessionToken);
+    const session = paywallSession.session || verifySessionToken(sessionToken);
     const risk = assessAbuseRisk({
       sessionValid: session.valid,
       fingerprintPresent: Boolean(clientFingerprint && clientFingerprint !== 'unknown-fp'),
@@ -185,21 +197,6 @@ function grahaPathChatV2(req, res, next) {
         });
       }
     }
-    if (requireSession && !session.valid) {
-      incCounter('security.session_invalid');
-      return res.status(401).json({
-        error: 'SessionRequired',
-        message: 'Session expired or missing. Please regenerate your chart and try again.'
-      });
-    }
-    if (requireSession && session.payload?.profileHash && session.payload.profileHash !== sessionProfileHash) {
-      incCounter('security.profile_mismatch');
-      return res.status(403).json({
-        error: 'ProfileMismatch',
-        message: 'Profile identity mismatch detected. Please regenerate your chart.'
-      });
-    }
-
     const freeLimit = Number(process.env.FREE_CHAT_LIMIT || 3);
 
     if (mode === 'greeting') {

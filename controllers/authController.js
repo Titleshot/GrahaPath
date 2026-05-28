@@ -7,6 +7,7 @@ const {
   getUserByAccessId,
   assignChartToUser
 } = require('../services/authUserService');
+const { stampChartIdentity } = require('../services/chartIdentityService');
 const {
   issueAuthToken,
   buildAuthCookie,
@@ -165,10 +166,11 @@ function authChart(req, res) {
   if (!user) {
     return res.status(404).json({ error: 'NotFound', message: 'User not found.' });
   }
+  const chart = user.assignedChart ? stampChartIdentity(user.assignedChart) : null;
   return res.json({
     ok: true,
-    chart: user.assignedChart || null,
-    assignedProfileHash: user.assignedProfileHash || null,
+    chart,
+    assignedProfileHash: user.assignedProfileHash || chart?.profileHash || null,
     insights: {
       used: user.insightsUsed || 0,
       limit: user.insightsLimit || 55,
