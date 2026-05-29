@@ -83,7 +83,9 @@ export default function ChartGrahaChat({
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [insightsLeft, setInsightsLeft] = useState(teaserMode ? teaserQuestionLimit : 3);
+  const [insightsLeft, setInsightsLeft] = useState(
+    sessionChatMode ? (Number.isFinite(Number(initialInsights)) ? Math.max(0, Math.trunc(Number(initialInsights))) : null) : teaserMode ? teaserQuestionLimit : 3
+  );
   const [insightPulse, setInsightPulse] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [premiumDemoUnlocked, setPremiumDemoUnlocked] = useState(false);
@@ -97,21 +99,20 @@ export default function ChartGrahaChat({
 
   /** Only magic-link clients use server-side profile insight quota on chat-v2. */
   const hasBoundedUnlockBudget = sessionChatMode;
-  const magicLinkInsightsExhausted = sessionChatMode && insightsLeft <= 0;
+  const magicLinkInsightsExhausted = sessionChatMode && typeof insightsLeft === 'number' && insightsLeft <= 0;
   const showInsightsCounter =
     sessionChatMode ||
     ((forceUnlocked || premiumDemoUnlocked) &&
       Number.isFinite(Number(initialInsights)) &&
       Number(initialInsights) < 900) ||
-    (insightsLeft > 0 && insightsLeft < 900);
+    (typeof insightsLeft === 'number' && insightsLeft > 0 && insightsLeft < 900);
 
   const applyInsightsLeft = useCallback(
     (next) => {
+      if (!Number.isFinite(Number(next))) return;
       const normalized = Math.max(0, Math.trunc(Number(next)));
       setInsightsLeft(normalized);
-      if (typeof onInsightsChange === 'function') {
-        onInsightsChange(normalized);
-      }
+      if (typeof onInsightsChange === 'function') onInsightsChange(normalized);
     },
     [onInsightsChange]
   );
@@ -175,10 +176,7 @@ export default function ChartGrahaChat({
         return;
       }
     }
-    if (sessionChatMode) {
-      setInsightsLeft(55);
-      return;
-    }
+    if (sessionChatMode) return;
     setInsightsLeft(teaserMode ? teaserQuestionLimit : 3);
   }, [persistKey, teaserMode, teaserQuestionLimit, sessionChatMode, initialInsights]);
 
@@ -336,8 +334,13 @@ export default function ChartGrahaChat({
         }
         if (data?.error === 'InsightsExhausted' || res.status === 402) {
           applyInsightsLeft(0);
-          const exhaustedCopy =
-            typeof data.message === 'string' && data.message.trim()
+          const exhaustedCopy = sessionChatMode
+            ? typeof data.message === 'string' &&
+              data.message.trim() &&
+              !/contact admin for renewal/i.test(data.message)
+              ? data.message.trim()
+              : MAGIC_LINK_TOPUP_COPY
+            : typeof data.message === 'string' && data.message.trim()
               ? data.message.trim()
               : MAGIC_LINK_TOPUP_COPY;
           setMessagesPersisted((prev) => [...prev, { role: 'assistant', content: exhaustedCopy }]);
@@ -427,7 +430,7 @@ export default function ChartGrahaChat({
               tabIndex={sessionChatMode ? undefined : 0}
             >
               <span aria-hidden>🌟</span>
-              <span className="text-[11px] leading-none">{`${insightsLeft} Insights Left`}</span>
+              <span className="text-[11px] leading-none">{`${typeof insightsLeft === 'number' ? insightsLeft : '…'} Insights Left`}</span>
             </div>
           ) : null}
         </div>

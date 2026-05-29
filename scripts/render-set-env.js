@@ -33,6 +33,7 @@ function buildVarsFromEnv() {
   pushIf('OPENAI_API_KEY', 'OPENAI_API_KEY', '');
   pushIf('SUPABASE_URL', 'SUPABASE_URL', '');
   pushIf('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', '');
+  pushIf('SUPABASE_DB_URL', 'SUPABASE_DB_URL', '');
   pushIf('FEEDBACK_FORMSPREE_ENDPOINT', 'FEEDBACK_FORMSPREE_ENDPOINT', '');
   pushIf('FRONTEND_ORIGIN', 'FRONTEND_ORIGIN', 'https://grahapath-web.vercel.app');
   pushIf('NODE_VERSION', 'NODE_VERSION', '20');

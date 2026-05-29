@@ -169,8 +169,27 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.VERCEL !== '1') {
+  const { ensureChartAccessProfilesTable } = safeRequire('./services/ensureChartAccessSchema', () => ({
+    ensureChartAccessProfilesTable: async () => ({ skipped: true, reason: 'module_unavailable' })
+  }));
+
   app.listen(port, () => {
     console.log(`GrahaPath backend listening on port ${port}`);
+    ensureChartAccessProfilesTable()
+      .then((result) => {
+        if (result.ok) {
+          console.log('[GrahaPath] chart_access_profiles ready:', result.table);
+        } else if (result.reason === 'no_db_url') {
+          console.warn(
+            '[GrahaPath] Magic links need chart_access_profiles. Set SUPABASE_DB_URL or run scripts/supabase-chart-access-profiles.sql in Supabase SQL Editor once.'
+          );
+        } else if (!result.skipped) {
+          console.warn('[GrahaPath] chart_access_profiles bootstrap:', result.reason || result);
+        }
+      })
+      .catch((e) => {
+        console.warn('[GrahaPath] chart_access_profiles bootstrap failed:', String(e?.message || e));
+      });
     probeGeminiReadiness()
       .then((probe) => {
         if (probe.ok) {

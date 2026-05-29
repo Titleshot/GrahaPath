@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { detectIntent } = require('./intentDetector');
+const { expandContinuationMessage } = require('./continuationMessage');
 const { buildChatContext } = require('./contextBuilder');
 const {
   buildSystemPrompt,
@@ -411,14 +412,15 @@ async function runMessage({
     return { mode: 'message', intent: 'deterministic_panchanga', answer: await deterministicAstroFactsReply(chart) };
   }
 
+  const effectiveMessage = expandContinuationMessage(message, conversationHistory);
   const intent =
-    surfaceMode === 'daily_transit' ? 'daily_forecast' : detectIntent(message);
+    surfaceMode === 'daily_transit' ? 'daily_forecast' : detectIntent(effectiveMessage);
   const dw = await maybeDailyWeather(chart, intent);
   const ctx = await buildChatContext(chart, intent, {
     dailyWeather: dw,
     userPlan,
     premiumUnlocked,
-    userMessage: message
+    userMessage: effectiveMessage
   });
   if (ctx.error === 'invalid_chart') {
     const err = new Error('Invalid chart data');
@@ -429,7 +431,7 @@ async function runMessage({
   // Hard guard: fame/past-age timing must come from precomputed table, not
   // model improvisation that can accidentally use "current" dasha/transit.
   if (intent === 'fame_timing') {
-    const answer = buildFameTimingDeterministicReply(ctx.fameTiming, message);
+    const answer = buildFameTimingDeterministicReply(ctx.fameTiming, effectiveMessage);
     const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
     return { mode, intent, answer };
   }
@@ -445,7 +447,7 @@ async function runMessage({
 
   let raw = await invokeModel({
     systemText,
-    userMessage: message,
+    userMessage: effectiveMessage,
     conversationHistory: conversationHistory || [],
     maxTokens,
     temperature
@@ -457,14 +459,14 @@ async function runMessage({
       '\n\nCRITICAL: Your previous reply was invalid. Reply in plain prose or markdown only. No JSON, no curly braces with schema, no coreInsight or phases.';
     raw = await invokeModel({
       systemText: retrySystem,
-      userMessage: message,
+      userMessage: effectiveMessage,
       conversationHistory: conversationHistory || [],
       maxTokens,
       temperature: Math.min(0.7, temperature + 0.02)
     });
   }
 
-  let answer = formatAnswer(raw, message);
+  let answer = formatAnswer(raw, effectiveMessage);
   if (answer === BIRTH_DETAILS_REDIRECT) {
     const retrySystem =
       systemText +
@@ -473,14 +475,14 @@ async function runMessage({
       'For timing/fame/recognition questions, give phase-based age windows (not exact guarantees).';
     raw = await invokeModel({
       systemText: retrySystem,
-      userMessage: message,
+      userMessage: effectiveMessage,
       conversationHistory: conversationHistory || [],
       maxTokens,
       temperature: Math.min(0.72, temperature + 0.04)
     });
-    answer = formatAnswer(raw, message);
+    answer = formatAnswer(raw, effectiveMessage);
     if (answer === BIRTH_DETAILS_REDIRECT) {
-      answer = proseFallback(message);
+      answer = proseFallback(effectiveMessage);
     }
   }
 
@@ -494,12 +496,12 @@ async function runMessage({
       'Rewrite the answer and keep every planet in its exact immutable house. Also keep sign lordship exactly as immutableSignLordship.';
     raw = await invokeModel({
       systemText: retrySystem,
-      userMessage: message,
+      userMessage: effectiveMessage,
       conversationHistory: conversationHistory || [],
       maxTokens,
       temperature: Math.min(0.68, temperature)
     });
-    answer = formatAnswer(raw, message);
+    answer = formatAnswer(raw, effectiveMessage);
   }
 
   const finalHouseConflicts = extractHouseClaimConflicts(answer, ctx.immutableChartState);
@@ -512,13 +514,13 @@ async function runMessage({
       `Do not contradict: houses=${JSON.stringify(finalHouseConflicts)} lordship=${JSON.stringify(finalLordshipConflicts)}.`;
     raw = await invokeModel({
       systemText: retrySystem,
-      userMessage: message,
+      userMessage: effectiveMessage,
       conversationHistory: conversationHistory || [],
       maxTokens,
       temperature: 0.55
     });
-    answer = formatAnswer(raw, message);
-    if (answer === BIRTH_DETAILS_REDIRECT) answer = proseFallback(message);
+    answer = formatAnswer(raw, effectiveMessage);
+    if (answer === BIRTH_DETAILS_REDIRECT) answer = proseFallback(effectiveMessage);
   }
 
   const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';

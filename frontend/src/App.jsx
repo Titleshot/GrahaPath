@@ -327,7 +327,12 @@ export default function App() {
     setTokenSessionMode(true);
     if (data?.profileId) setChartProfileId(String(data.profileId));
     const remaining = insightsFromPayload(data);
-    if (remaining != null) applyInsightsBalance(remaining);
+    if (remaining != null) {
+      applyInsightsBalance(remaining);
+      if (data?.profileId) {
+        writeCachedInsights(`token:${String(data.profileId)}`, remaining);
+      }
+    }
     setPendingViewToken('');
     window.history.replaceState(window.history.state || {}, '', '/');
     setRoutePath('/');

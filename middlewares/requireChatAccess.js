@@ -29,20 +29,13 @@ function loadAuthUser(accessId) {
 }
 
 /**
- * Chat routes: admin/user cookie login OR magic-link chart session.
- * readAuthTokenFromRequest prefers the gp_auth cookie over Bearer, so admin is not overridden by a stale client token in Authorization.
+ * Chat routes: magic-link chart session OR admin/user cookie login.
+ * Magic link is checked first when a valid chart-view token is present (cookie/header from /view/ redeem).
+ * That way a lingering gp_auth login cookie cannot drain the wrong quota after sessionStorage is cleared.
  */
 async function requireChatAccess(req, res, next) {
   if (!authEnabled()) {
     req.chatAccessMode = 'open';
-    return next();
-  }
-
-  const token = readAuthTokenFromRequest(req);
-  const userVerified = verifyAuthToken(token);
-  if (userVerified.valid && userVerified.payload?.accessId) {
-    req.authUser = loadAuthUser(userVerified.payload.accessId);
-    req.chatAccessMode = 'user';
     return next();
   }
 
@@ -58,6 +51,14 @@ async function requireChatAccess(req, res, next) {
     }
     req.magicLinkProfile = profile;
     req.chatAccessMode = 'magic_link';
+    return next();
+  }
+
+  const token = readAuthTokenFromRequest(req);
+  const userVerified = verifyAuthToken(token);
+  if (userVerified.valid && userVerified.payload?.accessId) {
+    req.authUser = loadAuthUser(userVerified.payload.accessId);
+    req.chatAccessMode = 'user';
     return next();
   }
 

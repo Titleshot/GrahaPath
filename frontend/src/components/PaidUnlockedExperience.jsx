@@ -12,12 +12,15 @@ export default function PaidUnlockedExperience({
   onInsightsChange = null
 }) {
   const isQuick = selectedTier === 'quick';
-  const fallbackInsights = isQuick ? 12 : sessionChatMode ? 55 : 50;
-  const initialInsights =
-    typeof remainingInsights === 'number' && Number.isFinite(remainingInsights)
-      ? Math.max(0, Math.trunc(remainingInsights))
-      : fallbackInsights;
-  const premiumLabel = `${initialInsights} Insights Left`;
+  const fallbackInsights = isQuick ? 12 : sessionChatMode ? null : 50;
+  const initialInsights = (() => {
+    if (typeof remainingInsights === 'number' && Number.isFinite(remainingInsights)) {
+      return Math.max(0, Math.trunc(remainingInsights));
+    }
+    return fallbackInsights;
+  })();
+  const premiumLabel =
+    typeof initialInsights === 'number' ? `${initialInsights} Insights Left` : 'Insights Left';
   return (
     <div id="paid-unlocked-section" className="flex flex-col gap-6">
       {!sessionChatMode ? (

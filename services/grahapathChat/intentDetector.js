@@ -90,7 +90,7 @@ function detectIntent(rawText) {
     /^(hi|hello|hey|hiya|yo|sup|namaste|namaskar|k\s*cha|ke\s*cha|क\s*च|के\s*च|what'?s\s+up|how\s+are\s+you|how\s+am\s+i|how\s+ru)\b/i.test(
       lower.replace(/[!?.…]+$/u, '').trim()
     ) ||
-    /^(thanks|thank\s+you|thx|ok|okay|bye)\b/i.test(lower.replace(/[!?.…]+$/u, '').trim())
+    /^(thanks|thank\s+you|thx|bye)\b/i.test(lower.replace(/[!?.…]+$/u, '').trim())
   ) {
     return 'small_talk';
   }

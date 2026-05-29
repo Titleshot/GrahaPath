@@ -15,6 +15,7 @@
     "render:merge-kofi-env": "node scripts/merge-render-kofi-env.js",
     "render:print-kofi-url": "node scripts/render-print-kofi-url.js",
     "render:deploy": "node scripts/render-deploy.js",
+    "supabase:magic-links-table": "node scripts/ensure-chart-access-profiles-table.js",
     "regression:nightly": "node scripts/nightly-regression.js",
     "regression:ashtakavarga": "node scripts/ashtakavarga-regression.js",
     "feedback:weekly": "node scripts/feedback-weekly-summary.js",
@@ -42,6 +43,7 @@
     "nodemailer": "^8.0.7",
     "swisseph": "latest",
     "tz-lookup": "latest",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "pg": "^8.21.0"
   }
 }

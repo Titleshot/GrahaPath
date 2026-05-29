@@ -41,7 +41,7 @@ const DOCS = {
       {
         heading: 'Payments and Digital Product Nature',
         body:
-          'Payments are processed through Ko-fi. GrahaPath does not directly process card details. Digital access is provided after successful payment flow.'
+          'Premium access may be purchased through Ko-fi or other payment channels we make available (including direct bank transfer, UPI, or other arrangements confirmed with you). GrahaPath does not directly store full card or bank credentials on our servers. Access may also be issued by an administrator after offline payment or a private agreement. Digital access is provided once payment is confirmed through the relevant channel.'
       },
       {
         heading: 'Refunds',
@@ -104,7 +104,7 @@ const DOCS = {
       {
         heading: 'Payments',
         body:
-          'Payment processing is handled by Ko-fi. GrahaPath does not store full payment card details directly.'
+          'When you pay online, checkout may be handled by Ko-fi or another third-party processor we use. For offline or direct payments, we may record only what is needed to verify your purchase and activate access (such as email, transaction reference, or assigned account). GrahaPath does not store full payment card or bank credentials directly.'
       },
       {
         heading: 'AI Processing Disclosure',
@@ -133,7 +133,7 @@ const DOCS = {
       {
         heading: 'Third-Party Services',
         body:
-          'GrahaPath may rely on third-party providers such as Ko-fi, AI providers, analytics/hosting providers, and related infrastructure services.'
+          'GrahaPath may rely on third-party providers such as Ko-fi, other payment processors, AI providers, analytics/hosting providers, and related infrastructure services.'
       },
       {
         heading: 'Security',

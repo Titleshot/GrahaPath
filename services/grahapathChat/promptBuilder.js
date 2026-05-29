@@ -69,6 +69,10 @@ function buildSystemPrompt({ intent, userPlan, premiumUnlocked, conversationHist
     'FORBIDDEN: raw JSON objects, { "coreInsight" }, "phases" arrays, report export format. ' +
     'Chart context is already loaded — NEVER ask for birth date/time/place. ' +
     'Use plain text or light markdown only. ' +
+    'CONVERSATION CONTINUITY: If the user briefly agrees (ok, yes, हो, ठीक छ, thik cha, la, go on, etc.) after you offered specific topics ' +
+    '(career, relationships, emotional patterns, dasha timing), treat that as "yes, continue" — deliver a substantive reading ' +
+    'on those topics immediately in the user\'s language. Never reply with only "glad that resonated" or ask them to choose again. ' +
+    'Use conversation history — you cannot list every short phrase; infer intent from your last message and their tone. ' +
     'STRICT CHART STATE RULE: CHART_CONTEXT_JSON.immutableChartState is authoritative and immutable. ' +
     'Do not invent planetary positions. If a planet is listed in one house there, do not place it in another house in your response. ' +
     'STRICT LORDSHIP RULE: CHART_CONTEXT_JSON.immutableSignLordship is authoritative. ' +
@@ -110,7 +114,7 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
   switch (intent) {
     case 'small_talk':
       intentBlock =
-        'Intent: SMALL_TALK. Max 3–5 short lines. Casual and warm. Do NOT list Lagna/Moon/Sun or give a natal essay. At most one gentle mood line from data. End by offering topic choices (career, timing, relationship, emotional pattern).';
+        'Intent: SMALL_TALK. Max 3–5 short lines. Casual and warm. Do NOT list Lagna/Moon/Sun or give a natal essay. At most one gentle mood line from data. If conversation history shows you already offered follow-up topics, do NOT re-offer — answer with chart substance instead.';
       break;
     case 'capability_question':
       intentBlock =
