@@ -45,6 +45,9 @@ export default function MagicLinkConsentGate({ accessToken, onRedeemed, onCancel
               This secure link opens a personal chart prepared for you. Please read and accept our policies before
               viewing chart data or using GrahaPath AI chat.
             </p>
+            <p className="mt-2 text-xs text-ivory/50">
+              The first open can take up to a minute while the server wakes up. Please keep this page open.
+            </p>
 
             <label className="mt-5 flex items-start gap-2 text-xs leading-relaxed text-ivory/75">
               <input
@@ -88,7 +91,7 @@ export default function MagicLinkConsentGate({ accessToken, onRedeemed, onCancel
               onClick={openChart}
               className="mt-4 w-full rounded-xl border border-gold/45 bg-gold/15 px-4 py-2.5 text-sm font-semibold text-gold transition hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? 'Opening your chart...' : 'Accept and open my chart'}
+              {loading ? 'Opening your chart (please wait)…' : 'Accept and open my chart'}
             </button>
 
             {onCancel ? (

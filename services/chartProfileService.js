@@ -69,6 +69,49 @@ function readGpMeta(chart) {
   return meta && typeof meta === 'object' ? meta : {};
 }
 
+function normalizeAccessToken(raw) {
+  let token = String(raw || '').trim();
+  if (!token) return '';
+  try {
+    if (token.includes('%')) token = decodeURIComponent(token);
+  } catch {
+    // keep original token
+  }
+  return token;
+}
+
+function isProductionRuntime() {
+  return String(process.env.RENDER || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+}
+
+function profileFromAccessTableRow(row) {
+  if (!row?.chart_data) return null;
+  const chart = row.chart_data;
+  const meta = readGpMeta(chart);
+  return sanitizeRecord({
+    id: row.id,
+    clientName: row.client_name || meta.clientName || null,
+    accessToken: row.access_token,
+    createdBy: row.created_by || meta.createdBy || null,
+    createdAt: row.created_at || null,
+    revoked: row.revoked === true,
+    expiresAt: row.expires_at || meta.expiresAt || null,
+    insightsUsed: Number.isFinite(Number(row.insights_used))
+      ? Number(row.insights_used)
+      : Number(meta.insightsUsed) || 0,
+    insightsLimit: Number.isFinite(Number(row.insights_limit))
+      ? Number(row.insights_limit)
+      : Number(meta.insightsLimit) || 55,
+    chart,
+    legalAcceptances: Array.isArray(row.legal_acceptances)
+      ? row.legal_acceptances
+      : Array.isArray(meta.legalAcceptances)
+        ? meta.legalAcceptances
+        : [],
+    supabaseUserId: null
+  });
+}
+
 function sanitizeRecord(row) {
   return {
     id: row.id,
@@ -129,9 +172,84 @@ async function getLatestChartRowForUser(userId) {
   return data;
 }
 
+async function getProfileFromAccessTable(accessToken) {
+  if (!supabase) return null;
+  const token = normalizeAccessToken(accessToken);
+  if (!token) return null;
+  const { data, error } = await supabase
+    .from('chart_access_profiles')
+    .select('*')
+    .eq('access_token', token)
+    .maybeSingle();
+  if (error) {
+    if (!String(error.message || '').includes('does not exist')) {
+      console.warn('[chartProfileService] chart_access_profiles lookup failed:', error.message);
+    }
+    return null;
+  }
+  return profileFromAccessTableRow(data);
+}
+
+async function getProfileByIdFromAccessTable(profileId) {
+  if (!supabase) return null;
+  const id = String(profileId || '').trim();
+  if (!id) return null;
+  const { data, error } = await supabase.from('chart_access_profiles').select('*').eq('id', id).maybeSingle();
+  if (error || !data) return null;
+  return profileFromAccessTableRow(data);
+}
+
+async function createProfileInAccessTable(record) {
+  if (!supabase) return false;
+  const { error } = await supabase.from('chart_access_profiles').upsert(
+    {
+      id: record.id,
+      access_token: record.accessToken,
+      client_name: record.clientName || null,
+      chart_data: {
+        ...record.chart,
+        _gpMeta: {
+          insightsLimit: record.insightsLimit,
+          insightsUsed: 0,
+          clientName: record.clientName || null,
+          createdBy: record.createdBy || null,
+          revoked: false,
+          expiresAt: record.expiresAt || null,
+          legalAcceptances: []
+        }
+      },
+      created_by: record.createdBy || null,
+      created_at: record.createdAt || nowIso(),
+      revoked: false,
+      expires_at: record.expiresAt || null,
+      insights_used: 0,
+      insights_limit: record.insightsLimit,
+      legal_acceptances: []
+    },
+    { onConflict: 'access_token' }
+  );
+  if (error) {
+    console.warn('[chartProfileService] chart_access_profiles upsert failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
+async function patchAccessTable(profileId, patch = {}) {
+  if (!supabase) return false;
+  const id = String(profileId || '').trim();
+  if (!id) return false;
+  const { error } = await supabase.from('chart_access_profiles').update(patch).eq('id', id);
+  if (error) {
+    console.warn('[chartProfileService] chart_access_profiles update failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
 async function getProfileByTokenFromSupabase(accessToken) {
   if (!supabase) return null;
-  const token = String(accessToken || '').trim();
+  const token = normalizeAccessToken(accessToken);
   const { data: user, error } = await supabase
     .from('users')
     .select('id, email, chart_id, remaining_insights, premium_active, purchase_status, purchase_timestamp, created_at')
@@ -250,19 +368,42 @@ async function createChartProfile({ clientName, chart, createdBy, expiresAt = nu
     legalAcceptances: []
   };
 
+  if (supabase) {
+    const tableOk = await createProfileInAccessTable(record);
+    const legacyOk = await createChartProfileInSupabase(record);
+    if (!tableOk && !legacyOk) {
+      const err = new Error(
+        'Could not save this chart link to the database. Run scripts/supabase-chart-access-profiles.sql in Supabase, then try again.'
+      );
+      err.statusCode = 503;
+      throw err;
+    }
+    const verified = await getProfileByToken(accessToken);
+    if (!verified) {
+      const err = new Error('Chart link was created but could not be verified. Please generate a new link.');
+      err.statusCode = 503;
+      throw err;
+    }
+    return verified;
+  }
+
   const store = readStore();
   store.records[id] = record;
   writeStore(store);
-  await createChartProfileInSupabase(record);
   return sanitizeRecord(record);
 }
 
 async function getProfileByToken(accessToken) {
-  const token = String(accessToken || '').trim();
+  const token = normalizeAccessToken(accessToken);
   if (!token) return null;
 
-  const fromDb = await getProfileByTokenFromSupabase(token);
-  if (fromDb) return fromDb;
+  if (supabase) {
+    const fromTable = await getProfileFromAccessTable(token);
+    if (fromTable) return fromTable;
+    const fromLegacy = await getProfileByTokenFromSupabase(token);
+    if (fromLegacy) return fromLegacy;
+    if (isProductionRuntime()) return null;
+  }
 
   return getProfileByTokenFromFile(token);
 }
@@ -271,8 +412,13 @@ async function getProfileById(id) {
   const key = String(id || '').trim();
   if (!key) return null;
 
-  const fromDb = await getProfileByIdFromSupabase(key);
-  if (fromDb) return fromDb;
+  if (supabase) {
+    const fromTable = await getProfileByIdFromAccessTable(key);
+    if (fromTable) return fromTable;
+    const fromLegacy = await getProfileByIdFromSupabase(key);
+    if (fromLegacy) return fromLegacy;
+    if (isProductionRuntime()) return null;
+  }
 
   return getProfileByIdFromFile(key);
 }
@@ -314,12 +460,15 @@ async function recordLegalAcceptance(profileId, meta = {}) {
   list.push(entry);
   const legalAcceptances = list.slice(-20);
 
-  const store = readStore();
-  const row = store.records[id] || { ...profile };
-  row.legalAcceptances = legalAcceptances;
-  store.records[id] = row;
-  writeStore(store);
+  if (!isProductionRuntime()) {
+    const store = readStore();
+    const row = store.records[id] || { ...profile };
+    row.legalAcceptances = legalAcceptances;
+    store.records[id] = row;
+    writeStore(store);
+  }
 
+  await patchAccessTable(id, { legal_acceptances: legalAcceptances });
   await updateSupabaseMeta(profile, { legalAcceptances });
   return true;
 }
@@ -342,11 +491,15 @@ async function consumeProfileInsight(profileId) {
   const nextUsed = used + 1;
   const remaining = Math.max(0, limit - nextUsed);
 
-  const store = readStore();
-  const row = store.records[id] || { ...profile };
-  row.insightsUsed = nextUsed;
-  store.records[id] = row;
-  writeStore(store);
+  if (!isProductionRuntime()) {
+    const store = readStore();
+    const row = store.records[id] || { ...profile };
+    row.insightsUsed = nextUsed;
+    store.records[id] = row;
+    writeStore(store);
+  }
+
+  await patchAccessTable(id, { insights_used: nextUsed, insights_limit: limit });
 
   if (supabase && profile.supabaseUserId) {
     const { error } = await supabase

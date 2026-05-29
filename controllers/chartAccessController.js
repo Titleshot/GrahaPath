@@ -53,8 +53,19 @@ async function adminGenerateChartProfile(req, res, next) {
   }
 }
 
+function normalizeRouteToken(raw) {
+  let token = String(raw || '').trim();
+  if (!token) return '';
+  try {
+    if (token.includes('%')) token = decodeURIComponent(token);
+  } catch {
+    // keep token as-is
+  }
+  return token;
+}
+
 async function redeemViewToken(req, res) {
-  const token = String(req.params?.token || '').trim();
+  const token = normalizeRouteToken(req.params?.token);
   if (!token) {
     return res.status(400).json({ error: 'BadRequest', message: 'Token is required.' });
   }
@@ -70,21 +81,15 @@ async function redeemViewToken(req, res) {
     return res.status(404).json({
       error: 'NotFound',
       message:
-        'This chart link is invalid or no longer available. Ask your astrologer to send a fresh link if this one was created before a recent server update.'
+        'This chart link is invalid or no longer available. Ask your astrologer to generate and send a fresh link (links created before a recent update may not work).'
     });
   }
   if (profile.expiresAt && new Date(profile.expiresAt).getTime() < Date.now()) {
     return res.status(410).json({ error: 'Expired', message: 'This chart link has expired.' });
   }
-  await recordLegalAcceptance(profile.id, {
-    termsVersion: req.body?.termsVersion,
-    privacyVersion: req.body?.privacyVersion,
-    disclaimerVersion: req.body?.disclaimerVersion,
-    userAgent: req.headers['user-agent']
-  });
   const accessToken = issueChartAccessToken({ chartProfileId: profile.id, kind: 'chart_profile_view' });
   res.setHeader('Set-Cookie', buildChartAccessCookie(accessToken));
-  return res.json({
+  const payload = {
     ok: true,
     profileId: profile.id,
     viewSession: accessToken,
@@ -95,6 +100,15 @@ async function redeemViewToken(req, res) {
       remaining: Math.max(0, profile.insightsLimit - profile.insightsUsed),
       phase: profile.insightsUsed < 5 ? 'test' : 'full'
     }
+  };
+  res.json(payload);
+  void recordLegalAcceptance(profile.id, {
+    termsVersion: req.body?.termsVersion,
+    privacyVersion: req.body?.privacyVersion,
+    disclaimerVersion: req.body?.disclaimerVersion,
+    userAgent: req.headers['user-agent']
+  }).catch((err) => {
+    console.warn('[chartAccess] recordLegalAcceptance failed:', err?.message || err);
   });
 }
 
