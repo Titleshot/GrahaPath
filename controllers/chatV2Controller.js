@@ -345,13 +345,24 @@ function grahaPathChatV2(req, res, next) {
         insightsUsed: (req.magicLinkProfile.insightsUsed || 0) + 1
       };
     } else if (authEnabled) {
-      authInsight = consumeInsight(req.authUser?.accessId || '');
-      if (!authInsight.allowed) {
-        return res.status(402).json({
-          error: 'InsightsExhausted',
-          message: 'Your 55 insights are exhausted. Contact admin for renewal.',
-          remainingInsights: 0
-        });
+      const isAdminUser = String(req.authUser?.role || '').toLowerCase() === 'admin';
+      if (isAdminUser) {
+        authInsight = {
+          allowed: true,
+          insightsUsed: 0,
+          insightsLimit: 999,
+          remainingInsights: 999,
+          phase: 'full'
+        };
+      } else {
+        authInsight = consumeInsight(req.authUser?.accessId || '');
+        if (!authInsight.allowed) {
+          return res.status(402).json({
+            error: 'InsightsExhausted',
+            message: 'Your 55 insights are exhausted. Contact admin for renewal.',
+            remainingInsights: 0
+          });
+        }
       }
       freeGate = {
         allowed: true,

@@ -27,7 +27,12 @@ import {
   writeCachedInsights,
   insightsFromPayload
 } from './lib/insightsBalance';
-import { hasStoredChartViewSession, readChartViewSession, saveChartViewSession } from './lib/chartViewSession';
+import {
+  clearChartViewSession,
+  hasStoredChartViewSession,
+  readChartViewSession,
+  saveChartViewSession
+} from './lib/chartViewSession';
 
 const API_URL = withApiBase('/api/generate-chart');
 const ADMIN_GENERATE_TOKEN_URL = withApiBase('/api/admin/charts/generate');
@@ -248,6 +253,10 @@ export default function App() {
         if (cancelled) return;
         if (res.ok && data?.user) {
           setAuthUser(data.user);
+          if (String(data.user?.role || '').toLowerCase() === 'admin') {
+            clearChartViewSession();
+            setTokenSessionMode(false);
+          }
           const remaining = insightsFromPayload({ user: data.user });
           if (remaining != null) setPremiumInsights(remaining);
         } else setAuthUser(null);
@@ -622,11 +631,18 @@ export default function App() {
         }
         if (data?.chart && typeof data.chart === 'object') {
           setChart(data.chart);
-          setPaidUnlocked(false);
         }
+        if (data?.profile?.id) {
+          setChartProfileId(String(data.profile.id));
+        }
+        const linkInsights = Math.max(1, Math.trunc(Number(payload.insightsLimit) || 55));
+        applyInsightsBalance(linkInsights);
+        setPaidUnlocked(true);
+        setTokenSessionMode(false);
+        clearChartViewSession();
         trackEvent('admin_chart_link_generated', {
           has_location: Boolean(formData.location),
-          insights_limit: Number(payload.insightsLimit) || 55
+          insights_limit: linkInsights
         });
         return;
       }
@@ -1006,6 +1022,10 @@ export default function App() {
         onLoginSuccess={(user) => {
           const nextUser = user || { accessId: 'user' };
           setAuthUser(nextUser);
+          if (String(nextUser?.role || '').toLowerCase() === 'admin') {
+            clearChartViewSession();
+            setTokenSessionMode(false);
+          }
           const remaining = insightsFromPayload({ user: nextUser });
           if (remaining != null) setPremiumInsights(remaining);
         }}

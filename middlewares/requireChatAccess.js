@@ -8,8 +8,29 @@ function authEnabled() {
   return v === 'true' || v === '1';
 }
 
+function loadAuthUser(accessId) {
+  const latest = getUserByAccessId(accessId);
+  if (!latest) {
+    return {
+      accessId: String(accessId),
+      assignedProfileHash: null,
+      role: 'user',
+      insightsUsed: 0,
+      insightsLimit: 55
+    };
+  }
+  return {
+    accessId: latest.accessId,
+    assignedProfileHash: latest.assignedProfileHash || null,
+    role: latest.role || 'user',
+    insightsUsed: latest.insightsUsed || 0,
+    insightsLimit: latest.insightsLimit || 55
+  };
+}
+
 /**
- * Allows credential login OR magic-link chart session (Bearer / cookie) on chat routes.
+ * Chat routes: admin/user cookie login OR magic-link chart session.
+ * readAuthTokenFromRequest prefers the gp_auth cookie over Bearer, so admin is not overridden by a stale client token in Authorization.
  */
 async function requireChatAccess(req, res, next) {
   if (!authEnabled()) {
@@ -18,23 +39,9 @@ async function requireChatAccess(req, res, next) {
   }
 
   const token = readAuthTokenFromRequest(req);
-  const verified = verifyAuthToken(token);
-  if (verified.valid && verified.payload?.accessId) {
-    req.authUser = {
-      accessId: String(verified.payload.accessId),
-      assignedProfileHash: String(verified.payload.assignedProfileHash || '').trim() || null,
-      role: String(verified.payload.role || 'user')
-    };
-    const latest = getUserByAccessId(req.authUser.accessId);
-    if (latest) {
-      req.authUser = {
-        accessId: latest.accessId,
-        assignedProfileHash: latest.assignedProfileHash || null,
-        role: latest.role || 'user',
-        insightsUsed: latest.insightsUsed || 0,
-        insightsLimit: latest.insightsLimit || 55
-      };
-    }
+  const userVerified = verifyAuthToken(token);
+  if (userVerified.valid && userVerified.payload?.accessId) {
+    req.authUser = loadAuthUser(userVerified.payload.accessId);
     req.chatAccessMode = 'user';
     return next();
   }

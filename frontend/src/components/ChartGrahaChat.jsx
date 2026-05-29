@@ -95,15 +95,15 @@ export default function ChartGrahaChat({
   const turnstileWidgetIdRef = useRef(null);
   const chatInitRef = useRef('');
 
-  const hasBoundedUnlockBudget =
+  /** Only magic-link clients use server-side profile insight quota on chat-v2. */
+  const hasBoundedUnlockBudget = sessionChatMode;
+  const magicLinkInsightsExhausted = sessionChatMode && insightsLeft <= 0;
+  const showInsightsCounter =
     sessionChatMode ||
     ((forceUnlocked || premiumDemoUnlocked) &&
       Number.isFinite(Number(initialInsights)) &&
-      Number(initialInsights) < 900 &&
-      String(premiumEmail || '').trim().length === 0);
-  const magicLinkInsightsExhausted = sessionChatMode && insightsLeft <= 0;
-  const showInsightsCounter =
-    sessionChatMode || hasBoundedUnlockBudget || (insightsLeft > 0 && insightsLeft < 900);
+      Number(initialInsights) < 900) ||
+    (insightsLeft > 0 && insightsLeft < 900);
 
   const applyInsightsLeft = useCallback(
     (next) => {
@@ -316,12 +316,7 @@ export default function ChartGrahaChat({
         headers: {
           'Content-Type': 'application/json',
           'x-gp-client-fp': getClientFingerprint(),
-          'x-gp-demo-premium':
-            sessionChatMode || hasBoundedUnlockBudget
-              ? 'false'
-              : forceUnlocked || premiumDemoUnlocked
-                ? 'true'
-                : 'false',
+          'x-gp-demo-premium': sessionChatMode ? 'false' : forceUnlocked || premiumDemoUnlocked ? 'true' : 'false',
           ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {}),
           ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
         },

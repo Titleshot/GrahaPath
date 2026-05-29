@@ -1,3 +1,5 @@
+import { isChartViewClientMode, readChartViewSession } from './chartViewSession';
+
 function normalizeApiBase(raw) {
   return String(raw || '').trim().replace(/\/+$/, '');
 }
@@ -24,12 +26,6 @@ function devPreferViteProxy(apiBase) {
 
 const API_BASE = devPreferViteProxy(import.meta.env.VITE_API_BASE_URL);
 const ACCESS_EMAIL_KEY = 'gp_access_email';
-const CHART_VIEW_SESSION_KEY = 'gp_chart_view_session';
-
-function readChartViewSession() {
-  if (typeof window === 'undefined') return '';
-  return String(window.sessionStorage.getItem(CHART_VIEW_SESSION_KEY) || '').trim();
-}
 
 export function withApiBase(path) {
   const cleanPath = String(path || '').trim();
@@ -48,7 +44,8 @@ export function apiFetch(input, init = {}) {
       headers.set('x-gp-access-email', stored);
     }
   }
-  if (typeof window !== 'undefined') {
+  // Only attach magic-link session on client /view/ flow — never on admin dashboard (avoids stealing admin chat).
+  if (typeof window !== 'undefined' && isChartViewClientMode()) {
     const viewSession = readChartViewSession();
     if (viewSession) {
       if (!headers.has('authorization')) {
