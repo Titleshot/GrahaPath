@@ -8,6 +8,7 @@ export default function PaidUnlockedExperience({
   premiumEmail = '',
   remainingInsights = null,
   sessionChatMode = false,
+  sessionProfileId = '',
   onInsightsChange = null
 }) {
   const isQuick = selectedTier === 'quick';
@@ -19,10 +20,12 @@ export default function PaidUnlockedExperience({
   const premiumLabel = `${initialInsights} Insights Left`;
   return (
     <div id="paid-unlocked-section" className="flex flex-col gap-6">
-      <section className="rounded-3xl border border-emerald-300/30 bg-emerald-400/8 p-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-emerald-200/80">Full Life Decode Unlocked</p>
-        <p className="mt-2 text-sm text-emerald-100/85">Your deeper chart layers are now visible.</p>
-      </section>
+      {!sessionChatMode ? (
+        <section className="rounded-3xl border border-emerald-300/30 bg-emerald-400/8 p-5">
+          <p className="text-xs uppercase tracking-[0.3em] text-emerald-200/80">Full Life Decode Unlocked</p>
+          <p className="mt-2 text-sm text-emerald-100/85">Your deeper chart layers are now visible.</p>
+        </section>
+      ) : null}
 
       <ChartIdentityStrip chart={chart} forceDeepData />
       <KundaliWheel chart={chart} forceDeepData mode="paid" />
@@ -36,6 +39,7 @@ export default function PaidUnlockedExperience({
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
             sessionChatMode={sessionChatMode}
+            sessionProfileId={sessionProfileId}
             onInsightsChange={onInsightsChange}
           />
         </>
@@ -48,6 +52,7 @@ export default function PaidUnlockedExperience({
             premiumEmail={premiumEmail}
             initialInsights={initialInsights}
             sessionChatMode={sessionChatMode}
+            sessionProfileId={sessionProfileId}
             onInsightsChange={onInsightsChange}
           />
         </>

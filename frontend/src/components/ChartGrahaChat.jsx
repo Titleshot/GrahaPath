@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { getClientFingerprint } from '../lib/clientFingerprint';
 import PremiumUnlockModal from './PremiumUnlockModal';
 import { readPremiumDemoUnlock, writePremiumDemoUnlock } from '../lib/chartAccess';
@@ -8,33 +7,27 @@ import { MAGIC_LINK_TOPUP_COPY, SUPPORT_EMAIL } from '../lib/supportContact';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
 const API_CHAT_SESSION = withApiBase('/api/v1/chat-query');
-const AUTO_GREETING_ENABLED =
-  (import.meta.env.VITE_GRAHAPATH_AUTO_GREETING ?? (import.meta.env.DEV ? 'false' : 'true')) === 'true';
 
 function prettifyAssistantText(raw) {
   const text = String(raw || '').trim();
   if (!text) return '';
-
-  // If model emits inline dash-points in one paragraph, split them for readability.
   const normalizedBullets = text
     .replace(/\s-\s(?=[A-Z0-9])/g, '\n- ')
     .replace(/:\s-\s/g, ':\n- ');
-
-  // Add breathing room between dense sentences in longer assistant blocks.
   if (normalizedBullets.length > 280 && !normalizedBullets.includes('\n\n')) {
     return normalizedBullets.replace(/\. (?=[A-Z])/g, '.\n\n');
   }
   return normalizedBullets;
 }
 
-function sessionChatStorageKey(chartKey) {
-  const key = String(chartKey || '').trim();
-  return key ? `gp_session_chat_${key}` : '';
+function chatStorageKey(persistKey) {
+  const key = String(persistKey || '').trim();
+  return key ? `gp_chat_${key}` : '';
 }
 
-function readStoredSessionMessages(chartKey) {
+function readStoredMessages(persistKey) {
   if (typeof window === 'undefined') return null;
-  const storageKey = sessionChatStorageKey(chartKey);
+  const storageKey = chatStorageKey(persistKey);
   if (!storageKey) return null;
   try {
     const raw = window.sessionStorage.getItem(storageKey);
@@ -49,33 +42,48 @@ function readStoredSessionMessages(chartKey) {
   }
 }
 
-function buildSessionWelcomeText(chart) {
-  const lagna = chart?.ascendant || 'your';
-  const moon = chart?.moonSign || 'chart';
-  return `Your ${lagna}-${moon} chart is active. Ask about career timing, relationships, dasha, or what feels most pressing right now.`;
+function writeStoredMessages(persistKey, messages) {
+  if (typeof window === 'undefined') return;
+  const storageKey = chatStorageKey(persistKey);
+  if (!storageKey || !messages?.length) return;
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(messages));
+  } catch {
+    // ignore
+  }
+}
+
+function buildWelcomeMessage(chart, sessionChatMode) {
+  if (sessionChatMode) {
+    const lagna = chart?.ascendant || 'your';
+    const moon = chart?.moonSign || 'chart';
+    return `Your ${lagna}-${moon} chart is ready. Ask about career, relationships, dasha, or timing.`;
+  }
+  return 'Ask your chart below — career, timing, relationships, houses, or dasha.';
 }
 
 /**
-
  * GrahaPath AI chat — below the wheel.
  */
 export default function ChartGrahaChat({
   chart,
   onPremiumUnlock,
   forceUnlocked = false,
-  premiumLabel = '',
   premiumEmail = '',
   initialInsights = null,
   teaserMode = false,
   teaserQuestionLimit = 2,
   onTeaserLock,
   sessionChatMode = false,
+  sessionProfileId = '',
   onInsightsChange = null
 }) {
+  const chartKey = chart?.utcDateTime || chart?.localDateTime || '';
+  const persistKey = String(sessionProfileId || chartKey || '').trim();
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [greetingLoading, setGreetingLoading] = useState(false);
   const [insightsLeft, setInsightsLeft] = useState(teaserMode ? teaserQuestionLimit : 3);
   const [insightPulse, setInsightPulse] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -86,36 +94,8 @@ export default function ChartGrahaChat({
   const textareaRef = useRef(null);
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetIdRef = useRef(null);
-  const greetingLoadedKeyRef = useRef('');
-  const chartKey = chart?.utcDateTime || chart?.localDateTime || '';
+  const chatInitRef = useRef('');
 
-  const applyAssistantGreeting = useCallback((content) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.role === 'user')) return prev;
-      const text = String(content || '').trim();
-      if (!text) return prev;
-      return [{ role: 'assistant', content: text }];
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!sessionChatMode || !chartKey) return;
-    if (messages.length === 0) return;
-    const storageKey = sessionChatStorageKey(chartKey);
-    if (!storageKey) return;
-    try {
-      window.sessionStorage.setItem(storageKey, JSON.stringify(messages));
-    } catch {
-      // ignore quota / private mode errors
-    }
-  }, [messages, sessionChatMode, chartKey]);
-
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }, [input]);
   const hasBoundedUnlockBudget =
     sessionChatMode ||
     ((forceUnlocked || premiumDemoUnlocked) &&
@@ -125,9 +105,6 @@ export default function ChartGrahaChat({
   const magicLinkInsightsExhausted = sessionChatMode && insightsLeft <= 0;
   const showInsightsCounter =
     sessionChatMode || hasBoundedUnlockBudget || (insightsLeft > 0 && insightsLeft < 900);
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, []);
 
   const applyInsightsLeft = useCallback(
     (next) => {
@@ -169,9 +146,84 @@ export default function ChartGrahaChat({
     [sessionChatMode, hasBoundedUnlockBudget, applyInsightsDelta, applyInsightsLeft]
   );
 
+  const persistMessages = useCallback(
+    (next) => {
+      if (persistKey) writeStoredMessages(persistKey, next);
+    },
+    [persistKey]
+  );
+
+  const setMessagesPersisted = useCallback(
+    (updater) => {
+      setMessages((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        persistMessages(next);
+        return next;
+      });
+    },
+    [persistMessages]
+  );
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, greetingLoading, scrollToBottom]);
+    setPremiumDemoUnlocked(forceUnlocked || readPremiumDemoUnlock());
+  }, [persistKey, forceUnlocked]);
+
+  useEffect(() => {
+    if (typeof initialInsights === 'number' && Number.isFinite(initialInsights)) {
+      const seed = Math.max(0, Math.trunc(initialInsights));
+      if (seed < 900) {
+        setInsightsLeft(seed);
+        return;
+      }
+    }
+    if (sessionChatMode) {
+      setInsightsLeft(55);
+      return;
+    }
+    setInsightsLeft(teaserMode ? teaserQuestionLimit : 3);
+  }, [persistKey, teaserMode, teaserQuestionLimit, sessionChatMode, initialInsights]);
+
+  useEffect(() => {
+    if (!chart || !persistKey) return;
+    const loadKey = `${persistKey}::${sessionChatMode ? 'session' : 'paid'}`;
+    if (chatInitRef.current === loadKey) return;
+    chatInitRef.current = loadKey;
+
+    if (sessionChatMode && typeof initialInsights === 'number' && initialInsights <= 0) {
+      const lagna = chart?.ascendant || 'your';
+      const moon = chart?.moonSign || 'chart';
+      const exhausted = [
+        {
+          role: 'assistant',
+          content: `Your ${lagna}-${moon} chart is loaded, but your AI insights for this link are used up. ${MAGIC_LINK_TOPUP_COPY}`
+        }
+      ];
+      setMessages(exhausted);
+      persistMessages(exhausted);
+      return;
+    }
+
+    const stored = readStoredMessages(persistKey);
+    if (stored?.length) {
+      setMessages(stored);
+      return;
+    }
+
+    const welcome = [{ role: 'assistant', content: buildWelcomeMessage(chart, sessionChatMode) }];
+    setMessages(welcome);
+    persistMessages(welcome);
+  }, [chart, persistKey, sessionChatMode, initialInsights, persistMessages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, sending]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
 
   useEffect(() => {
     if (!insightPulse) return;
@@ -190,15 +242,9 @@ export default function ChartGrahaChat({
       turnstileWidgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
         sitekey: challengeState.siteKey,
         theme: 'dark',
-        callback: (token) => {
-          setChallengeToken(String(token || ''));
-        },
-        'expired-callback': () => {
-          setChallengeToken('');
-        },
-        'error-callback': () => {
-          setChallengeToken('');
-        }
+        callback: (token) => setChallengeToken(String(token || '')),
+        'expired-callback': () => setChallengeToken(''),
+        'error-callback': () => setChallengeToken('')
       });
     }
 
@@ -228,156 +274,17 @@ export default function ChartGrahaChat({
     };
   }, [challengeState]);
 
-  useEffect(() => {
-    setPremiumDemoUnlocked(forceUnlocked || readPremiumDemoUnlock());
-  }, [chartKey, forceUnlocked]);
-
-  useEffect(() => {
-    if (typeof initialInsights === 'number' && Number.isFinite(initialInsights)) {
-      const seed = Math.max(0, Math.trunc(initialInsights));
-      if (seed < 900) {
-        applyInsightsLeft(seed);
-        return;
-      }
-    }
-    if (sessionChatMode) {
-      applyInsightsLeft(55);
-      return;
-    }
-    applyInsightsLeft(teaserMode ? teaserQuestionLimit : 3);
-  }, [chartKey, teaserMode, teaserQuestionLimit, sessionChatMode, initialInsights, applyInsightsLeft]);
-
-  useEffect(() => {
-    if (!chart || !chartKey) return;
-    const loadKey = `${chartKey}::${sessionChatMode ? 'session' : 'std'}`;
-    if (greetingLoadedKeyRef.current === loadKey) return;
-    greetingLoadedKeyRef.current = loadKey;
-
-    setInput('');
-
-    if (sessionChatMode && typeof initialInsights === 'number' && initialInsights <= 0) {
-      const lagna = chart?.ascendant || 'your';
-      const moon = chart?.moonSign || 'chart';
-      setMessages([
-        {
-          role: 'assistant',
-          content: `Your assigned ${lagna}-${moon} chart is loaded, but your AI insights for this link are used up. ${MAGIC_LINK_TOPUP_COPY}`
-        }
-      ]);
-      setGreetingLoading(false);
-      return () => {};
-    }
-
-    if (sessionChatMode) {
-      const stored = readStoredSessionMessages(chartKey);
-      if (stored?.length) {
-        setMessages(stored);
-        setGreetingLoading(false);
-        return () => {};
-      }
-      setMessages([]);
-      applyAssistantGreeting(buildSessionWelcomeText(chart));
-      setGreetingLoading(false);
-      return () => {};
-    }
-
-    setMessages([]);
-
-    let cancelled = false;
-    if (!AUTO_GREETING_ENABLED) {
-      applyAssistantGreeting(
-        `Your ${chart?.ascendant || 'your'}-${chart?.moonSign || 'chart'} chart pattern is active. You can now ask about career timing, emotional cycles, relationships, mental patterns, or life direction.`
-      );
-      setGreetingLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setGreetingLoading(true);
-
-    const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : 'free';
-    apiFetch(API_CHAT_V2, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-gp-client-fp': getClientFingerprint(),
-        'x-gp-demo-premium':
-          hasBoundedUnlockBudget
-            ? 'false'
-            : forceUnlocked || premiumDemoUnlocked
-              ? 'true'
-              : 'false',
-        ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
-      },
-      body: JSON.stringify({
-        chart,
-        mode: 'greeting',
-        userPlan,
-        premiumEmail: premiumEmail || undefined,
-        conversationHistory: []
-      })
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          const hint = import.meta.env.DEV ? `Greeting failed (${res.status}). Is the API dev server running?` : `Greeting failed (${res.status}).`;
-          throw new Error(data.message || hint);
-        }
-        const text =
-          typeof data.answer === 'string' && data.answer.trim()
-            ? data.answer.trim()
-            : 'Your chart is ready. Ask about houses, daśā timing, or career structure.';
-        applyAssistantGreeting(text);
-        if (typeof data.remainingInsights === 'number') {
-          applyServerRemainingInsights(data.remainingInsights);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          const detail =
-            typeof err?.message === 'string' && err.message.trim().length > 0
-              ? err.message
-              : import.meta.env.DEV
-                ? 'Network error — is the GrahaPath API dev server running?'
-                : 'Network error — check your connection or try again in a moment.';
-          applyAssistantGreeting(`GrahaPath AI greeting: ${detail}`);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setGreetingLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    chartKey,
-    chart,
-    sessionChatMode,
-    initialInsights,
-    forceUnlocked,
-    premiumDemoUnlocked,
-    premiumEmail,
-    hasBoundedUnlockBudget,
-    applyAssistantGreeting,
-    applyServerRemainingInsights
-  ]);
-
   async function sendChat(mode = 'message') {
-    const lockedInTeaser = teaserMode && !forceUnlocked && insightsLeft <= 0 && mode !== 'greeting';
-    if (lockedInTeaser) {
+    if (teaserMode && !forceUnlocked && insightsLeft <= 0 && mode !== 'greeting') {
       onTeaserLock?.();
       return;
     }
-    if (sessionChatMode && insightsLeft <= 0 && mode !== 'greeting') {
-      return;
-    }
-    if (!(forceUnlocked || premiumDemoUnlocked) && !teaserMode && insightsLeft <= 0 && mode !== 'greeting') {
+    if (sessionChatMode && insightsLeft <= 0) return;
+    if (!(forceUnlocked || premiumDemoUnlocked) && !teaserMode && insightsLeft <= 0) {
       setShowPremiumModal(true);
       return;
     }
+
     const raw = input.trim();
     const text =
       mode === 'daily_transit'
@@ -388,20 +295,16 @@ export default function ChartGrahaChat({
     setSending(true);
     setInput('');
 
-    const userMsg = { role: 'user', content: text };
     const historyForApi = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
+    const userMsg = { role: 'user', content: text };
+    setMessagesPersisted((prev) => [...prev, userMsg]);
 
-    setMessages((prev) => [...prev, userMsg]);
-
-    const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : teaserMode ? 'free' : 'free';
+    const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : 'free';
 
     try {
       const endpoint = sessionChatMode ? API_CHAT_SESSION : API_CHAT_V2;
       const payload = sessionChatMode
-        ? {
-            message: text,
-            conversationHistory: historyForApi
-          }
+        ? { message: text, conversationHistory: historyForApi }
         : {
             chart,
             message: text,
@@ -411,23 +314,26 @@ export default function ChartGrahaChat({
             surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
             challengeToken: challengeToken || undefined
           };
+
       const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-gp-client-fp': getClientFingerprint(),
           'x-gp-demo-premium':
-          sessionChatMode || hasBoundedUnlockBudget
-            ? 'false'
-            : forceUnlocked || premiumDemoUnlocked
-              ? 'true'
-              : 'false',
+            sessionChatMode || hasBoundedUnlockBudget
+              ? 'false'
+              : forceUnlocked || premiumDemoUnlocked
+                ? 'true'
+                : 'false',
           ...(challengeToken ? { 'x-gp-turnstile-token': challengeToken } : {}),
           ...(chart?.sessionToken ? { 'x-gp-session': chart.sessionToken } : {})
         },
         body: JSON.stringify(payload)
       });
+
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         if (data?.error === 'ChallengeRequired') {
           setChallengeState({
@@ -443,34 +349,40 @@ export default function ChartGrahaChat({
             typeof data.message === 'string' && data.message.trim()
               ? data.message.trim()
               : MAGIC_LINK_TOPUP_COPY;
-          setMessages((prev) => [...prev, { role: 'assistant', content: exhaustedCopy }]);
+          setMessagesPersisted((prev) => [...prev, { role: 'assistant', content: exhaustedCopy }]);
           return;
         }
         if (sessionChatMode && (res.status === 401 || data?.error === 'Unauthorized')) {
-          setMessages((prev) => [
+          setMessagesPersisted((prev) => [
             ...prev,
             {
               role: 'assistant',
               content:
-                'Your chart session expired. Close this tab and open the full magic link URL your astrologer sent you again (the link that contains /view/).'
+                'Session expired — open your full magic link again (the URL with /view/ in it).'
             }
           ]);
           return;
         }
         throw new Error(data.message || `Chat failed (${res.status})`);
       }
+
       setChallengeState(null);
       setChallengeToken('');
       if (window.turnstile && turnstileWidgetIdRef.current != null) {
         try {
           window.turnstile.remove(turnstileWidgetIdRef.current);
         } catch {
-          // ignore widget cleanup failures
+          // ignore
         }
         turnstileWidgetIdRef.current = null;
       }
+
       const reply = typeof data.answer === 'string' ? data.answer.trim() : '';
-      setMessages((prev) => [...prev, { role: 'assistant', content: prettifyAssistantText(reply || '…') }]);
+      setMessagesPersisted((prev) => [
+        ...prev,
+        { role: 'assistant', content: prettifyAssistantText(reply || 'No reply received. Try again.') }
+      ]);
+
       if (typeof data.remainingInsights === 'number') {
         applyServerRemainingInsights(data.remainingInsights);
       } else if (sessionChatMode || hasBoundedUnlockBudget) {
@@ -483,14 +395,8 @@ export default function ChartGrahaChat({
       const detail =
         typeof err?.message === 'string' && err.message.trim().length > 0
           ? err.message
-          : 'Could not reach GrahaPath AI. Check your connection or try again shortly.';
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: detail
-        }
-      ]);
+          : 'Could not reach GrahaPath AI. Check your connection or try again.';
+      setMessagesPersisted((prev) => [...prev, { role: 'assistant', content: detail }]);
     } finally {
       setSending(false);
     }
@@ -499,10 +405,6 @@ export default function ChartGrahaChat({
   async function handleSend(e) {
     e.preventDefault();
     await sendChat('message');
-  }
-
-  async function handleDailyTransit() {
-    await sendChat('daily_transit');
   }
 
   if (!chart) return null;
@@ -532,14 +434,6 @@ export default function ChartGrahaChat({
               }}
               role={sessionChatMode ? undefined : 'button'}
               tabIndex={sessionChatMode ? undefined : 0}
-              onKeyDown={(e) => {
-                if (sessionChatMode) return;
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  if (teaserMode) onTeaserLock?.();
-                  else setShowPremiumModal(true);
-                }
-              }}
             >
               <span aria-hidden>🌟</span>
               <span className="text-[11px] leading-none">{`${insightsLeft} Insights Left`}</span>
@@ -549,38 +443,28 @@ export default function ChartGrahaChat({
       </div>
 
       <div
-        className={`max-h-[min(420px,50vh)] space-y-3 overflow-y-auto overscroll-contain pr-1 transition sm:max-h-[min(480px,55vh)] ${
+        className={`max-h-[min(420px,50vh)] space-y-3 overflow-y-auto overscroll-contain pr-1 sm:max-h-[min(480px,55vh)] ${
           teaserMode && !forceUnlocked && insightsLeft <= 0 ? 'blur-[1.2px] opacity-70' : ''
         }`}
       >
-        {greetingLoading && messages.length === 0 && (
-          <p className="text-sm text-ivory/50">Preparing your summary…</p>
-        )}
-        <AnimatePresence initial={false}>
-          {messages.map((m, i) => (
-            <motion.div
-              key={`${i}-${m.role}`}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+        {messages.map((m, i) => (
+          <div key={`msg-${i}-${m.role}-${String(m.content).slice(0, 24)}`} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`max-w-[92%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed sm:max-w-[85%] ${
+                m.role === 'user'
+                  ? 'border border-indigo-400/25 bg-indigo-950/50 text-cream'
+                  : 'border border-gold/15 bg-black/45 text-ivory/88'
+              }`}
             >
-              <div
-                className={`max-w-[92%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed sm:max-w-[85%] ${
-                  m.role === 'user'
-                    ? 'border border-indigo-400/25 bg-indigo-950/50 text-cream'
-                    : 'border border-gold/15 bg-black/45 text-ivory/88'
-                }`}
-              >
-                <span className="whitespace-pre-wrap">
-                  {m.role === 'assistant' ? prettifyAssistantText(m.content) : m.content}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {sending && (
-          <p className="text-xs italic text-ivory/40">GrahaPath AI is thinking…</p>
-        )}
+              <span className="whitespace-pre-wrap">
+                {m.role === 'assistant' ? prettifyAssistantText(m.content) : m.content}
+              </span>
+            </div>
+          </div>
+        ))}
+        {sending ? (
+          <p className="text-sm text-amber-200/80">GrahaPath AI is thinking… (first reply can take up to a minute)</p>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
@@ -588,31 +472,18 @@ export default function ChartGrahaChat({
         {challengeState?.required ? (
           <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3 text-xs text-amber-100">
             <p className="font-semibold">Quick security check required</p>
-            <p className="mt-1">
-              Please complete this one-time check to continue chatting.
-              {Array.isArray(challengeState.reasons) && challengeState.reasons.length > 0
-                ? ` (${challengeState.reasons.join(', ')})`
-                : ''}
-            </p>
             {challengeState.provider === 'turnstile' && challengeState.siteKey ? (
               <div className="mt-2">
                 <div ref={turnstileContainerRef} />
-                <p className="mt-1 text-[11px] text-amber-100/80">
-                  {challengeToken ? 'Verified. You can send your message now.' : 'Waiting for verification...'}
-                </p>
               </div>
-            ) : (
-              <p className="mt-1 text-[11px] text-amber-100/80">
-                Challenge provider is not configured fully on server.
-              </p>
-            )}
+            ) : null}
           </div>
         ) : null}
 
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end">
           <textarea
             ref={textareaRef}
-            rows={3}
+            rows={2}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -621,31 +492,26 @@ export default function ChartGrahaChat({
                 handleSend(e);
               }
             }}
-            placeholder="Ask about career timing, houses, or dasha…"
-            disabled={
-              sending ||
-              (greetingLoading && !sessionChatMode) ||
-              magicLinkInsightsExhausted ||
-              (teaserMode && !forceUnlocked && insightsLeft <= 0)
-            }
-            className="min-h-[88px] max-h-[200px] flex-1 resize-y overflow-y-auto rounded-2xl border border-blue-400/30 bg-black/55 px-4 py-3 text-sm leading-relaxed text-cream outline-none placeholder:text-ivory/35 focus:border-violet-400/55 focus:ring-1 focus:ring-violet-500/35 disabled:opacity-50"
+            placeholder="Ask about career, relationships, dasha…"
+            disabled={sending || magicLinkInsightsExhausted || (teaserMode && !forceUnlocked && insightsLeft <= 0)}
+            className="min-h-[72px] max-h-[160px] flex-1 resize-y overflow-y-auto rounded-2xl border border-blue-400/30 bg-black/55 px-4 py-3 text-sm leading-relaxed text-cream outline-none placeholder:text-ivory/35 focus:border-violet-400/55 disabled:opacity-50"
             aria-label="Chat message"
           />
           <button
             type="submit"
             disabled={
               sending ||
-              (greetingLoading && !sessionChatMode) ||
               !input.trim() ||
               magicLinkInsightsExhausted ||
               (teaserMode && !forceUnlocked && insightsLeft <= 0) ||
               Boolean(challengeState?.required && challengeState.provider === 'turnstile' && !challengeToken)
             }
-            className="min-h-[48px] rounded-2xl border border-amber-400/45 bg-gradient-to-r from-amber-900/45 to-violet-900/40 px-6 py-2 text-sm font-medium text-gold transition hover:border-gold/60 disabled:opacity-40 sm:w-auto"
+            className="min-h-[44px] rounded-2xl border border-amber-400/45 bg-gradient-to-r from-amber-900/45 to-violet-900/40 px-6 py-2 text-sm font-medium text-gold transition hover:border-gold/60 disabled:opacity-40 sm:w-auto"
           >
-            Send
+            {sending ? 'Sending…' : 'Send'}
           </button>
         </div>
+        <p className="text-[11px] text-ivory/40">Enter to send · Shift+Enter for new line</p>
       </form>
 
       {magicLinkInsightsExhausted ? (
@@ -658,43 +524,30 @@ export default function ChartGrahaChat({
           >
             Email {SUPPORT_EMAIL}
           </a>
-          <p className="mt-3 text-xs text-ivory/50">
-            Your chart view remains available; only new AI questions need a top-up from your astrologer or support.
-          </p>
         </div>
       ) : null}
 
-      {teaserMode && !forceUnlocked && insightsLeft <= 0 && (
+      {teaserMode && !forceUnlocked && insightsLeft <= 0 ? (
         <div className="mt-4 rounded-2xl border border-gold/30 bg-black/55 p-5 text-center">
-          <p className="text-sm leading-relaxed text-gold-100">
-            Your chart contains deeper timing layers, emotional blueprints, and life-phase patterns waiting underneath.
-          </p>
-          <p className="mt-2 text-xs text-ivory-100/50">
-            Explore detailed planetary reasoning, activation windows, and ongoing conversational analysis.
-          </p>
           <button
             type="button"
             onClick={() => onTeaserLock?.()}
-            className="mt-4 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gold/60 bg-gold/90 px-5 py-2.5 text-xs font-semibold tracking-wide text-black transition hover:bg-gold"
+            className="mt-2 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gold/60 bg-gold/90 px-5 py-2.5 text-xs font-semibold text-black"
           >
             Explore Full Life Decode
           </button>
         </div>
-      )}
+      ) : null}
 
       <PremiumUnlockModal
         open={showPremiumModal}
         onClose={() => setShowPremiumModal(false)}
         onUnlock={(tier) => {
-          if (tier === 'master') {
-            setInsightsLeft(30);
-          } else if (tier === 'curiosity') {
-            setInsightsLeft(10);
-          }
+          if (tier === 'master') setInsightsLeft(30);
+          else if (tier === 'curiosity') setInsightsLeft(10);
           writePremiumDemoUnlock(true);
           setPremiumDemoUnlocked(true);
           onPremiumUnlock?.(tier);
-          setInsightPulse(true);
           setShowPremiumModal(false);
         }}
       />

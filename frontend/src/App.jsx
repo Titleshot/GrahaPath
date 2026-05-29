@@ -27,6 +27,7 @@ import {
   writeCachedInsights,
   insightsFromPayload
 } from './lib/insightsBalance';
+import { hasStoredChartViewSession, readChartViewSession, saveChartViewSession } from './lib/chartViewSession';
 
 const API_URL = withApiBase('/api/generate-chart');
 const ADMIN_GENERATE_TOKEN_URL = withApiBase('/api/admin/charts/generate');
@@ -311,6 +312,7 @@ export default function App() {
       setError('Assigned chart could not be loaded for this token.');
       return;
     }
+    if (data?.viewSession) saveChartViewSession(data.viewSession);
     setChart(data.chart);
     setPaidUnlocked(true);
     setTokenSessionMode(true);
@@ -323,13 +325,46 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!hasStoredChartViewSession() || chart || pendingViewToken) return;
+    let cancelled = false;
+    setTokenSessionMode(true);
+    setPaidUnlocked(true);
+    (async () => {
+      try {
+        const res = await apiFetch(CHART_SESSION_URL, { method: 'GET' });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok || !data?.chart) {
+          if (!readChartViewSession()) return;
+          setTokenSessionMode(false);
+          setPaidUnlocked(false);
+          return;
+        }
+        setChart(data.chart);
+        if (data?.profileId) setChartProfileId(String(data.profileId));
+        const remaining = insightsFromPayload(data);
+        if (remaining != null) applyInsightsBalance(remaining);
+      } catch {
+        if (!cancelled) {
+          setTokenSessionMode(false);
+          setPaidUnlocked(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chart, pendingViewToken, applyInsightsBalance]);
+
+  useEffect(() => {
     trackPageView(routePath || '/');
   }, [routePath]);
 
   useEffect(() => {
     if (routePath !== '/' || !chart) return;
     refreshInsightsBalance();
-  }, [routePath, chart, refreshInsightsBalance]);
+  }, [routePath, tokenSessionMode, chartProfileId, refreshInsightsBalance]);
 
   useEffect(() => {
     if (!chart || premiumInsights != null) return;
@@ -695,18 +730,6 @@ export default function App() {
     });
   }
 
-  async function handleShareLink() {
-    const href = typeof window !== 'undefined' ? window.location.href : '';
-    if (!href) return;
-    try {
-      await navigator.clipboard.writeText(href);
-      setShareStatus('Link copied. You can now share this page.');
-    } catch {
-      setShareStatus('Could not copy automatically. Please copy from your address bar.');
-    }
-    window.setTimeout(() => setShareStatus(''), 2600);
-  }
-
   async function handleCopyMagicLink() {
     const value = String(adminMagicLink || '').trim();
     if (!value) return;
@@ -931,6 +954,7 @@ export default function App() {
   }, [routePath]);
 
   const hasMeaningfulRightPanel = isLoading || Boolean(chart) || Boolean(error);
+  const clientMagicLinkView = tokenSessionMode;
 
   if (routePath === '/terms') {
     return <LegalPage type="terms" onBack={handleBack} onNavigate={navigateTo} />;
@@ -1034,7 +1058,7 @@ export default function App() {
               >
                 Explore the experience
               </a>
-              {!AUTH_LOGIN_ENABLED ? (
+              {!AUTH_LOGIN_ENABLED && !clientMagicLinkView ? (
                 <button
                   onClick={() => setShowPaymentPreview(true)}
                   className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
@@ -1045,7 +1069,7 @@ export default function App() {
             </div>
           </div>
         </motion.header>
-        {!AUTH_LOGIN_ENABLED && premiumStatus ? (
+        {!AUTH_LOGIN_ENABLED && !clientMagicLinkView && premiumStatus ? (
           <div
             className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm ${
               premiumStatusTone === 'warning'
@@ -1096,15 +1120,16 @@ export default function App() {
           </div>
         ) : null}
 
-        {INVITE_GATE_ENABLED ? <InviteAccessPanel /> : null}
+        {INVITE_GATE_ENABLED && !clientMagicLinkView ? <InviteAccessPanel /> : null}
 
         <section
           className={`grid flex-1 gap-6 ${
-            hasMeaningfulRightPanel
+            hasMeaningfulRightPanel && !clientMagicLinkView
               ? '2xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)] 2xl:items-start 2xl:gap-7'
               : 'grid-cols-1'
           }`}
         >
+          {!clientMagicLinkView ? (
           <div
             className={`relative z-50 min-w-0 overflow-visible ${
               hasMeaningfulRightPanel ? '' : 'mx-auto w-full max-w-[900px]'
@@ -1183,11 +1208,12 @@ export default function App() {
               </>
             )}
           </div>
+          ) : null}
 
           {hasMeaningfulRightPanel ? (
             <div
               ref={resultsRef}
-              className="min-h-[500px] min-w-0 overflow-x-hidden scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:min-h-[560px] sm:p-5 lg:min-h-[720px] lg:p-7"
+              className="min-w-0 scroll-mt-4 overflow-x-hidden overflow-y-visible rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5"
             >
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -1212,6 +1238,7 @@ export default function App() {
                         premiumEmail={premiumEmail}
                         remainingInsights={premiumInsights}
                         sessionChatMode={tokenSessionMode}
+                        sessionProfileId={chartProfileId}
                         onInsightsChange={applyInsightsBalance}
                       />
                     ) : demoUsed ? (
@@ -1239,6 +1266,7 @@ export default function App() {
                         <DemoExperience
                           chart={chart}
                           sessionChatMode={tokenSessionMode}
+                          sessionProfileId={chartProfileId}
                           remainingInsights={premiumInsights}
                           onInsightsChange={applyInsightsBalance}
                           onUnlock={() => {
@@ -1250,6 +1278,7 @@ export default function App() {
                       <DemoExperience
                         chart={chart}
                         sessionChatMode={tokenSessionMode}
+                        sessionProfileId={chartProfileId}
                         remainingInsights={premiumInsights}
                         onInsightsChange={applyInsightsBalance}
                         onUnlock={() => {
@@ -1299,19 +1328,11 @@ export default function App() {
                     ) : null}
                     <section className="rounded-2xl border border-gold/18 bg-black/25 p-4 sm:p-5">
                       <p className="text-xs uppercase tracking-[0.22em] text-gold/70">Continue the experience</p>
-                      <h3 className="mt-2 font-serif text-xl text-gold-100">Share or leave feedback</h3>
+                      <h3 className="mt-2 font-serif text-xl text-gold-100">Feedback &amp; contact</h3>
                       <p className="mt-2 text-sm leading-relaxed text-ivory/70">
-                        If this reading resonated, share the page with someone who might value it. You can also send
-                        feedback to help us improve the GrahaPath experience.
+                        Send feedback to help us improve the GrahaPath experience, or reach out if you need support.
                       </p>
                       <div className="mt-4 flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={handleShareLink}
-                          className="rounded-full border border-gold/35 bg-gold/10 px-5 py-2 text-sm font-medium text-gold transition hover:border-gold/55 hover:bg-gold/20"
-                        >
-                          Share this link
-                        </button>
                         <a
                           href={buildFeedbackMailto()}
                           onClick={() => {
@@ -1337,8 +1358,7 @@ export default function App() {
                           Contact us
                         </a>
                       </div>
-                      {shareStatus ? <p className="mt-3 text-xs text-emerald-300">{shareStatus}</p> : null}
-                      {feedbackStatus ? <p className="mt-1 text-xs text-ivory/65">{feedbackStatus}</p> : null}
+                      {feedbackStatus ? <p className="mt-3 text-xs text-ivory/65">{feedbackStatus}</p> : null}
                     </section>
                   </motion.div>
                 ) : error ? (

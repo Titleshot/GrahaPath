@@ -181,6 +181,7 @@ function extendPhaseTitle(title, ageRange) {
 export default function DemoExperience({
   chart,
   sessionChatMode = false,
+  sessionProfileId = '',
   remainingInsights = null,
   onInsightsChange = null
 }) {
@@ -283,6 +284,7 @@ export default function DemoExperience({
               : 50
         }
         sessionChatMode={sessionChatMode}
+        sessionProfileId={sessionProfileId}
         onInsightsChange={onInsightsChange}
       />
 
