@@ -6,7 +6,6 @@ import { apiFetch, withApiBase } from '../lib/apiBase';
 import { MAGIC_LINK_TOPUP_COPY, SUPPORT_EMAIL } from '../lib/supportContact';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
-const API_CHAT_SESSION = withApiBase('/api/v1/chat-query');
 
 function prettifyAssistantText(raw) {
   const text = String(raw || '').trim();
@@ -302,20 +301,17 @@ export default function ChartGrahaChat({
     const userPlan = forceUnlocked || premiumDemoUnlocked ? 'full' : 'free';
 
     try {
-      const endpoint = sessionChatMode ? API_CHAT_SESSION : API_CHAT_V2;
-      const payload = sessionChatMode
-        ? { message: text, conversationHistory: historyForApi }
-        : {
-            chart,
-            message: text,
-            userPlan,
-            premiumEmail: premiumEmail || undefined,
-            conversationHistory: historyForApi,
-            surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
-            challengeToken: challengeToken || undefined
-          };
+      const payload = {
+        chart,
+        message: text,
+        userPlan: sessionChatMode || forceUnlocked || premiumDemoUnlocked ? 'full' : userPlan,
+        premiumEmail: premiumEmail || undefined,
+        conversationHistory: historyForApi,
+        surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
+        challengeToken: challengeToken || undefined
+      };
 
-      const res = await apiFetch(endpoint, {
+      const res = await apiFetch(API_CHAT_V2, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

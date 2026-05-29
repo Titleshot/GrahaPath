@@ -27,6 +27,12 @@ const { incCounter } = require('../services/securityMetricsService');
 const { looksLikeReportOrLifePhaseJson } = require('../services/grahapathChat/responseFormatter');
 const { detectIntent } = require('../services/grahapathChat/intentDetector');
 const { stampChartIdentity, validatePaywallSessionForChart } = require('../services/chartIdentityService');
+const { consumeProfileInsight } = require('../services/chartProfileService');
+
+function magicLinkRemaining(profile) {
+  if (!profile) return 0;
+  return Math.max(0, Number(profile.insightsLimit || 55) - Number(profile.insightsUsed || 0));
+}
 
 function userKeyFromRequest(req) {
   const fwd = req.headers['x-forwarded-for'];
@@ -98,20 +104,27 @@ function grahaPathChatV2(req, res, next) {
       });
     }
 
+    const isMagicLink = req.chatAccessMode === 'magic_link' && req.magicLinkProfile;
     let chart = req.body?.chart;
     if (!chart || typeof chart !== 'object') {
-      return res.status(400).json({
-        error: 'BadRequest',
-        message: 'Request body must include chart.'
-      });
+      if (!isMagicLink) {
+        return res.status(400).json({
+          error: 'BadRequest',
+          message: 'Request body must include chart.'
+        });
+      }
+      chart = req.magicLinkProfile.chart;
     }
-    chart = stampChartIdentity(chart, extractClientFingerprint(req));
+    chart = stampChartIdentity(
+      isMagicLink ? req.magicLinkProfile.chart : chart,
+      extractClientFingerprint(req)
+    );
 
-    const demoPremium = isDemoPremiumUnlocked(req);
+    const demoPremium = isMagicLink ? true : isDemoPremiumUnlocked(req);
     const premiumEmail =
       typeof req.body?.premiumEmail === 'string' ? req.body.premiumEmail.trim().toLowerCase() : '';
     let premiumCounter = null;
-    const userPlan = String(req.body?.userPlan || (demoPremium ? 'full' : 'free')).toLowerCase();
+    const userPlan = isMagicLink ? 'full' : String(req.body?.userPlan || (demoPremium ? 'full' : 'free')).toLowerCase();
     const mode = String(req.body?.mode || 'message').toLowerCase();
     const conversationHistory = Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory : [];
 
@@ -146,55 +159,56 @@ function grahaPathChatV2(req, res, next) {
       clientFingerprint
     );
     const sessionProfileHash = chart?.profileHash || profileHash;
-    const assignedProfileHash = String(req.authUser?.assignedProfileHash || '').trim();
-    if (assignedProfileHash && sessionProfileHash !== assignedProfileHash) {
-      return res.status(403).json({
-        error: 'ProfileAccessDenied',
-        message: 'This login is bound to a different chart profile.'
-      });
-    }
-
-    const paywallSession = validatePaywallSessionForChart(req, chart, profileHash);
-    if (!paywallSession.ok) {
-      if (paywallSession.status === 401) incCounter('security.session_invalid');
-      else incCounter('security.profile_mismatch');
-      return res.status(paywallSession.status).json({
-        error: paywallSession.error,
-        message: paywallSession.message
-      });
-    }
-
-    const requireSession = process.env.PAYWALL_REQUIRE_SESSION !== 'false';
-    const sessionToken = readSessionTokenFromRequest(req);
-    const session = paywallSession.session || verifySessionToken(sessionToken);
-    const risk = assessAbuseRisk({
-      sessionValid: session.valid,
-      fingerprintPresent: Boolean(clientFingerprint && clientFingerprint !== 'unknown-fp'),
-      burstCount: burst.count
-    });
-    if (risk.requireChallenge) {
-      const challengeToken = String(req.headers['x-gp-turnstile-token'] || req.body?.challengeToken || '').trim();
-      const staticToken = String(req.headers['x-gp-challenge-token'] || '').trim();
-      const challenge = await verifySecurityChallenge({
-        token: challengeToken,
-        staticToken,
-        remoteIp: requester
-      });
-      if (challenge.ok) {
-        incCounter('security.challenge_pass');
-      } else {
-        incCounter('security.challenge_required');
-        return res.status(429).json({
-          error: 'ChallengeRequired',
-          message: 'Additional verification is required before continuing.',
-          challenge: {
-            required: true,
-            reasons: risk.reasons,
-            provider: challenge.provider,
-            siteKey: challenge.siteKey || null,
-            reason: challenge.reason || null
-          }
+    if (!isMagicLink) {
+      const assignedProfileHash = String(req.authUser?.assignedProfileHash || '').trim();
+      if (assignedProfileHash && sessionProfileHash !== assignedProfileHash) {
+        return res.status(403).json({
+          error: 'ProfileAccessDenied',
+          message: 'This login is bound to a different chart profile.'
         });
+      }
+
+      const paywallSession = validatePaywallSessionForChart(req, chart, profileHash);
+      if (!paywallSession.ok) {
+        if (paywallSession.status === 401) incCounter('security.session_invalid');
+        else incCounter('security.profile_mismatch');
+        return res.status(paywallSession.status).json({
+          error: paywallSession.error,
+          message: paywallSession.message
+        });
+      }
+
+      const sessionToken = readSessionTokenFromRequest(req);
+      const session = paywallSession.session || verifySessionToken(sessionToken);
+      const risk = assessAbuseRisk({
+        sessionValid: session.valid,
+        fingerprintPresent: Boolean(clientFingerprint && clientFingerprint !== 'unknown-fp'),
+        burstCount: burst.count
+      });
+      if (risk.requireChallenge) {
+        const challengeToken = String(req.headers['x-gp-turnstile-token'] || req.body?.challengeToken || '').trim();
+        const staticToken = String(req.headers['x-gp-challenge-token'] || '').trim();
+        const challenge = await verifySecurityChallenge({
+          token: challengeToken,
+          staticToken,
+          remoteIp: requester
+        });
+        if (challenge.ok) {
+          incCounter('security.challenge_pass');
+        } else {
+          incCounter('security.challenge_required');
+          return res.status(429).json({
+            error: 'ChallengeRequired',
+            message: 'Additional verification is required before continuing.',
+            challenge: {
+              required: true,
+              reasons: risk.reasons,
+              provider: challenge.provider,
+              siteKey: challenge.siteKey || null,
+              reason: challenge.reason || null
+            }
+          });
+        }
       }
     }
     const freeLimit = Number(process.env.FREE_CHAT_LIMIT || 3);
@@ -207,16 +221,22 @@ function grahaPathChatV2(req, res, next) {
           mode: 'greeting',
           intent: 'greeting',
           answer: cached,
-          remainingInsights: authEnabled
-            ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
-            : demoPremium
-              ? 999
-              : freeLimit,
-          insightPhase: authEnabled
-            ? Number(req.authUser?.insightsUsed || 0) < 5
+          remainingInsights: isMagicLink
+            ? magicLinkRemaining(req.magicLinkProfile)
+            : authEnabled
+              ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
+              : demoPremium
+                ? 999
+                : freeLimit,
+          insightPhase: isMagicLink
+            ? Number(req.magicLinkProfile?.insightsUsed || 0) < 5
               ? 'test'
               : 'full'
-            : null,
+            : authEnabled
+              ? Number(req.authUser?.insightsUsed || 0) < 5
+                ? 'test'
+                : 'full'
+              : null,
           cached: true
         });
       }
@@ -225,9 +245,9 @@ function grahaPathChatV2(req, res, next) {
         processChatV2Request({
           chart,
           message: '',
-          userPlan,
+          userPlan: 'full',
           conversationHistory,
-          premiumUnlocked: demoPremium,
+          premiumUnlocked: true,
           mode: 'greeting'
         })
       );
@@ -251,18 +271,24 @@ function grahaPathChatV2(req, res, next) {
         mode: 'greeting',
         intent: 'greeting',
         answer,
-        remainingInsights: authEnabled
-          ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
-          : premiumCounter
-            ? premiumCounter.remainingInsights
-            : demoPremium
-              ? 999
-              : freeLimit,
-        insightPhase: authEnabled
-          ? Number(req.authUser?.insightsUsed || 0) < 5
+        remainingInsights: isMagicLink
+          ? magicLinkRemaining(req.magicLinkProfile)
+          : authEnabled
+            ? Math.max(0, Number(req.authUser?.insightsLimit || 55) - Number(req.authUser?.insightsUsed || 0))
+            : premiumCounter
+              ? premiumCounter.remainingInsights
+              : demoPremium
+                ? 999
+                : freeLimit,
+        insightPhase: isMagicLink
+          ? Number(req.magicLinkProfile?.insightsUsed || 0) < 5
             ? 'test'
             : 'full'
-          : null,
+          : authEnabled
+            ? Number(req.authUser?.insightsUsed || 0) < 5
+              ? 'test'
+              : 'full'
+            : null,
         cached: false
       });
     }
@@ -303,7 +329,22 @@ function grahaPathChatV2(req, res, next) {
 
     let freeGate = { allowed: true, used: 0, limit: freeLimit };
     let authInsight = null;
-    if (authEnabled) {
+    let magicInsightQuota = null;
+    if (isMagicLink) {
+      magicInsightQuota = await consumeProfileInsight(req.magicLinkProfile.id);
+      if (!magicInsightQuota.allowed) {
+        return res.status(402).json({
+          error: 'InsightsExhausted',
+          message:
+            'Your AI insights for this chart are used up. To top up this link, contact whoever shared it with you, or email radheradhe742@proton.me.',
+          remainingInsights: 0
+        });
+      }
+      req.magicLinkProfile = {
+        ...req.magicLinkProfile,
+        insightsUsed: (req.magicLinkProfile.insightsUsed || 0) + 1
+      };
+    } else if (authEnabled) {
       authInsight = consumeInsight(req.authUser?.accessId || '');
       if (!authInsight.allowed) {
         return res.status(402).json({
@@ -348,14 +389,20 @@ function grahaPathChatV2(req, res, next) {
           mode: surfaceMode,
           intent: detectIntent(cleanMessage),
           answer: cached,
-          remainingInsights: premiumCounter
-            ? premiumCounter.remainingInsights
+          remainingInsights: isMagicLink
+            ? magicInsightQuota?.remainingInsights ?? magicLinkRemaining(req.magicLinkProfile)
+            : premiumCounter
+              ? premiumCounter.remainingInsights
+              : authEnabled
+                ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
+                : demoPremium
+                  ? 999
+                  : Math.max(0, freeGate.limit - freeGate.used),
+          insightPhase: isMagicLink
+            ? magicInsightQuota?.phase || 'full'
             : authEnabled
-              ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
-              : demoPremium
-                ? 999
-                : Math.max(0, freeGate.limit - freeGate.used),
-          insightPhase: authEnabled ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full') : null,
+              ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full')
+              : null,
           cached: true,
           freeUsed: freeGate.used,
           freeLimit: freeGate.limit
@@ -367,10 +414,10 @@ function grahaPathChatV2(req, res, next) {
       processChatV2Request({
         chart,
         message: cleanMessage,
-        userPlan,
+        userPlan: isMagicLink ? 'full' : userPlan,
         conversationHistory,
         surfaceMode,
-        premiumUnlocked: demoPremium,
+        premiumUnlocked: isMagicLink ? true : demoPremium,
         mode: 'message'
       })
     );
@@ -384,14 +431,20 @@ function grahaPathChatV2(req, res, next) {
       mode: result.mode,
       intent: result.intent,
       answer,
-      remainingInsights: premiumCounter
-        ? premiumCounter.remainingInsights
-        : authEnabled
-          ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
-          : demoPremium
-            ? 999
+      remainingInsights: isMagicLink
+        ? magicInsightQuota?.remainingInsights ?? magicLinkRemaining(req.magicLinkProfile)
+        : premiumCounter
+          ? premiumCounter.remainingInsights
+          : authEnabled
+            ? authInsight?.remainingInsights ?? Math.max(0, freeGate.limit - freeGate.used)
+            : demoPremium
+              ? 999
               : Math.max(0, freeGate.limit - freeGate.used),
-      insightPhase: authEnabled ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full') : null,
+      insightPhase: isMagicLink
+        ? magicInsightQuota?.phase || 'full'
+        : authEnabled
+          ? authInsight?.phase || (freeGate.used <= 5 ? 'test' : 'full')
+          : null,
       cached: false,
       freeUsed: freeGate.used,
       freeLimit: freeGate.limit

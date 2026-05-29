@@ -139,7 +139,9 @@ async function chartBoundChatQuery(req, res, next) {
     }
     const remainingBefore = Math.max(0, profile.insightsLimit - profile.insightsUsed);
     if (mode === 'greeting') {
-      const result = await processChatV2Request({
+      const { enqueueGeminiOperation } = require('../services/chatReliabilityService');
+      const result = await enqueueGeminiOperation(() =>
+        processChatV2Request({
         chart: stampChartIdentity(profile.chart),
         message: '',
         userPlan: 'full',
@@ -147,7 +149,8 @@ async function chartBoundChatQuery(req, res, next) {
         surfaceMode: 'greeting',
         premiumUnlocked: true,
         mode: 'greeting'
-      });
+        })
+      );
       return res.json({
         mode: result.mode,
         intent: result.intent,
@@ -165,15 +168,18 @@ async function chartBoundChatQuery(req, res, next) {
         remainingInsights: 0
       });
     }
-    const result = await processChatV2Request({
-      chart: stampChartIdentity(profile.chart),
-      message,
-      userPlan: 'full',
-      conversationHistory: Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory : [],
-      surfaceMode: 'message',
-      premiumUnlocked: true,
-      mode: 'message'
-    });
+    const { enqueueGeminiOperation } = require('../services/chatReliabilityService');
+    const result = await enqueueGeminiOperation(() =>
+      processChatV2Request({
+        chart: stampChartIdentity(profile.chart),
+        message,
+        userPlan: 'full',
+        conversationHistory: Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory : [],
+        surfaceMode: 'message',
+        premiumUnlocked: true,
+        mode: 'message'
+      })
+    );
     return res.json({
       mode: result.mode,
       intent: result.intent,
