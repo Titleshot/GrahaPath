@@ -1,10 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 const { stampChartIdentity } = require('./chartIdentityService');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const STORE_FILE = path.join(DATA_DIR, 'chart-profiles.json');
+const MAGIC_EMAIL_DOMAIN = 'view.grahapath.app';
+const MAGIC_PURCHASE_STATUS = 'magic_link';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket }
+  });
+}
 
 function ensureStoreFile() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -41,6 +55,20 @@ function randomToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
 
+function magicEmail(profileId) {
+  return `magic+${String(profileId || '').trim()}@${MAGIC_EMAIL_DOMAIN}`;
+}
+
+function profileIdFromMagicEmail(email) {
+  const match = String(email || '').match(/^magic\+(.+)@view\.grahapath\.app$/i);
+  return match ? match[1] : null;
+}
+
+function readGpMeta(chart) {
+  const meta = chart?._gpMeta;
+  return meta && typeof meta === 'object' ? meta : {};
+}
+
 function sanitizeRecord(row) {
   return {
     id: row.id,
@@ -52,17 +80,160 @@ function sanitizeRecord(row) {
     expiresAt: row.expiresAt || null,
     insightsUsed: Number.isFinite(Number(row.insightsUsed)) ? Number(row.insightsUsed) : 0,
     insightsLimit: Number.isFinite(Number(row.insightsLimit)) ? Number(row.insightsLimit) : 55,
-    chart: row.chart && typeof row.chart === 'object' ? row.chart : null
+    chart: row.chart && typeof row.chart === 'object' ? row.chart : null,
+    legalAcceptances: Array.isArray(row.legalAcceptances) ? row.legalAcceptances : [],
+    supabaseUserId: row.supabaseUserId || null
   };
 }
 
-function createChartProfile({ clientName, chart, createdBy, expiresAt = null, insightsLimit = 55 }) {
+function profileFromSupabaseRows(user, chartRow) {
+  if (!user || !chartRow?.chart_data) return null;
+  const profileId = profileIdFromMagicEmail(user.email);
+  if (!profileId) return null;
+  const chart = chartRow.chart_data;
+  const meta = readGpMeta(chart);
+  const limit = Math.max(1, Math.trunc(Number(meta.insightsLimit) || Number(user.remaining_insights) || 55));
+  const remaining = Math.max(0, Math.trunc(Number(user.remaining_insights) || 0));
+  const used = Number.isFinite(Number(meta.insightsUsed))
+    ? Math.max(0, Math.trunc(Number(meta.insightsUsed)))
+    : Math.max(0, limit - remaining);
+
+  return sanitizeRecord({
+    id: profileId,
+    clientName: meta.clientName || null,
+    accessToken: user.chart_id,
+    createdBy: meta.createdBy || null,
+    createdAt: user.created_at || user.purchase_timestamp || null,
+    revoked: meta.revoked === true || user.premium_active === false,
+    expiresAt: meta.expiresAt || null,
+    insightsUsed: used,
+    insightsLimit: limit,
+    chart,
+    legalAcceptances: Array.isArray(meta.legalAcceptances) ? meta.legalAcceptances : [],
+    supabaseUserId: user.id
+  });
+}
+
+async function getLatestChartRowForUser(userId) {
+  const { data, error } = await supabase
+    .from('charts')
+    .select('id, chart_data, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn('[chartProfileService] chart lookup failed:', error.message);
+    return null;
+  }
+  return data;
+}
+
+async function getProfileByTokenFromSupabase(accessToken) {
+  if (!supabase) return null;
+  const token = String(accessToken || '').trim();
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('id, email, chart_id, remaining_insights, premium_active, purchase_status, purchase_timestamp, created_at')
+    .eq('chart_id', token)
+    .eq('purchase_status', MAGIC_PURCHASE_STATUS)
+    .maybeSingle();
+  if (error) {
+    console.warn('[chartProfileService] Supabase token lookup failed:', error.message);
+    return null;
+  }
+  if (!user) return null;
+  const chartRow = await getLatestChartRowForUser(user.id);
+  return profileFromSupabaseRows(user, chartRow);
+}
+
+async function getProfileByIdFromSupabase(profileId) {
+  if (!supabase) return null;
+  const email = magicEmail(profileId);
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('id, email, chart_id, remaining_insights, premium_active, purchase_status, purchase_timestamp, created_at')
+    .eq('email', email)
+    .eq('purchase_status', MAGIC_PURCHASE_STATUS)
+    .maybeSingle();
+  if (error) {
+    console.warn('[chartProfileService] Supabase profile lookup failed:', error.message);
+    return null;
+  }
+  if (!user) return null;
+  const chartRow = await getLatestChartRowForUser(user.id);
+  return profileFromSupabaseRows(user, chartRow);
+}
+
+async function createChartProfileInSupabase(record) {
+  if (!supabase) return false;
+  const email = magicEmail(record.id);
+  const limit = Math.max(1, Math.trunc(Number(record.insightsLimit) || 55));
+  const chartPayload = {
+    ...record.chart,
+    _gpMeta: {
+      insightsLimit: limit,
+      insightsUsed: 0,
+      clientName: record.clientName || null,
+      createdBy: record.createdBy || null,
+      revoked: false,
+      expiresAt: record.expiresAt || null,
+      legalAcceptances: []
+    }
+  };
+
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .insert({
+      email,
+      chart_id: record.accessToken,
+      plan: 'full',
+      remaining_insights: limit,
+      premium_active: true,
+      purchase_status: MAGIC_PURCHASE_STATUS,
+      purchase_timestamp: record.createdAt || nowIso()
+    })
+    .select('id')
+    .single();
+
+  if (userError) {
+    console.warn('[chartProfileService] Supabase user insert failed:', userError.message);
+    return false;
+  }
+
+  const { error: chartError } = await supabase.from('charts').insert({
+    user_id: user.id,
+    birth_date: record.chart?.birthDate || record.chart?.dateOfBirth || null,
+    birth_time: record.chart?.birthTime || record.chart?.timeOfBirth || null,
+    birth_place: record.chart?.place || record.chart?.location?.displayName || null,
+    chart_data: chartPayload
+  });
+
+  if (chartError) {
+    console.warn('[chartProfileService] Supabase chart insert failed:', chartError.message);
+    return false;
+  }
+  return true;
+}
+
+function getProfileByTokenFromFile(accessToken) {
+  const store = readStore();
+  const record = Object.values(store.records).find((row) => String(row?.accessToken || '') === accessToken);
+  return record ? sanitizeRecord(record) : null;
+}
+
+function getProfileByIdFromFile(id) {
+  const store = readStore();
+  const row = store.records[id];
+  return row ? sanitizeRecord(row) : null;
+}
+
+async function createChartProfile({ clientName, chart, createdBy, expiresAt = null, insightsLimit = 55 }) {
   if (!chart || typeof chart !== 'object') {
     const error = new Error('chart is required.');
     error.code = 'INVALID_CHART';
     throw error;
   }
-  const store = readStore();
   const id = randomId();
   const accessToken = randomToken();
   const record = {
@@ -75,35 +246,59 @@ function createChartProfile({ clientName, chart, createdBy, expiresAt = null, in
     revoked: false,
     expiresAt: expiresAt || null,
     insightsUsed: 0,
-    insightsLimit: Math.max(1, Math.trunc(Number(insightsLimit) || 55))
+    insightsLimit: Math.max(1, Math.trunc(Number(insightsLimit) || 55)),
+    legalAcceptances: []
   };
+
+  const store = readStore();
   store.records[id] = record;
   writeStore(store);
+  await createChartProfileInSupabase(record);
   return sanitizeRecord(record);
 }
 
-function getProfileByToken(accessToken) {
+async function getProfileByToken(accessToken) {
   const token = String(accessToken || '').trim();
   if (!token) return null;
-  const store = readStore();
-  const record = Object.values(store.records).find((row) => String(row?.accessToken || '') === token);
-  return record ? sanitizeRecord(record) : null;
+
+  const fromDb = await getProfileByTokenFromSupabase(token);
+  if (fromDb) return fromDb;
+
+  return getProfileByTokenFromFile(token);
 }
 
-function getProfileById(id) {
+async function getProfileById(id) {
   const key = String(id || '').trim();
   if (!key) return null;
-  const store = readStore();
-  const row = store.records[key];
-  return row ? sanitizeRecord(row) : null;
+
+  const fromDb = await getProfileByIdFromSupabase(key);
+  if (fromDb) return fromDb;
+
+  return getProfileByIdFromFile(key);
 }
 
-function recordLegalAcceptance(profileId, meta = {}) {
+async function updateSupabaseMeta(profile, patch = {}) {
+  if (!supabase || !profile?.supabaseUserId) return false;
+  const chartRow = await getLatestChartRowForUser(profile.supabaseUserId);
+  if (!chartRow?.id || !chartRow?.chart_data) return false;
+  const nextChart = {
+    ...chartRow.chart_data,
+    _gpMeta: {
+      ...readGpMeta(chartRow.chart_data),
+      ...patch
+    }
+  };
+  const { error } = await supabase.from('charts').update({ chart_data: nextChart }).eq('id', chartRow.id);
+  if (error) {
+    console.warn('[chartProfileService] Supabase meta update failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
+async function recordLegalAcceptance(profileId, meta = {}) {
   const id = String(profileId || '').trim();
   if (!id) return false;
-  const store = readStore();
-  const row = store.records[id];
-  if (!row) return false;
   const entry = {
     at: nowIso(),
     termsVersion: String(meta.termsVersion || '').trim() || null,
@@ -111,36 +306,63 @@ function recordLegalAcceptance(profileId, meta = {}) {
     disclaimerVersion: String(meta.disclaimerVersion || '').trim() || null,
     userAgent: String(meta.userAgent || '').slice(0, 280) || null
   };
-  const list = Array.isArray(row.legalAcceptances) ? row.legalAcceptances : [];
+
+  const profile = await getProfileById(id);
+  if (!profile) return false;
+
+  const list = Array.isArray(profile.legalAcceptances) ? profile.legalAcceptances : [];
   list.push(entry);
-  row.legalAcceptances = list.slice(-20);
+  const legalAcceptances = list.slice(-20);
+
+  const store = readStore();
+  const row = store.records[id] || { ...profile };
+  row.legalAcceptances = legalAcceptances;
   store.records[id] = row;
   writeStore(store);
+
+  await updateSupabaseMeta(profile, { legalAcceptances });
   return true;
 }
 
-function consumeProfileInsight(profileId) {
+async function consumeProfileInsight(profileId) {
   const id = String(profileId || '').trim();
   if (!id) return { allowed: false, reason: 'invalid_profile' };
-  const store = readStore();
-  const row = store.records[id];
-  if (!row) return { allowed: false, reason: 'not_found' };
-  const limit = Math.max(1, Math.trunc(Number(row.insightsLimit) || 55));
-  const used = Math.max(0, Math.trunc(Number(row.insightsUsed) || 0));
-  if (row.revoked === true) return { allowed: false, reason: 'revoked' };
-  if (row.expiresAt && new Date(row.expiresAt).getTime() < Date.now()) {
+
+  const profile = await getProfileById(id);
+  if (!profile) return { allowed: false, reason: 'not_found' };
+
+  const limit = Math.max(1, Math.trunc(Number(profile.insightsLimit) || 55));
+  const used = Math.max(0, Math.trunc(Number(profile.insightsUsed) || 0));
+  if (profile.revoked === true) return { allowed: false, reason: 'revoked' };
+  if (profile.expiresAt && new Date(profile.expiresAt).getTime() < Date.now()) {
     return { allowed: false, reason: 'expired' };
   }
   if (used >= limit) return { allowed: false, reason: 'exhausted', remainingInsights: 0 };
-  row.insightsUsed = used + 1;
+
+  const nextUsed = used + 1;
+  const remaining = Math.max(0, limit - nextUsed);
+
+  const store = readStore();
+  const row = store.records[id] || { ...profile };
+  row.insightsUsed = nextUsed;
   store.records[id] = row;
   writeStore(store);
+
+  if (supabase && profile.supabaseUserId) {
+    const { error } = await supabase
+      .from('users')
+      .update({ remaining_insights: remaining })
+      .eq('id', profile.supabaseUserId);
+    if (error) console.warn('[chartProfileService] insight consume update failed:', error.message);
+    await updateSupabaseMeta(profile, { insightsUsed: nextUsed, insightsLimit: limit });
+  }
+
   return {
     allowed: true,
-    insightsUsed: row.insightsUsed,
+    insightsUsed: nextUsed,
     insightsLimit: limit,
-    remainingInsights: Math.max(0, limit - row.insightsUsed),
-    phase: row.insightsUsed <= 5 ? 'test' : 'full'
+    remainingInsights: remaining,
+    phase: nextUsed <= 5 ? 'test' : 'full'
   };
 }
 

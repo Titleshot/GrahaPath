@@ -28,7 +28,7 @@ async function adminGenerateChartProfile(req, res, next) {
   try {
     if (!requireAdmin(req, res)) return;
     const chart = await buildChartFromRequest(req.body || {});
-    const profile = createChartProfile({
+    const profile = await createChartProfile({
       clientName: req.body?.clientName || req.body?.name || null,
       chart,
       createdBy: req.authUser?.accessId || 'admin',
@@ -53,7 +53,7 @@ async function adminGenerateChartProfile(req, res, next) {
   }
 }
 
-function redeemViewToken(req, res) {
+async function redeemViewToken(req, res) {
   const token = String(req.params?.token || '').trim();
   if (!token) {
     return res.status(400).json({ error: 'BadRequest', message: 'Token is required.' });
@@ -65,14 +65,18 @@ function redeemViewToken(req, res) {
         'You must accept the Terms & Conditions, Privacy Policy, and Disclaimer before opening this chart link.'
     });
   }
-  const profile = getProfileByToken(token);
+  const profile = await getProfileByToken(token);
   if (!profile || profile.revoked) {
-    return res.status(404).json({ error: 'NotFound', message: 'Invalid or expired chart token.' });
+    return res.status(404).json({
+      error: 'NotFound',
+      message:
+        'This chart link is invalid or no longer available. Ask your astrologer to send a fresh link if this one was created before a recent server update.'
+    });
   }
   if (profile.expiresAt && new Date(profile.expiresAt).getTime() < Date.now()) {
     return res.status(410).json({ error: 'Expired', message: 'This chart link has expired.' });
   }
-  recordLegalAcceptance(profile.id, {
+  await recordLegalAcceptance(profile.id, {
     termsVersion: req.body?.termsVersion,
     privacyVersion: req.body?.privacyVersion,
     disclaimerVersion: req.body?.disclaimerVersion,
@@ -83,6 +87,7 @@ function redeemViewToken(req, res) {
   return res.json({
     ok: true,
     profileId: profile.id,
+    viewSession: accessToken,
     chart: stampChartIdentity(profile.chart),
     insights: {
       used: profile.insightsUsed,
@@ -93,13 +98,13 @@ function redeemViewToken(req, res) {
   });
 }
 
-function getSessionChart(req, res) {
+async function getSessionChart(req, res) {
   const raw = readChartAccessToken(req);
   const verified = verifyChartAccessToken(raw);
   if (!verified.valid || !verified.payload?.chartProfileId) {
     return res.status(401).json({ error: 'Unauthorized', message: 'No active chart session.' });
   }
-  const profile = getProfileById(verified.payload.chartProfileId);
+  const profile = await getProfileById(verified.payload.chartProfileId);
   if (!profile) {
     return res.status(404).json({ error: 'NotFound', message: 'Chart profile not found.' });
   }
@@ -127,11 +132,11 @@ async function chartBoundChatQuery(req, res, next) {
     if (!verified.valid || !verified.payload?.chartProfileId) {
       return res.status(401).json({ error: 'Unauthorized', message: 'No active chart session.' });
     }
-    const profile = getProfileById(verified.payload.chartProfileId);
+    const profile = await getProfileById(verified.payload.chartProfileId);
     if (!profile) {
       return res.status(404).json({ error: 'NotFound', message: 'Chart profile not found.' });
     }
-    const quota = consumeProfileInsight(profile.id);
+    const quota = await consumeProfileInsight(profile.id);
     if (!quota.allowed) {
       return res.status(402).json({
         error: 'InsightsExhausted',

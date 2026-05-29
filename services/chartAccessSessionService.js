@@ -64,7 +64,15 @@ function parseCookies(req) {
 
 function readChartAccessToken(req) {
   const cookies = parseCookies(req);
-  return String(cookies[TOKEN_NAME] || '').trim();
+  const fromCookie = String(cookies[TOKEN_NAME] || '').trim();
+  if (fromCookie) return fromCookie;
+
+  const authHeader = String(req?.headers?.authorization || '').trim();
+  if (/^bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^bearer\s+/i, '').trim();
+  }
+
+  return String(req?.headers?.['x-gp-chart-view-session'] || '').trim();
 }
 
 function useCrossSiteCookies() {
