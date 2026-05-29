@@ -123,8 +123,9 @@ async function getSessionChart(req, res) {
 
 async function chartBoundChatQuery(req, res, next) {
   try {
+    const mode = String(req.body?.mode || 'message').toLowerCase();
     const message = String(req.body?.message || '').trim();
-    if (!message) {
+    if (mode !== 'greeting' && !message) {
       return res.status(400).json({ error: 'BadRequest', message: 'message is required.' });
     }
     const raw = readChartAccessToken(req);
@@ -136,11 +137,31 @@ async function chartBoundChatQuery(req, res, next) {
     if (!profile) {
       return res.status(404).json({ error: 'NotFound', message: 'Chart profile not found.' });
     }
+    const remainingBefore = Math.max(0, profile.insightsLimit - profile.insightsUsed);
+    if (mode === 'greeting') {
+      const result = await processChatV2Request({
+        chart: stampChartIdentity(profile.chart),
+        message: '',
+        userPlan: 'full',
+        conversationHistory: Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory : [],
+        surfaceMode: 'greeting',
+        premiumUnlocked: true,
+        mode: 'greeting'
+      });
+      return res.json({
+        mode: result.mode,
+        intent: result.intent,
+        answer: result.answer,
+        remainingInsights: remainingBefore,
+        insightPhase: profile.insightsUsed < 5 ? 'test' : 'full'
+      });
+    }
     const quota = await consumeProfileInsight(profile.id);
     if (!quota.allowed) {
       return res.status(402).json({
         error: 'InsightsExhausted',
-        message: 'Insights exhausted for this chart. Contact admin.',
+        message:
+          'Your AI insights for this chart are used up. To top up this link, contact whoever shared it with you, or email radheradhe742@proton.me.',
         remainingInsights: 0
       });
     }

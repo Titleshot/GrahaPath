@@ -24,6 +24,12 @@ function devPreferViteProxy(apiBase) {
 
 const API_BASE = devPreferViteProxy(import.meta.env.VITE_API_BASE_URL);
 const ACCESS_EMAIL_KEY = 'gp_access_email';
+const CHART_VIEW_SESSION_KEY = 'gp_chart_view_session';
+
+function readChartViewSession() {
+  if (typeof window === 'undefined') return '';
+  return String(window.sessionStorage.getItem(CHART_VIEW_SESSION_KEY) || '').trim();
+}
 
 export function withApiBase(path) {
   const cleanPath = String(path || '').trim();
@@ -40,6 +46,17 @@ export function apiFetch(input, init = {}) {
     const stored = String(window.localStorage.getItem(ACCESS_EMAIL_KEY) || '').trim().toLowerCase();
     if (stored) {
       headers.set('x-gp-access-email', stored);
+    }
+  }
+  if (typeof window !== 'undefined') {
+    const viewSession = readChartViewSession();
+    if (viewSession) {
+      if (!headers.has('authorization')) {
+        headers.set('Authorization', `Bearer ${viewSession}`);
+      }
+      if (!headers.has('x-gp-chart-view-session')) {
+        headers.set('x-gp-chart-view-session', viewSession);
+      }
     }
   }
   return fetch(input, {
