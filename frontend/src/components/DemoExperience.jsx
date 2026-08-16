@@ -5,6 +5,7 @@ import KundaliWheel from './KundaliWheel';
 import LifePhaseValidation from './LifePhaseValidation';
 import ValidationResult from './ValidationResult';
 import ChartGrahaChat from './ChartGrahaChat';
+import ChartReportDownload from './ChartReportDownload';
 import { getClientFingerprint } from '../lib/clientFingerprint';
 import { apiFetch, withApiBase } from '../lib/apiBase';
 
@@ -266,6 +267,8 @@ export default function DemoExperience({
         </div>
         <KundaliWheel chart={chart} forceDeepData mode="paid" />
       </section>
+
+      <ChartReportDownload chart={chart} />
 
       <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-gold/20 bg-black/25 p-5">
         <p className="text-xs uppercase tracking-[0.26em] text-gold/70">This Is What Defines You</p>

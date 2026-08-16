@@ -1,5 +1,5 @@
 const express = require('express');
-const { debugChart, generateChart, placeSuggestions, validateLifePhases, dailyWeather, panchanga } = require('../controllers/chartController');
+const { debugChart, generateChart, generateChartReport, placeSuggestions, validateLifePhases, dailyWeather, panchanga } = require('../controllers/chartController');
 const { requireInviteAccess } = require('../middlewares/requireInviteAccess');
 const { requireUserAuth } = require('../middlewares/requireUserAuth');
 
@@ -7,6 +7,7 @@ const router = express.Router();
 const protectedChart = [requireUserAuth, requireInviteAccess];
 
 router.post('/generate-chart', ...protectedChart, generateChart);
+router.post('/generate-chart-report', ...protectedChart, generateChartReport);
 router.post('/debug-chart', ...protectedChart, debugChart);
 router.post('/validate-life-phases', ...protectedChart, validateLifePhases);
 router.post('/daily-weather', ...protectedChart, dailyWeather);

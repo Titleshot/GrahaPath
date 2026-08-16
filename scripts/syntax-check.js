@@ -74,7 +74,9 @@ const files = [
   'services/grahapathChat/responseFormatter.js',
   'services/grahapathChat/chatService.js',
   'services/dasha/dashaCalculator.js',
-  'services/dasha/ageTimingService.js'
+  'services/dasha/ageTimingService.js',
+  'services/chartReport/reportNarrative.js',
+  'services/chartReport/chartReportPdfService.js'
 ];
 
 for (const relative of files) {

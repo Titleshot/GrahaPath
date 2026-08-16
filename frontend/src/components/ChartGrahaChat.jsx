@@ -4,6 +4,7 @@ import PremiumUnlockModal from './PremiumUnlockModal';
 import { readPremiumDemoUnlock, writePremiumDemoUnlock } from '../lib/chartAccess';
 import { apiFetch, withApiBase } from '../lib/apiBase';
 import { MAGIC_LINK_TOPUP_COPY, SUPPORT_EMAIL } from '../lib/supportContact';
+import ChartReportDownload from './ChartReportDownload';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
 
@@ -414,8 +415,9 @@ export default function ChartGrahaChat({
           <h3 className="mt-1 font-serif text-lg text-cream sm:text-xl">Ask your chart</h3>
           <p className="mt-1 text-[11px] text-ivory/45">GrahaPath AI can make mistakes. Verify important details.</p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2">
           <p className="text-[11px] text-ivory/45">{teaserMode ? 'Free demo teaser mode' : 'Live Chart Intelligence'}</p>
+          <ChartReportDownload chart={chart} compact />
           {showInsightsCounter ? (
             <div
               className={`inline-flex items-center gap-1 rounded-full border border-gold/35 bg-white/5 px-3 py-1 text-[11px] font-medium text-gold-100 shadow-sm backdrop-blur-md transition ${
@@ -457,7 +459,7 @@ export default function ChartGrahaChat({
           </div>
         ))}
         {sending ? (
-          <p className="text-sm text-amber-200/80">GrahaPath AI is thinking… (first reply can take up to a minute)</p>
+          <p className="text-sm text-amber-200/80">GrahaPath AI is thinking… (reply can take up to a minute)</p>
         ) : null}
         <div ref={bottomRef} />
       </div>

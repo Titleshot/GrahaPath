@@ -1,6 +1,7 @@
 import ChartIdentityStrip from './ChartIdentityStrip';
 import KundaliWheel from './KundaliWheel';
 import ChartGrahaChat from './ChartGrahaChat';
+import ChartReportDownload from './ChartReportDownload';
 
 export default function PaidUnlockedExperience({
   chart,
@@ -32,6 +33,7 @@ export default function PaidUnlockedExperience({
 
       <ChartIdentityStrip chart={chart} forceDeepData />
       <KundaliWheel chart={chart} forceDeepData mode="paid" />
+      <ChartReportDownload chart={chart} />
 
       {isQuick ? (
         <>

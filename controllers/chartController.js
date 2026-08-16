@@ -23,6 +23,7 @@ const {
   buildDeviceCookie
 } = require('../services/sessionTokenService');
 const { applyClientChartAccess } = require('../services/chartClientRedaction');
+const { buildChartReportPdf, safeFilename } = require('../services/chartReport/chartReportPdfService');
 const { buildPanchangaForDate } = require('../services/currentAstronomyService');
 const { saveChartForEmail } = require('../services/premiumAccessService');
 const { assignChartToUser, normalizeAccessId, createOrUpdateUser } = require('../services/authUserService');
@@ -513,6 +514,31 @@ async function generateChart(req, res, next) {
   }
 }
 
+async function generateChartReport(req, res, next) {
+  try {
+    let chart = req.body?.chart;
+    const hasPlanets = chart && typeof chart === 'object' && Array.isArray(chart.planets) && chart.planets.length > 0;
+    if (!hasPlanets) {
+      chart = await buildChartFromRequest(req.body || {});
+      attachTimingCore(chart);
+    }
+    const pdf = await buildChartReportPdf(chart);
+    const filename = `GrahaPath-Report-${safeFilename(chart.name)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(pdf.length));
+    return res.send(pdf);
+  } catch (error) {
+    if (error?.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Chart report failed.',
+        details: [error.message]
+      });
+    }
+    return handleChartError(error, res, next);
+  }
+}
+
 async function debugChart(req, res, next) {
   try {
     const chart = await buildChartFromRequest(req.body, { includeDebug: true });
@@ -591,6 +617,7 @@ module.exports = {
   buildChartFromRequest,
   debugChart,
   generateChart,
+  generateChartReport,
   placeSuggestions,
   validateLifePhases,
   dailyWeather,
