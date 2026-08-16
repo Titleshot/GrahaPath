@@ -10,8 +10,7 @@ const { evaluateBirthTimeRectification, compareRectificationOffsets } = require(
 const { buildDailyGrahaWeatherFromTransit } = require('../services/dailyGrahaWeatherService');
 const {
   buildIdentityHash,
-  extractClientFingerprint,
-  checkBurstLimit
+  extractClientFingerprint
 } = require('../services/antiBypassService');
 const {
   issueSessionToken,
@@ -397,23 +396,7 @@ function handleChartError(error, res, next) {
 
 async function generateChart(req, res, next) {
   try {
-    if (String(process.env.ACCESS_AUTH_ENABLED || '').toLowerCase() === 'true') {
-      if (String(req.authUser?.role || 'user') !== 'admin') {
-        return res.status(403).json({
-          error: 'AdminOnlyChartGeneration',
-          message: 'Only admin can generate new charts.'
-        });
-      }
-    }
     const demoPremium = isDemoPremiumUnlocked(req);
-    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-    const burst = await checkBurstLimit(ip);
-    if (!burst.allowed) {
-      return res.status(429).json({
-        error: 'TooManyRequests',
-        message: 'Too many requests in a short period. Please wait and try again.'
-      });
-    }
     const clientFingerprint = extractClientFingerprint(req);
     const { profileHash } = buildIdentityHash(req.body || {}, clientFingerprint);
     const assignedProfileHash = String(req.authUser?.assignedProfileHash || '').trim();
