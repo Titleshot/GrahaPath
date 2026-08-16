@@ -142,27 +142,8 @@ function assessAbuseRisk({ sessionValid, fingerprintPresent, burstCount }) {
   return { score, reasons, requireChallenge };
 }
 
-async function checkAndRecordNewProfile(ip, profileHash) {
-  if (process.env.DISABLE_DAILY_PROFILE_LIMIT === 'true') {
-    return { allowed: true, isNew: true, used: 0, limit: DAILY_NEW_PROFILES_PER_IP };
-  }
-  const now = nowMs();
-  const dayStart = floorToDay(now);
-  const key = `${ip || 'unknown'}:${dayStart}`;
-  const storeKey = `anti:profiles:${key}`;
-  const exists = await store.sismember(storeKey, profileHash);
-  if (exists) {
-    const used = await store.scard(storeKey);
-    return { allowed: true, isNew: false, used, limit: DAILY_NEW_PROFILES_PER_IP };
-  }
-  const used = await store.scard(storeKey);
-  if (used >= DAILY_NEW_PROFILES_PER_IP) {
-    logSecurityEvent('daily_profile_limit_block', { ip: ip || 'unknown', used, limit: DAILY_NEW_PROFILES_PER_IP });
-    return { allowed: false, isNew: true, used, limit: DAILY_NEW_PROFILES_PER_IP };
-  }
-  await store.saddWithTtl(storeKey, profileHash, Math.ceil(DAY_MS / 1000));
-  const nextUsed = await store.scard(storeKey);
-  return { allowed: true, isNew: true, used: nextUsed, limit: DAILY_NEW_PROFILES_PER_IP };
+async function checkAndRecordNewProfile() {
+  return { allowed: true, isNew: true, used: 0, limit: DAILY_NEW_PROFILES_PER_IP };
 }
 
 async function checkAndUseFreeMessage(identityHash) {

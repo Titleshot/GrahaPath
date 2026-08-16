@@ -11,7 +11,6 @@ const { buildDailyGrahaWeatherFromTransit } = require('../services/dailyGrahaWea
 const {
   buildIdentityHash,
   extractClientFingerprint,
-  checkAndRecordNewProfile,
   checkBurstLimit
 } = require('../services/antiBypassService');
 const {
@@ -422,14 +421,6 @@ async function generateChart(req, res, next) {
       return res.status(403).json({
         error: 'ProfileAccessDenied',
         message: 'This login is bound to a different chart profile.'
-      });
-    }
-    const profileGate = checkAndRecordNewProfile(ip, profileHash);
-    const checked = await profileGate;
-    if (!checked.allowed) {
-      return res.status(429).json({
-        error: 'DailyLimitReached',
-        message: 'Free profile creation limit reached for today. Please try again later.'
       });
     }
 
