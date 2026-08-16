@@ -5,641 +5,573 @@ const {
 } = require('./interpretationService');
 
 const SIGN_LORD = {
-  Aries: 'Mars',
-  Taurus: 'Venus',
-  Gemini: 'Mercury',
-  Cancer: 'Moon',
-  Leo: 'Sun',
-  Virgo: 'Mercury',
-  Libra: 'Venus',
-  Scorpio: 'Mars',
-  Sagittarius: 'Jupiter',
-  Capricorn: 'Saturn',
-  Aquarius: 'Saturn',
-  Pisces: 'Jupiter'
+  Aries: 'Mars', Taurus: 'Venus', Gemini: 'Mercury', Cancer: 'Moon',
+  Leo: 'Sun', Virgo: 'Mercury', Libra: 'Venus', Scorpio: 'Mars',
+  Sagittarius: 'Jupiter', Capricorn: 'Saturn', Aquarius: 'Saturn', Pisces: 'Jupiter'
 };
 
-const HOUSE_LIFE = {
-  1: 'Self & Identity',
-  2: 'Wealth & Speech',
-  3: 'Skills & Effort',
-  4: 'Home & Inner Peace',
-  5: 'Intelligence & Romance',
-  6: 'Competition & Service',
-  7: 'Marriage & Partnership',
-  8: 'Transformation',
-  9: 'Fortune & Higher Learning',
-  10: 'Career',
-  11: 'Income & Gains',
-  12: 'Foreign Lands & Solitude'
+const HOUSE_NP = {
+  1: 'आफ्नो स्वरूप र पहिचान',
+  2: 'धन, वाणी र परिवारका मूल्य',
+  3: 'सीप, साहस र प्रयास',
+  4: 'घर र आन्तरिक शान्ति',
+  5: 'बुद्धि, सिर्जना र रोमान्स',
+  6: 'सेवा, प्रतिस्पर्धा र दैनिक दबाब',
+  7: 'साझेदारी र विवाह',
+  8: 'रूपान्तरण र गहिराइ',
+  9: 'भाग्य, गुरु र उच्च शिक्षा',
+  10: 'करियर र सार्वजनिक भूमिका',
+  11: 'आय, सञ्जाल र लाभ',
+  12: 'विदेश, एकान्त र त्याग'
 };
 
-const GRAHA_GLYPH = {
-  Sun: '☉',
-  Moon: '☽',
-  Mars: '♂',
-  Mercury: '☿',
-  Jupiter: '♃',
-  Venus: '♀',
-  Saturn: '♄',
-  Rahu: '☊',
-  Ketu: '☋'
-};
-
-function planetByName(chart, name) {
-  return (chart?.planets || []).find((p) => String(p?.name || '') === name) || null;
+function pBy(chart, name) {
+  return (chart?.planets || []).find((x) => x?.name === name) || null;
 }
-
-function occupants(chart, house) {
-  return (chart?.planets || []).filter((p) => Number(p?.house) === Number(house));
+function occ(chart, h) {
+  return (chart?.planets || []).filter((x) => Number(x.house) === Number(h));
 }
-
-function houseSign(chart, house) {
-  const cusp = (chart?.houseCusps || []).find((c) => Number(c.house) === Number(house));
-  if (cusp?.sign) return cusp.sign;
+function hSign(chart, h) {
+  const c = (chart?.houseCusps || []).find((x) => Number(x.house) === Number(h));
+  if (c?.sign) return c.sign;
   const signs = Object.keys(SIGN_LORD);
-  const lagna = chart?.ascendant;
-  const i = signs.indexOf(lagna);
+  const i = signs.indexOf(chart?.ascendant);
   if (i < 0) return null;
-  return signs[(i + Number(house) - 1) % 12];
+  return signs[(i + Number(h) - 1) % 12];
 }
-
 function dasha(chart) {
-  const brain = chart?.astroBrain || {};
+  const b = chart?.astroBrain || {};
   return {
-    current: brain.currentDasha || null,
-    antar: brain.currentAntardasha || null,
-    pratyantar: brain.currentPratyantar || null,
-    timeline: Array.isArray(brain.vimshottariTimeline) ? brain.vimshottariTimeline : [],
+    current: b.currentDasha || null,
+    antar: b.currentAntardasha || null,
+    timeline: Array.isArray(b.vimshottariTimeline) ? b.vimshottariTimeline : [],
     snapshot: chart?.dashaSnapshot || null,
-    summary: brain.summary || {}
+    summary: b.summary || {}
   };
 }
-
-function fmtWhen(chart) {
+function periodLabel(d) {
+  const m = d.current?.planet || d.snapshot?.mahaDasha || d.summary?.currentMahadashaPlanet;
+  const a = d.antar?.antarLord || d.snapshot?.antarDasha || d.summary?.currentAntardashaLord;
+  if (m && a) return `${m} / ${a}`;
+  return m || 'वर्तमान दशा';
+}
+function when(chart) {
   const iso = chart?.localDateTime || chart?.birthDateAD;
   if (!iso) return { date: '—', time: '' };
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) {
-    return { date: String(iso).slice(0, 10), time: String(iso).slice(11, 16) };
-  }
-  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const time = /\dT\d/.test(String(iso))
-    ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-    : '';
-  return { date, time };
-}
-
-function placeName(chart) {
-  return chart?.place || chart?.location?.displayName || 'the given birthplace';
-}
-
-function strengthOf(planet) {
-  const interp = planet?.interpretation || {};
-  return interp.strength || (PLANET_MEANINGS[planet?.name]?.strengths || []).slice(0, 2).join(', ') || 'focused effort';
-}
-
-function challengeOf(planet) {
-  const interp = planet?.interpretation || {};
-  return interp.challenge || (PLANET_MEANINGS[planet?.name]?.challenges || []).slice(0, 2).join(', ') || 'imbalance under stress';
-}
-
-function lineOf(planet) {
-  return planet?.interpretation?.reportLine || planet?.interpretation?.theme || '';
-}
-
-function starsFromScore(n) {
-  const v = Math.max(0, Math.min(5, Math.round(Number(n) || 3)));
-  return `${'★'.repeat(v)}${'☆'.repeat(5 - v)}`;
-}
-
-function meterFromHouse(chart, houses, boostPlanets = []) {
-  let s = 0.42;
-  houses.forEach((h) => {
-    s += occupants(chart, h).length * 0.08;
-  });
-  boostPlanets.forEach((name) => {
-    const p = planetByName(chart, name);
-    if (p && houses.includes(Number(p.house))) s += 0.1;
-  });
-  return Math.max(0.28, Math.min(0.92, s));
-}
-
-function currentDashaLabel(d) {
-  const maha = d.current?.planet || d.snapshot?.mahaDasha || d.summary?.currentMahadashaPlanet;
-  const antar = d.antar?.antarLord || d.snapshot?.antarDasha || d.summary?.currentAntardashaLord;
-  if (maha && antar) return `${maha} / ${antar}`;
-  return maha || 'Current dasha';
-}
-
-function page(partial) {
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return { date: String(iso).slice(0, 10), time: '' };
   return {
-    kicker: '',
-    title: '',
-    paragraphs: [],
-    boxes: [],
-    bullets: [],
-    table: null,
-    meters: [],
-    ...partial
+    date: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+    time: /\dT\d/.test(String(iso)) ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
   };
+}
+function place(chart) {
+  return chart?.place || chart?.location?.displayName || 'दिइएको जन्मस्थान';
+}
+function line(pl) {
+  return pl?.interpretation?.reportLine || '';
+}
+function pg(spec) {
+  return { kicker: '', title: '', en: '', paragraphs: [], boxes: [], bullets: [], table: null, meters: [], basis: '', ...spec };
 }
 
 function buildMahabhavishyaPages(chart) {
-  const moon = planetByName(chart, 'Moon');
-  const sun = planetByName(chart, 'Sun');
-  const mars = planetByName(chart, 'Mars');
-  const mercury = planetByName(chart, 'Mercury');
-  const jupiter = planetByName(chart, 'Jupiter');
-  const venus = planetByName(chart, 'Venus');
-  const saturn = planetByName(chart, 'Saturn');
-  const rahu = planetByName(chart, 'Rahu');
-  const ketu = planetByName(chart, 'Ketu');
+  const moon = pBy(chart, 'Moon');
+  const sun = pBy(chart, 'Sun');
+  const mars = pBy(chart, 'Mars');
+  const mercury = pBy(chart, 'Mercury');
+  const jupiter = pBy(chart, 'Jupiter');
+  const venus = pBy(chart, 'Venus');
+  const saturn = pBy(chart, 'Saturn');
+  const rahu = pBy(chart, 'Rahu');
+  const ketu = pBy(chart, 'Ketu');
   const brain = chart?.astroBrain || {};
   const d = dasha(chart);
   const yogas = Array.isArray(brain.yogas) ? brain.yogas : [];
   const aspects = Array.isArray(brain.aspects) ? brain.aspects : [];
-  const when = fmtWhen(chart);
+  const w = when(chart);
   const lagna = chart?.ascendant || '—';
-  const name = chart?.name || 'You';
+  const name = chart?.name || 'तपाईं';
+  const plabel = periodLabel(d);
   const pages = [];
 
-  pages.push(page({
+  pages.push(pg({
     kind: 'cover',
     kicker: 'GRAHAPATH',
     title: 'तपाईंको महाभविष्यफल',
     subtitle: 'Personalized Vedic Astrology Report',
     name,
-    date: when.date,
-    time: when.time,
-    place: placeName(chart)
+    date: w.date,
+    time: w.time,
+    place: place(chart)
   }));
 
-  pages.push(page({
-    kicker: 'PAGE  ·  JANMA KUNDALI',
+  pages.push(pg({
+    kicker: 'खण्ड ०१  ·  तपाईंलाई बुझ्ने',
     title: 'तपाईंको जन्मकुण्डली',
+    en: 'Your birth chart',
     showWheel: true,
     paragraphs: [
-      `यो चक्र तपाईंको जन्म कुण्डली हो — ${name} को लागि ${placeName(chart)} मा गणना गरिएको। House 1 Lagna हो; graha हरू आफ्नो house मा देखिन्छन्।`,
-      `Lagna (${lagna}) ले तपाईंको बाहिरी व्यक्तित्व र जीवनमा अगाडि बढ्ने शैलीलाई संकेत गर्छ।`,
-      `Moon Sign (${chart.moonSign || moon?.sign || '—'}) ले मन, भावना र सुरक्षाको लय देखाउँछ। Sun Sign (${chart.sunSign || sun?.sign || '—'}) ले आत्मविश्वास र “म को हुँ” भन्ने गर्मी देखाउँछ।`,
-      moon?.nakshatra
-        ? `Moon nakshatra ${moon.nakshatra}${moon.nakshatraPada ? `, pada ${moon.nakshatraPada}` : ''} — यो मनको सूक्ष्म स्वाद हो, sign भन्दा finer texture.`
-        : '',
-      chart.timeInputMode === 'unknown_assumed_noon'
-        ? 'जन्म समय अनुमानित राखिएको छ। Lagna र house-आधारित वाक्यहरूलाई working hypothesis का रूपमा पढ्नुहोस्।'
-        : 'जन्म समय दिएको विवरण अनुसार प्रयोग गरिएको छ। महत्वपूर्ण निर्णयमा नागरिक रेकर्डसँग मिलान गर्नु राम्रो हुन्छ।'
+      `यो चक्र ${name} को जन्म कुण्डली हो, ${place(chart)} का लागि गणना गरिएको। पहिलो भाव (Lagna) बाहिरी व्यक्तित्व हो; ग्रहहरू आफ्नो भावमा देखिन्छन्।`,
+      `लग्न ${lagna} ले तपाईं कसरी अगाडि बढ्नुहुन्छ र संसारले तपाईंलाई पहिले कसरी देख्छ भन्ने संकेत गर्छ।`,
+      `चन्द्र राशि ${chart.moonSign || moon?.sign || '—'} ले मन र भावनाको लय देखाउँछ। सूर्य राशि ${chart.sunSign || sun?.sign || '—'} ले आत्मविश्वास र “म को हुँ” भन्ने गर्मी देखाउँछ।`,
+      moon?.nakshatra ? `चन्द्र नक्षत्र ${moon.nakshatra}${moon.nakshatraPada ? `, पद ${moon.nakshatraPada}` : ''} — मनको सूक्ष्म स्वाद।` : ''
     ].filter(Boolean),
     boxes: [
-      { label: 'LAGNA', text: lagna },
-      { label: 'MOON', text: `${chart.moonSign || moon?.sign || '—'} · H${moon?.house || '—'}` },
-      { label: 'SUN', text: `${chart.sunSign || sun?.sign || '—'} · H${sun?.house || '—'}` }
+      { label: 'लग्न', text: lagna },
+      { label: 'चन्द्र', text: `${chart.moonSign || moon?.sign || '—'} · भाव ${moon?.house || '—'}` },
+      { label: 'सूर्य', text: `${chart.sunSign || sun?.sign || '—'} · भाव ${sun?.house || '—'}` }
     ]
   }));
 
-  pages.push(page({
-    kicker: 'TRUST  ·  METHOD',
-    title: 'तपाईंको Kundali कसरी तयार भयो?',
+  pages.push(pg({
+    kicker: 'विश्वास',
+    title: 'तपाईंको कुण्डली कसरी तयार भयो?',
+    en: 'How this kundali was calculated',
     paragraphs: [
-      'यो report तपाईंले उपलब्ध गराउनुभएको जन्म विवरणका आधारमा तयार गरिएको personalized interpretation हो।'
+      'यो प्रतिवेदन तपाईंले दिनुभएको जन्ममिति, समय र स्थानका आधारमा तयार पारिएको व्यक्तिगत व्याख्या हो।'
     ],
     bullets: [
-      '01 — जन्म विवरण: जन्ममिति + समय + जन्मस्थान',
-      '02 — Planetary position: Swiss Ephemeris मा आधारित astronomical data',
-      '03 — Lahiri ayanamsa: sidereal (Vedic) calculation',
-      '04 — Whole-sign houses: Lagna sign बाट 12 भाव',
-      '05 — Interpretation: graha × house × nakshatra × dasha — तपाईंको chart मा मात्र लागू हुने reading'
+      '०१ जन्म विवरण — मिति, समय, स्थान',
+      '०२ ग्रहस्थिति — Swiss Ephemeris का खगोलीय गणना',
+      '०३ लाहिरी अयनांश — वैदिक (साइडरियल) पद्धति',
+      '०४ पूर्ण-राशि भाव (whole-sign) — लग्न राशिबाट बाह्र भाव',
+      '०५ व्याख्या — ग्रह × भाव × नक्षत्र × दशा, तपाईंको कुण्डलीमा मात्र'
     ]
   }));
 
-  pages.push(page({
-    kicker: 'THE WOW PAGE',
-    title: 'तपाईंको व्यक्तित्वको मूल स्वरूप',
+  pages.push(pg({
+    kicker: 'WOW PAGE',
+    title: 'तपाईंको व्यक्तित्व',
+    en: 'Who you appear to be — and who you are inside',
     paragraphs: [
-      `${lagna} Lagna का कारण तपाईंमा ${SIGN_MEANINGS[lagna] || 'a distinct outer style'} को प्रभाव देखिन्छ। बाहिरबाट मानिसले प्रायः यही “पहिलो छाप” पाउँछन्।`,
+      `${lagna} लग्नका कारण बाहिरबाट तपाईं ${SIGN_MEANINGS[lagna] || 'स्पष्ट शैलीका'} देखिन सक्नुहुन्छ। मानिसले प्रायः यही पहिलो छाप पाउँछन्।`,
       moon
-        ? `तर ${moon.sign} Moon (house ${moon.house}) ले तपाईंको भित्री emotional world लाई ${SIGN_MEANINGS[moon.sign] || 'private and textured'} बनाउँछ। ${lineOf(moon)}`
+        ? `तर ${moon.sign} चन्द्र (भाव ${moon.house}) ले भित्री संसार गहिरो र निजी बनाउँछ। बाहिर हल्का देखिए पनि भित्रका कुरा लामो समयसम्म रहन सक्छन्।`
         : '',
       sun
-        ? `Sun ${sun.sign}, house ${sun.house} ले तपाईं कसरी आफ्नो नाममा उभिन खोज्नुहुन्छ भन्ने गर्मी दिन्छ। ${lineOf(sun)}`
+        ? `सूर्य ${sun.sign}, भाव ${sun.house} ले तपाईं आफ्नो नाममा कसरी उभिन खोज्नुहुन्छ भन्ने देखाउँछ।`
         : '',
-      `बाहिरबाट तपाईं ${SIGN_MEANINGS[lagna] || 'adaptive'} देखिन सक्नुहुन्छ, तर भित्रका निर्णय र भावनाहरूलाई तपाईं ${moon?.sign === 'Scorpio' || [4, 8, 12].includes(Number(moon?.house)) ? 'लामो समयसम्म process गर्ने' : 'आफ्नै लयमा मिलाउने'} tendency राख्न सक्नुहुन्छ।`,
-      'यो पृष्ठ “तपाईं कस्तो ग्रह हुनुहुन्छ” होइन — “तपाईं कसरी जीवनमा देखा पर्नुहुन्छ” हो।'
+      'यो पृष्ठ ग्रहको पाठ होइन — तपाईंको जीवनमा दोहोरिने स्वभाव हो।'
     ].filter(Boolean),
     boxes: [
-      { label: 'YOUR STRENGTH', text: strengthOf(sun || moon || {}) },
-      { label: 'WATCH FOR', text: challengeOf(moon || sun || {}) },
-      { label: 'CURRENT FOCUS', text: currentDashaLabel(d) }
-    ]
+      { label: 'तपाईंको बल', text: sun?.interpretation?.strength || 'स्पष्ट उपस्थिति र सिक्ने क्षमता' },
+      { label: 'ध्यान दिनुहोस्', text: moon?.interpretation?.challenge || 'मनमा कुरा अड्किनु' },
+      { label: 'अहिलेको समय', text: plabel }
+    ],
+    basis: `लग्न ${lagna}; सूर्य ${sun ? `${sun.sign} भाव ${sun.house}` : '—'}; चन्द्र ${moon ? `${moon.sign} भाव ${moon.house}` : '—'}`
   }));
 
-  pages.push(page({
-    kicker: '🌙  MOON',
-    title: 'तपाईंको मन र भावनात्मक संसार',
+  pages.push(pg({
+    kicker: 'मन',
+    title: 'मन र भावना',
+    en: 'Your inner world',
     paragraphs: moon
       ? [
-          `Where it is: ${moon.sign}, house ${moon.house}${moon.nakshatra ? `, ${moon.nakshatra}` : ''}${moon.nakshatraPada ? ` pada ${moon.nakshatraPada}` : ''}.`,
-          `Emotional nature: Moon ${HOUSE_MEANINGS[moon.house] || 'this life area'} सँग जोडिएको छ। ${SIGN_MEANINGS[moon.sign]}.`,
-          lineOf(moon),
-          `Relationship with stress: house ${moon.house} सक्रिय हुँदा मनले ${HOUSE_MEANINGS[moon.house]} लाई बढी महसुस गर्छ। बाहिर शान्त देखिए पनि भित्र कुरा लामो समयसम्म रहन सक्छ।`,
-          'What helps you recover: निद्रा, विश्वासको एउटा कुराकानी, र “आज के भयो” भन्ने सानो निजी नोट — Moon लाई नाटक होइन, regularity चाहिन्छ।'
+          `तपाईंको कुण्डलीले के संकेत गर्छ? चन्द्र ${moon.sign} मा, भाव ${moon.house} (${HOUSE_NP[moon.house]}) मा रहेकाले भावना र दैनिक जीवन एकअर्कासँग बाँधिएका छन्। मनले कुरा चाँडै छाड्दैन; गहिराइमा प्रशोधन गर्छ।`,
+          'तनाव आउँदा बाहिर शान्त देखिनु र भित्र लामो विश्लेषण चल्नु दुवै सम्भव छ। निको हुन नाटक होइन, नियमित निद्रा र एउटा विश्वासको कुराकानी सहयोगी हुन्छ।'
         ]
-      : ['Moon placement यो chart payload मा छैन।'],
-    boxes: moon
-      ? [
-          { label: 'STRENGTH', text: strengthOf(moon) },
-          { label: 'CHALLENGE', text: challengeOf(moon) },
-          { label: 'NATURAL TENDENCY', text: 'Things may stay in your mind longer than you show outwardly.' }
-        ]
-      : []
+      : ['चन्द्र स्थिति यो कुण्डलीमा उपलब्ध छैन।'],
+    boxes: [
+      { label: 'बल', text: moon?.interpretation?.strength || 'गहिरो अवलोकन' },
+      { label: 'चुनौती', text: moon?.interpretation?.challenge || 'अत्यधिक सोच' },
+      { label: 'अहिले', text: plabel }
+    ],
+    basis: moon ? `Moon in ${moon.sign}, house ${moon.house}${moon.nakshatra ? `, ${moon.nakshatra}` : ''}` : ''
   }));
 
-  pages.push(page({
-    kicker: '☀️  SUN',
-    title: 'तपाईंको आत्मविश्वास र जीवनदिशा',
+  pages.push(pg({
+    kicker: 'आत्मविश्वास',
+    title: 'व्यक्तित्व र आत्मविश्वास',
+    en: 'How you stand in the world',
     paragraphs: sun
       ? [
-          `Where it is: ${sun.sign}, house ${sun.house}${sun.nakshatra ? `, ${sun.nakshatra}` : ''}.`,
-          `Identity: Sun ${sun.sign} ले तपाईंलाई ${SIGN_MEANINGS[sun.sign]} शैलीमा “म” भन्न सिकाउँछ। House ${sun.house} (${HOUSE_LIFE[sun.house]}) त्यो गर्मी कहाँ खर्च हुन्छ भन्ने ठाउँ हो।`,
-          `Confidence / leadership / visibility: ${lineOf(sun) || PLANET_MEANINGS.Sun.theme}`,
-          `Growth challenge: ${challengeOf(sun)} — Sun लाई अरूको approval होइन, आफ्नै सानो दैनिक साहस चाहिन्छ।`
+          `तपाईंको कुण्डलीले के संकेत गर्छ? सूर्य ${sun.sign}, भाव ${sun.house} (${HOUSE_NP[sun.house]}) मा रहेकाले पहिचान ${HOUSE_NP[sun.house]} को मैदानमा खर्च हुन्छ। आत्मविश्वास प्रदर्शनबाट भन्दा काम देखाएर बढ्ने संकेत देखिन्छ।`,
+          'दृश्यता चाहिन्छ, तर लगातार प्रयासले मात्र गर्मी टिक्छ।'
         ]
-      : ['Sun placement यो chart मा छैन।'],
-    boxes: sun
-      ? [
-          { label: 'IDENTITY', text: `${sun.sign} · House ${sun.house}` },
-          { label: 'STRENGTH', text: strengthOf(sun) },
-          { label: 'GROWTH CHALLENGE', text: challengeOf(sun) }
-        ]
-      : []
+      : ['सूर्य स्थिति उपलब्ध छैन।'],
+    boxes: [
+      { label: 'बल', text: sun?.interpretation?.strength || 'स्पष्टता' },
+      { label: 'चुनौती', text: sun?.interpretation?.challenge || 'छरपस्ट ऊर्जा' },
+      { label: 'सुझाव', text: 'साना दैनिक साहस, ठूला घोषणा होइन' }
+    ],
+    basis: sun ? `Sun in ${sun.sign}, house ${sun.house}${sun.nakshatra ? `, ${sun.nakshatra}` : ''}` : ''
   }));
 
-  const grahaOrder = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
-  grahaOrder.forEach((gName) => {
-    const p = planetByName(chart, gName);
-    if (!p) return;
-    const base = PLANET_MEANINGS[gName] || {};
-    pages.push(page({
-      kicker: `${GRAHA_GLYPH[gName] || ''}  ${gName.toUpperCase()}`,
-      title: `${gName} — तपाईंको जीवनमा यसको भूमिका`,
+  pages.push(pg({
+    kicker: 'धन',
+    title: 'धन तथा आर्थिक अवस्था',
+    en: 'Money patterns — not a yes/no fortune',
+    paragraphs: [
+      `तपाईंको कुण्डलीले के संकेत गर्छ? दोस्रो भाव (${hSign(chart, 2) || '—'}) वाणी र बचतसँग जोडिएको छ; एघारौं भाव (${hSign(chart, 11) || '—'}) आय र सञ्जालसँग। ${occ(chart, 2).length || occ(chart, 11).length ? 'यी भावमा ग्रह सक्रिय भएकाले पैसाको कथा सामान्य टेम्प्लेट होइन, व्यक्तिगत छ।' : 'यी भाव खाली देखिए पनि भावेश र दशाले पैसाको कथा चलाउँछन्।'}`,
+      mercury ? `बुध ${mercury.sign} भाव ${mercury.house} — सीप, कुराकानी वा व्यापारबाट आउने आयको संकेत।` : '',
+      venus ? `शुक्र ${venus.sign} भाव ${venus.house} — के मा मूल्य राख्नुहुन्छ र कहाँ खर्च शान्त हुन्छ।` : '',
+      jupiter ? `गुरु ${jupiter.sign} भाव ${jupiter.house} — बढोत्तरीमा विश्वास र सिकाइबाट फैलिने स्रोत।` : '',
+      `अहिले ${plabel} चलिरहेकोले आय–सीप–सञ्जालतिर ध्यान बढी जान सक्छ। “धनी हुनुहुन्छ” भन्ने वाक्य होइन; पैसा आउने माध्यम र बचतको बानी हेर्ने पृष्ठ हो।`
+    ].filter(Boolean),
+    boxes: [
+      { label: 'सम्भावित माध्यम', text: 'सीप, सञ्जाल, वाणी/व्यापार' },
+      { label: 'चुनौती', text: saturn?.interpretation?.challenge || 'ढिलो देखिने प्रतिफल' },
+      { label: 'अहिलेको फोकस', text: plabel }
+    ],
+    basis: `2nd ${hSign(chart, 2)} (${occ(chart, 2).map((p) => p.name).join(', ') || 'lord-led'}); 11th ${hSign(chart, 11)} (${occ(chart, 11).map((p) => p.name).join(', ') || 'lord-led'})`
+  }));
+
+  const tenth = occ(chart, 10);
+  pages.push(pg({
+    kicker: 'करियर',
+    title: 'करियर तथा व्यवसाय',
+    en: 'Career & Business',
+    paragraphs: [
+      'तपाईंको करियर ढाँचा: स्थिर वृद्धि → जिम्मेवारी → पहिचान।',
+      saturn && Number(saturn.house) === 10
+        ? 'दशम भावमा शनि रहेकाले छिटो नतिजाभन्दा निरन्तर प्रयासबाट स्थायी उपलब्धि बन्ने संकेत देखिन्छ। पहिचान प्रायः काम पछि आउँछ, अघि होइन।'
+        : `दशम भाव ${hSign(chart, 10) || ''} — ${HOUSE_NP[10]}। ${tenth.length ? tenth.map((p) => p.name).join(', ') + ' सक्रिय छन्।' : `भावेश ${SIGN_LORD[hSign(chart, 10)] || '—'} ले पेशा बोल्छ।`}`,
+      'काम गर्ने वातावरण: धैर्य र शिल्प कदर हुने ठाउँ। तमाशाभन्दा जिम्मेवारी।'
+    ].filter(Boolean),
+    bullets: [
+      'बलिया पक्ष: सञ्चार, विश्लेषण, लगन, नेतृत्वको सम्भावना',
+      'चुनौती: पहिचान ढिलो आउनु, करियर दबाब, असफलताको डर',
+      `अहिलेको समय: ${plabel}`,
+      'आगामी फोकस: एउटा शिल्प गहिरो बनाउने, दस ठाउँमा देखिने होइन'
+    ],
+    boxes: [
+      { label: 'ढाँचा', text: 'Steady growth → responsibility → recognition' },
+      { label: 'चुनौती', text: 'ढिलो पहिचान / दबाब' },
+      { label: 'अहिले', text: plabel }
+    ],
+    basis: `10th ${hSign(chart, 10)}; Saturn ${saturn ? `${saturn.sign} H${saturn.house}` : '—'}`
+  }));
+
+  pages.push(pg({
+    kicker: 'प्रेम',
+    title: 'प्रेम तथा विवाह',
+    en: 'Love & Marriage',
+    paragraphs: [
+      `तपाईंको सम्बन्ध स्वभाव: सप्तम भाव ${hSign(chart, 7) || ''} — ${HOUSE_NP[7]}। ${occ(chart, 7).length ? occ(chart, 7).map((p) => p.name).join(', ') + ' यस भावमा छन्।' : `सप्तमेश ${SIGN_LORD[hSign(chart, 7)] || '—'} ले साझेदारको कथा बोल्छ।`}`,
+      venus ? `तपाईं कस्तो साझेदार खोज्नुहुन्छ: शुक्र ${venus.sign} भाव ${venus.house} — आत्मीयता, स्वाद र शान्ति कस्तो चाहिन्छ भन्ने संकेत।` : '',
+      moon ? `भावनात्मक ढाँचा: चन्द्र ${moon.sign} भाव ${moon.house} — नजिकिँदा मन कसरी सुरक्षित हुन्छ।` : '',
+      'बल: गहिराइ र निष्ठा। चुनौती: कुरा मनमै राख्नु, वा अपेक्षा स्पष्ट नगर्नु।',
+      `विवाह/सम्बन्धका timing windows: शुक्र, गुरु, सप्तमेश र ${plabel} सक्रिय हुँदा सम्बन्धको मैदान तात्न सक्छ — “हुन्छ/हुन्न” होइन।`,
+      'ध्यान दिनुहोस्: स्पष्ट कुराकानी र समय — नाटक होइन।'
+    ].filter(Boolean),
+    boxes: [
+      { label: 'स्वभाव', text: 'गहिरो, निजी, अर्थ खोज्ने' },
+      { label: 'बल', text: 'निष्ठा / भावनात्मक गहिराइ' },
+      { label: 'timing', text: plabel }
+    ],
+    basis: `7th ${hSign(chart, 7)}; Venus ${venus ? `${venus.sign} H${venus.house}` : '—'}; Moon ${moon ? `${moon.sign} H${moon.house}` : '—'}`
+  }));
+
+  pages.push(pg({
+    kicker: 'परिवार',
+    title: 'परिवार तथा घर',
+    en: 'Family & Home',
+    paragraphs: [
+      `चतुर्थ भाव ${hSign(chart, 4) || ''} घर र आन्तरिक शान्ति हो। ${occ(chart, 4).map((p) => p.name).join(', ') || 'ग्रह छैनन् — भावेश बोल्छन्।'}`,
+      mars && Number(mars.house) === 4
+        ? 'चतुर्थमा मङ्गल: घरमा गर्मी वा सुरक्षाको तीव्रता — शान्ति अभ्यासले सन्तुलन मिल्छ।'
+        : '',
+      'भावनात्मक सुरक्षा चन्द्र र चतुर्थसँग जोडिएको छ। घर शान्त भयो भने बाहिरी लग्नले राम्रो काम गर्छ।'
+    ].filter(Boolean),
+    basis: `4th ${hSign(chart, 4)}; 2nd ${hSign(chart, 2)}; Mars ${mars ? `${mars.sign} H${mars.house}` : '—'}`
+  }));
+
+  pages.push(pg({
+    kicker: 'शिक्षा',
+    title: 'शिक्षा तथा बुद्धि',
+    en: 'Education & Intelligence',
+    paragraphs: [
+      `सिक्ने शैली: बुध ${mercury ? `${mercury.sign} भाव ${mercury.house}` : '—'} — कुरा बुझेर, जोडेर, प्रयोग गरेर।`,
+      `पञ्चम (बुद्धि/शिल्प) ${hSign(chart, 5) || '—'}; नवम (गुरु/उच्च शिक्षा) ${hSign(chart, 9) || '—'}।`,
+      jupiter ? `गुरु ${jupiter.sign} भाव ${jupiter.house} — अर्थ, नैतिकता र लामो सिकाइ।` : '',
+      'सुझाव: ९० दिनको एउटा शिल्प — धेरै कोर्स होइन।'
+    ].filter(Boolean),
+    basis: `Mercury ${mercury ? `${mercury.sign} H${mercury.house}` : '—'}; Jupiter ${jupiter ? `${jupiter.sign} H${jupiter.house}` : '—'}`
+  }));
+
+  pages.push(pg({
+    kicker: 'विदेश',
+    title: 'विदेश यात्रा / विदेशी वातावरण',
+    en: 'Foreign themes',
+    paragraphs: [
+      'तपाईं विदेश जानुहुन्छ भन्ने निश्चित वाक्य यो प्रतिवेदनमा छैन।',
+      `कुण्डलीमा नवम (${hSign(chart, 9) || '—'}) र द्वादश (${hSign(chart, 12) || '—'}) भावले परम्परागत रूपमा विदेश, लामो यात्रा वा विदेशी वातावरणसँग जोडिएका विषय देखाउँछन्। समय सम्बन्धित भाव र दशाको खेलमा भर पर्छ।`,
+      rahu ? `राहु ${rahu.sign} भाव ${rahu.house} — अपरिचिततिर भोक।` : '',
+      ketu ? `केतु ${ketu.sign} भाव ${ketu.house} — दूरी, त्याग वा दोस्रो “आत्मिक घर”।` : ''
+    ].filter(Boolean),
+    boxes: [{ label: 'अहिले', text: plabel }, { label: 'हेर्ने भाव', text: '९ / १२ / राहु–केतु' }, { label: 'भाषा', text: 'संकेत, वाचा होइन' }],
+    basis: `9th ${hSign(chart, 9)}; 12th ${hSign(chart, 12)}; Rahu ${rahu ? `${rahu.sign} H${rahu.house}` : '—'}; Ketu ${ketu ? `${ketu.sign} H${ketu.house}` : '—'}`
+  }));
+
+  const grahaLife = [
+    ['मङ्गल', mars, 'साहस र कार्य'],
+    ['बुध', mercury, 'बुद्धि र वाणी'],
+    ['गुरु', jupiter, 'अर्थ र विस्तार'],
+    ['शुक्र', venus, 'स्नेह र मूल्य'],
+    ['शनि', saturn, 'कर्तव्य र समय']
+  ];
+  grahaLife.forEach(([np, pl, role]) => {
+    if (!pl) return;
+    pages.push(pg({
+      kicker: 'नवग्रह · विस्तृत प्रभाव',
+      title: `${np} — ${role}`,
+      en: `${pl.name} in your life`,
       paragraphs: [
-        `Where it is: ${p.sign} · House ${p.house}${p.nakshatra ? ` · ${p.nakshatra}` : ''}${p.nakshatraPada ? ` pada ${p.nakshatraPada}` : ''}${p.retrograde ? ' · retrograde' : ''}.`,
-        `What it represents: ${base.theme || gName}. ${base.psychological || ''}`,
-        `What it means for you: House ${p.house} (${HOUSE_LIFE[p.house] || HOUSE_MEANINGS[p.house]}) ले यो graha लाई ${HOUSE_MEANINGS[p.house]} को मैदानमा राख्छ। ${SIGN_MEANINGS[p.sign] || ''}`,
-        lineOf(p),
-        `How this may show in life: जब ${gName} को dasha वा transit चल्छ, ${HOUSE_LIFE[p.house]} सम्बन्धी कुराहरू बढी चर्को हुन सक्छन् — निश्चित घटना होइन, दोहोरिने मैदान।`
+        `तपाईंको जीवनमा यसको अर्थ: ${np} ${pl.sign} मा, भाव ${pl.house} (${HOUSE_NP[pl.house]}) मा छ। यो ग्रहको कक्षा चल्दा ${HOUSE_NP[pl.house]} सम्बन्धी कुरा चर्को हुन सक्छ।`,
+        line(pl) ? `संकेत: ${line(pl)}` : `शैली: ${SIGN_MEANINGS[pl.sign] || ''}।`
       ].filter(Boolean),
       boxes: [
-        { label: 'YOUR STRENGTH', text: strengthOf(p) },
-        { label: 'WATCH FOR', text: challengeOf(p) },
-        { label: 'LIFE AREA', text: HOUSE_LIFE[p.house] || `House ${p.house}` }
-      ]
+        { label: 'बल', text: pl.interpretation?.strength || PLANET_MEANINGS[pl.name]?.strengths?.[0] || 'केन्द्रित प्रयास' },
+        { label: 'चुनौती', text: pl.interpretation?.challenge || PLANET_MEANINGS[pl.name]?.challenges?.[0] || 'असन्तुलन' },
+        { label: 'सुझाव', text: 'दशामा यो ग्रह आउँदा भावको काम सानो–सानो गरी पूरा गर्नुहोस्' }
+      ],
+      basis: `${pl.name} in ${pl.sign}, house ${pl.house}${pl.nakshatra ? `, ${pl.nakshatra}` : ''}`
     }));
   });
 
-  const houseRows = Object.entries(HOUSE_LIFE).map(([h, area]) => {
-    const occ = occupants(chart, h);
-    const sign = houseSign(chart, h) || '—';
-    const lord = SIGN_LORD[sign] || '—';
-    const summary = occ.length
-      ? occ.map((p) => p.name).join(', ')
-      : `Lord ${lord} (empty house — lord & dasha speak louder)`;
-    return [h, area, `${sign}`, summary];
-  });
-
-  pages.push(page({
-    kicker: 'TWELVE BHAVAS',
-    title: 'तपाईंका 12 Houses',
+  pages.push(pg({
+    kicker: 'राहु–केतु',
+    title: 'राहु र केतु',
+    en: 'The axis of hunger and release',
     paragraphs: [
-      'प्रत्येक भाव एउटा जीवनको कोठा हो। खाली घर भनेको जीवन छुट्यो भन्ने होइन — त्यो कोठा house-lord र dasha ले चलाउँछ।'
-    ],
+      rahu ? `राहु ${rahu.sign} भाव ${rahu.house} — जहाँ जीवनले “अझै चाहियो” भन्छ।` : '',
+      ketu ? `केतु ${ketu.sign} भाव ${ketu.house} — जहाँ छोड्ने, पछि हट्ने वा सूक्ष्म बाटो देखिन्छ।` : '',
+      'यो अक्ष डरलाग्दो श्राप होइन। एउटा छेउमा भोक, अर्को छेउमा त्याग — दुवैलाई चिनेर बाँच्ने अभ्यास हो।'
+    ].filter(Boolean),
+    basis: `Rahu ${rahu ? `${rahu.sign} H${rahu.house}` : '—'}; Ketu ${ketu ? `${ketu.sign} H${ketu.house}` : '—'}`
+  }));
+
+  pages.push(pg({
+    kicker: 'बाह्र भाव',
+    title: 'बाह्र भाव — जीवनका कोठा',
+    en: 'Twelve houses',
+    paragraphs: ['खाली घर भनेको जीवन छुट्यो भन्ने होइन। त्यो कोठा भावेश र दशाले चलाउँछन्।'],
     table: {
-      headers: ['House', 'Life area', 'Sign', 'In your chart'],
-      rows: houseRows
+      headers: ['भाव', 'जीवन क्षेत्र', 'राशि', 'तपाईंको कुण्डली'],
+      rows: Object.entries(HOUSE_NP).map(([h, area]) => {
+        const o = occ(chart, h);
+        const s = hSign(chart, h) || '—';
+        return [h, area, s, o.length ? o.map((p) => p.name).join(', ') : `भावेश ${SIGN_LORD[s] || '—'}`];
+      })
     }
   }));
 
-  const h2 = occupants(chart, 2);
-  const h11 = occupants(chart, 11);
-  pages.push(page({
-    kicker: '💰  DHANA',
-    title: 'धन र आर्थिक अवस्था',
-    paragraphs: [
-      'यो पृष्ठ “तपाईं धनी हुनुहुन्छ/हुनुहुन्न” भन्ने blunt prediction होइन। Pattern + timing हो।',
-      `2nd house (${houseSign(chart, 2) || '—'}, ${HOUSE_MEANINGS[2]}): ${h2.length ? h2.map((p) => `${p.name} in ${p.sign}`).join('; ') : `occupants छैनन्; lord ${SIGN_LORD[houseSign(chart, 2)] || '—'} ले बोल्छ।`}`,
-      `11th house (${houseSign(chart, 11) || '—'}, ${HOUSE_MEANINGS[11]}): ${h11.length ? h11.map((p) => `${p.name} in ${p.sign}`).join('; ') : `occupants छैनन्; lord ${SIGN_LORD[houseSign(chart, 11)] || '—'}।`}`,
-      jupiter ? `Jupiter ${jupiter.sign} H${jupiter.house} — expansion, guidance, and how you trust growth. ${lineOf(jupiter)}` : '',
-      venus ? `Venus ${venus.sign} H${venus.house} — value, taste, and what you are willing to pay for peace. ${lineOf(venus)}` : '',
-      mercury ? `Mercury ${mercury.sign} H${mercury.house} — trade, skill, and the money that comes through words or craft. ${lineOf(mercury)}` : '',
-      `Current period (${currentDashaLabel(d)}) ले पैसाको कथामा कुन graha को classroom चलिरहेको छ भन्ने बताउँछ — नतिजा होइन, जोड।`,
-      'Practical guidance: आय र खर्चको एउटा साप्ताहिक रिवाज, र 11th-house themes (network, skill, product) मा सानो लगातार प्रयास।'
-    ].filter(Boolean),
-    boxes: [
-      { label: 'आर्थिक बल', text: h11.length || h2.length ? 'Activated 2nd/11th — money themes are personal, not generic.' : 'Money speaks more through lords and dasha than through packed houses.' },
-      { label: 'चुनौती', text: challengeOf(saturn || mercury || {}) },
-      { label: 'कुन समयमा बढी focus?', text: currentDashaLabel(d) }
-    ]
-  }));
-
-  const tenthOcc = occupants(chart, 10);
-  const careerMeter = chart?.careerWealth?.meters?.careerPoints;
-  pages.push(page({
-    kicker: '💼  CAREER & BUSINESS',
-    title: 'Career & Business',
-    paragraphs: [
-      `Astrological emphasis: ${starsFromScore((Number(careerMeter) || 60) / 20)}  — chart-derived emphasis, destiny score होइन।`,
-      `10th house ${houseSign(chart, 10) || ''} (${HOUSE_MEANINGS[10]}): ${tenthOcc.length ? tenthOcc.map((p) => `${p.name} — ${lineOf(p) || p.sign}`).join(' ') : `Empty 10th. Lord ${SIGN_LORD[houseSign(chart, 10)] || '—'} कहाँ बस्छ भन्ने कुराले पेशा बोल्छ।`}`,
-      saturn ? `Saturn ${saturn.sign} H${saturn.house}: ${lineOf(saturn) || 'duty, delay, and durable authority.'} Suitable work often rewards patience more than spectacle.` : '',
-      `Natural strengths: ${[strengthOf(saturn || {}), strengthOf(mercury || {}), strengthOf(sun || {})].filter(Boolean).slice(0, 3).join('; ')}.`,
-      'Business tendency: जब 3rd/7th/10th/11th का graha हरू dasha मा आउँछन्, skill, client, र reputation को कुरा चर्को हुन सक्छ।',
-      `Major challenge: ${challengeOf(saturn || sun || {})}. Growth pattern: consistency compounds; visibility often lags effort.`,
-      d.timeline.slice(0, 4).map((row) => {
-        const lord = row.planet || row.mahaLord || 'Graha';
-        const start = row.startDateApprox || row.startDate || '';
-        const end = row.endDateApprox || row.endDate || '';
-        return `Career timing note — ${lord}: ${start} → ${end}. ${row.theme || 'See that graha’s chapter.'}`;
-      }).join('\n')
-    ].filter(Boolean),
-    boxes: [
-      { label: 'YOUR STRENGTH', text: strengthOf(saturn || sun || {}) },
-      { label: 'WATCH FOR', text: challengeOf(saturn || mars || {}) },
-      { label: 'CURRENT FOCUS', text: currentDashaLabel(d) }
-    ]
-  }));
-
-  const h7 = occupants(chart, 7);
-  const h7sign = houseSign(chart, 7);
-  pages.push(page({
-    kicker: '❤️  LOVE & MARRIAGE',
-    title: 'Love & Marriage',
-    paragraphs: [
-      `Relationship nature: 7th house ${h7sign || ''} — ${HOUSE_MEANINGS[7]}. ${h7.length ? h7.map((p) => `${p.name} in ${p.sign}`).join('; ') : `Occupants छैनन्; 7th lord ${SIGN_LORD[h7sign] || '—'} ले साझेदारको कथा बोल्छ।`}`,
-      venus ? `Venus ${venus.sign} H${venus.house}: तपाईंलाई कस्तो sweetness चाहिन्छ। ${lineOf(venus)}` : '',
-      moon ? `Moon ${moon.sign} H${moon.house}: closeness मा मन कसरी सुरक्षित हुन्छ। ${lineOf(moon)}` : '',
-      jupiter && Number(jupiter.house) === 7 ? `Jupiter in 7th: meaning and goodwill often enter through partnership — still a pattern, not a promise.` : '',
-      'तपाईंलाई suit गर्न सक्ने partner: तपाईंको 7th sign र Venus/Moon को भाषा बुझ्ने व्यक्ति — नाटक होइन, emotional honesty र समय।',
-      'Marriage tendency: 7th, Venus, Jupiter र सम्बन्धित dasha सक्रिय हुँदा सम्बन्धका कुरा चर्को हुन सक्छन्। “हुन्छ/हुन्न” होइन — कहिले यो मैदान तात्छ।',
-      `Important periods: ${currentDashaLabel(d)} र Venus/Jupiter/7th-lord का antardasha हरूलाई सम्बन्धको classroom का रूपमा हेर्नुहोस्।`
-    ].filter(Boolean),
-    boxes: [
-      { label: 'EMOTIONAL PATTERN', text: moon ? `${moon.sign} Moon · H${moon.house}` : 'See Moon chapter' },
-      { label: 'VENUS', text: venus ? `${venus.sign} · H${venus.house}` : '—' },
-      { label: '7TH HOUSE', text: h7sign || '—' }
-    ]
-  }));
-
-  pages.push(page({
-    kicker: '👨‍👩‍👧  FAMILY & HOME',
-    title: 'Family & Home',
-    paragraphs: [
-      `4th house ${houseSign(chart, 4) || ''} — ${HOUSE_MEANINGS[4]}. Occupants: ${occupants(chart, 4).map((p) => p.name).join(', ') || 'none (lord speaks)'}.`,
-      `2nd house ${houseSign(chart, 2) || ''} — family voice, food, values. Occupants: ${occupants(chart, 2).map((p) => p.name).join(', ') || 'none'}.`,
-      mars && Number(mars.house) === 4 ? `Mars in 4th: घर र inner peace मा गर्मी/गति — protectiveness वा बेचैनी, दुवै सम्भव। ${lineOf(mars)}` : mars ? `Mars ${mars.sign} H${mars.house} ले परिवारको कथामा साहस वा द्वन्द्वको स्वाद छर्छ।` : '',
-      'Emotional security: Moon र 4th लाई सँगै पढ्नुहोस्। घर शान्त भयो भने बाहिरी Lagna ले राम्रो काम गर्छ।',
-      'Property tendency: 4th/11th/Mars/Saturn का dasha मा घर-जग्गाको कुरा चर्को हुन सक्छ — खरीदको आदेश होइन, ध्यानको मौसम।'
-    ].filter(Boolean)
-  }));
-
-  pages.push(page({
-    kicker: '🎓  BUDDHI',
-    title: 'Education & Intelligence',
-    paragraphs: [
-      `Learning style: Mercury ${mercury ? `${mercury.sign} H${mercury.house}` : '—'} — ${mercury ? SIGN_MEANINGS[mercury.sign] : 'the mind’s tool'}.`,
-      `5th house (intelligence, craft): ${houseSign(chart, 5) || '—'} · ${occupants(chart, 5).map((p) => p.name).join(', ') || 'lord-led'}.`,
-      `9th house (teachers, higher learning): ${houseSign(chart, 9) || '—'} · ${occupants(chart, 9).map((p) => p.name).join(', ') || 'lord-led'}.`,
-      jupiter ? `Jupiter ${jupiter.sign} H${jupiter.house}: ${lineOf(jupiter) || 'meaning, study, and goodwill.'}` : '',
-      'Challenges: Mercury/Moon stress मा overthinking; Saturn/6th मा “पुगेन” लाग्ने अध्ययन। Skill development: एउटा शिल्प 90 दिन — 5th र 3rd को भाषा।'
-    ].filter(Boolean)
-  }));
-
-  pages.push(page({
-    kicker: '✈️  FOREIGN THEMES',
-    title: 'Foreign travel / foreign environments',
-    paragraphs: [
-      'तपाईं विदेश जानुहुन्छ भन्ने निश्चित वाक्य यो report मा छैन।',
-      `Your chart shows themes traditionally associated with foreign travel/foreign environments. 9th house ${houseSign(chart, 9) || ''} (${occupants(chart, 9).map((p) => p.name).join(', ') || 'lord-led'}); 12th house ${houseSign(chart, 12) || ''} (${occupants(chart, 12).map((p) => p.name).join(', ') || 'lord-led'}).`,
-      rahu ? `Rahu ${rahu.sign} H${rahu.house}: hunger for the unfamiliar. ${lineOf(rahu)}` : '',
-      ketu ? `Ketu ${ketu.sign} H${ketu.house}: release, distance, or a second home of the spirit. ${lineOf(ketu)}` : '',
-      `Timing depends on the interaction of relevant houses and dasha periods — especially ${currentDashaLabel(d)}, plus Rahu/Ketu/9th/12th lords.`
-    ].filter(Boolean)
-  }));
-
-  pages.push(page({
-    kicker: '🪐  YOGAS',
-    title: 'Yogas & special combinations',
+  pages.push(pg({
+    kicker: 'योग',
+    title: 'विशेष योगहरू',
+    en: 'Named combinations — simply',
     paragraphs: yogas.length
-      ? yogas.slice(0, 8).flatMap((y) => [
-          `${y.name || 'Yoga'} — strength: ${y.strength || 'noted'}.`,
-          `What it traditionally indicates: ${y.interpretation || 'A named combination is present.'}`,
-          Array.isArray(y.evidence) && y.evidence.length ? `Evidence in your chart: ${y.evidence.join('; ')}.` : '',
-          y.caution ? `Important caution: ${y.caution}` : 'Named yogas are heuristics, not a life-changing headline. Read them next to the graha and house pages.'
-        ]).filter(Boolean)
-      : [
-          'Named yoga list यो payload मा छैन। Graha–house reading नै backbone हो। Sensational “महायोग!” भाषा प्रयोग गरिएको छैन — transparency राखिएको छ।'
-        ]
-  }));
-
-  const topAspects = aspects
-    .slice()
-    .sort((a, b) => Number(a.orb || 9) - Number(b.orb || 9))
-    .filter((a) => ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'].includes(a.planetA))
-    .slice(0, 6);
-
-  pages.push(page({
-    kicker: '🔗  ASPECTS',
-    title: 'Planetary relationships that matter',
-    paragraphs: topAspects.length
-      ? topAspects.map((a) => {
-          const meaning =
-            a.aspectType === 'conjunction'
-              ? 'एउटै कोठामा काम गर्छन्'
-              : a.aspectType === 'opposition'
-                ? 'टेबल पारि कुरा गर्छन्'
-                : a.aspectType === 'square'
-                  ? 'काम गराउने तनाव'
-                  : a.aspectType === 'trine'
-                    ? 'सहयोगको स्वाद'
-                    : a.aspectType;
-          return `${a.planetA} ↔ ${a.planetB} (${a.aspectType}, orb ${Number(a.orb || 0).toFixed(1)}°) — ${meaning}. यी दुई अध्याय सँगै पढ्नुहोस्।`;
+      ? yogas.slice(0, 6).map((y) => {
+          const nm = y.name || 'योग';
+          const meaning = /raj/i.test(nm)
+            ? 'यसले जिम्मेवारीसँगै उपलब्धि र दृश्यता बढाउने विषयसँग सम्बन्धित संकेत दिन सक्छ।'
+            : y.interpretation || 'एउटा नाम दिइएको संयोजन देखिएको छ।';
+          return `${nm} (${y.strength || 'संकेत'}) — ${meaning}`;
         })
-      : ['Major aspect list thin छ। Occupancy र drishti नै मुख्य सम्बन्ध भाषा हो।'],
-    bullets: ['Conjunction = sharing a room', 'Opposition = a conversation across a table', 'Square = work', 'Trine = support']
+      : ['नाम दिइएका योगहरू यो गणनामा कम छन्। ग्रह–भाव पढाइ नै मुख्य आधार हो। “महायोग!” भन्ने भाषा प्रयोग गरिएको छैन।'],
+    basis: yogas.slice(0, 4).map((y) => `${y.name}: ${(y.evidence || []).join('; ') || 'heuristic'}`).join(' · ')
   }));
 
-  const maha = d.current?.planet || d.snapshot?.mahaDasha || '—';
-  const antar = d.antar?.antarLord || d.snapshot?.antarDasha || '—';
-  pages.push(page({
-    kicker: '⏳  DASHA',
-    title: 'तपाईंको Dasha',
+  const topA = aspects.slice().sort((a, b) => Number(a.orb || 9) - Number(b.orb || 9)).slice(0, 5);
+  pages.push(pg({
+    kicker: 'ग्रह सम्बन्ध',
+    title: 'ग्रहहरूको सम्बन्ध — जीवनमा',
+    en: 'What the aspects mean for you',
+    paragraphs: topA.length
+      ? topA.map((a) => `${a.planetA} र ${a.planetB} (${a.aspectType}) — यी दुईको खेलले निर्णय, करियर वा सम्बन्धमा एउटै विषय बारम्बार ल्याउन सक्छ। सम्बन्धित ग्रहका पृष्ठ सँगै पढ्नुहोस्।`)
+      : ['मुख्य सम्बन्ध भाव-स्थितिबाट पढिन्छ।'],
+    basis: topA.map((a) => `${a.planetA}–${a.planetB} ${a.aspectType} orb ${Number(a.orb || 0).toFixed(1)}°`).join('; ')
+  }));
+
+  pages.push(pg({
+    kicker: 'दशा',
+    title: 'अहिले तपाईंको जीवनमा कुन समय चलिरहेको छ?',
+    en: 'Your dasha classroom',
     paragraphs: [
-      `अहिले: ${currentDashaLabel(d)}`,
-      d.current?.startDateApprox || d.current?.endDateApprox
-        ? `Mahadasha ${maha}: ${d.current?.startDateApprox || ''} → ${d.current?.endDateApprox || ''}.`
-        : '',
-      d.antar?.startDateApprox ? `Antardasha ${antar}: ${d.antar.startDateApprox} → ${d.antar.endDateApprox || '…'}.` : '',
-      d.current?.theme ? `Main themes: ${d.current.theme}` : `Main themes follow ${maha}: see that graha’s page.`,
-      d.current?.likelyFocus ? `Likely focus: ${d.current.likelyFocus}` : '',
-      d.current?.caution ? `Caution: ${d.current.caution}` : '',
-      'Dasha भनेको कुन graha को classroom मा बसिरहनुभएको छ। Free will हट्दैन।'
+      `अहिले: ${plabel}`,
+      d.current?.startDateApprox ? `महादशा ${d.current.planet || ''}: ${d.current.startDateApprox} → ${d.current.endDateApprox || ''}।` : '',
+      d.antar?.startDateApprox ? `अन्तर्दशा ${d.antar.antarLord}: ${d.antar.startDateApprox} → ${d.antar.endDateApprox || ''}।` : '',
+      'दशा भनेको कुन ग्रहको कक्षामा बसिरहनुभएको छ। स्वतन्त्र निर्णय हट्दैन।'
     ].filter(Boolean),
-    bullets: d.timeline.slice(0, 9).map((row) => {
-      const lord = row.planet || row.mahaLord || 'Graha';
-      return `${lord}  ·  ${row.startDateApprox || row.startDate || ''} → ${row.endDateApprox || row.endDate || ''}`;
-    })
+    bullets: [
+      'मुख्य फोकस: करियर र व्यवसाय',
+      'आय र सिकाइ',
+      'सम्बन्ध र सञ्चार',
+      ...d.timeline.slice(0, 6).map((row) => `${row.planet || row.mahaLord}: ${row.startDateApprox || ''} → ${row.endDateApprox || ''}`)
+    ]
   }));
 
-  pages.push(page({
-    kicker: '🔮  NEAR HORIZON',
-    title: '2026–2028 · current period',
+  pages.push(pg({
+    kicker: 'वर्तमान अवधि',
+    title: '२०२६–२०२८',
+    en: 'Near horizon',
     paragraphs: [
-      `यो ${currentDashaLabel(d)} को नजिकको तेस्रो। Certainty language होइन: may, likely themes, traditionally associated.`,
-      '2026 — What to focus on: skill, agreements, and the graha of your current antardasha. Communication and craft often pay more than drama.',
-      '2027 — What may become important: the same classroom, with results more visible if 2026 मा आधार राखियो। Relationships and work may ask for clearer terms.',
-      '2028 — What transition may emerge: antardasha change वा mahadasha को पछिल्लो तेस्रो — नयाँ विषय होइन, जोड सर्ने मौसम।',
-      antar && antar !== '—' ? `Especially watch ${antar}’s house (${planetByName(chart, antar)?.house || '—'}): ${HOUSE_LIFE[planetByName(chart, antar)?.house] || 'that life area'}.` : ''
+      `यो ${plabel} को नजिकको तेस्रो हो। निश्चित भविष्यवाणी होइन — सम्भावित जोड।`,
+      'मुख्य फोकस: करियर, आय, सिकाइ, सम्बन्ध, सञ्चार।'
+    ],
+    boxes: [
+      { label: 'कक्षा', text: plabel },
+      { label: 'जोड', text: 'सीप र सम्झौता' },
+      { label: 'भाषा', text: 'सम्भव / संकेत' }
+    ]
+  }));
+
+  pages.push(pg({
+    kicker: '२०२६',
+    title: '२०२६ — केमा ध्यान?',
+    paragraphs: [
+      'सम्झौता, सीप र दैनिक शिल्पमा ध्यान दिन उपयुक्त वर्ष हुन सक्छ। नयाँ नाटकभन्दा अधुरो काम पूरा गर्ने मौसम।',
+      mercury ? 'बुधको कक्षा चलिरहेको भए वाणी, लेखन, व्यापार र सिकाइ चर्को हुन सक्छ।' : '',
+      'सुझाव: एउटा आय-स्रोत वा शिल्पलाई गहिरो बनाउनुहोस्।'
     ].filter(Boolean)
   }));
 
-  pages.push(page({
-    kicker: '🔮  BROADER ARC',
-    title: '2028–2031 · broader direction',
+  pages.push(pg({
+    kicker: '२०२७',
+    title: '२०२७ — के महत्त्वपूर्ण हुन सक्छ?',
     paragraphs: [
-      maha && maha !== '—'
-        ? `${maha} mahadasha को बाँकी वर्षहरूमा ${PLANET_MEANINGS[maha]?.theme || 'that graha’s themes'} दोहोरिन सक्छन्।`
-        : 'Mahadasha lord यो payload मा स्पष्ट छैन; graha chapters नै timing को pallette हुन्।',
-      'अबको केही वर्षको broader direction: जुन house मा mahadasha lord बस्छ, त्यही life area मा पटक-पटक फर्कनु।',
-      planetByName(chart, maha)
-        ? `${maha} is in ${planetByName(chart, maha).sign}, house ${planetByName(chart, maha).house} (${HOUSE_LIFE[planetByName(chart, maha).house]}). That is the longer classroom.`
-        : '',
-      'यो भविष्यको स्क्रिप्ट होइन — ध्यानको नक्सा हो।'
-    ].filter(Boolean)
+      '२०२६ मा राखिएको आधार देखिन थाल्ने वर्ष हुन सक्छ — काम र सम्बन्धमा सर्तहरू स्पष्ट पार्ने मौसम।',
+      'सुझाव: जिम्मेवारी बढे पनि सीमा स्पष्ट राख्नुहोस्।'
+    ]
+  }));
+
+  pages.push(pg({
+    kicker: '२०२८',
+    title: '२०२८ — के संक्रमण हुन सक्छ?',
+    paragraphs: [
+      'अन्तर्दशा बदलिने वा महादशाको पछिल्लो तेस्रोतिर जोड सर्न सक्छ। नयाँ विषय होइन, जोड सर्ने मौसम।',
+      'सुझाव: जुन काम टुंग्याउन बाँकी छ, त्यसलाई २०२८ अघि सानो रूपमा टुंग्याउने अभ्यास गर्नुहोस्।'
+    ]
+  }));
+
+  const maha = d.current?.planet || '';
+  const mahaP = pBy(chart, maha);
+  pages.push(pg({
+    kicker: 'फराकिलो दिशा',
+    title: '२०२८–२०३१',
+    paragraphs: [
+      mahaP
+        ? `${maha} महादशाको बाँकी वर्षमा यो ग्रह ${mahaP.sign} भाव ${mahaP.house} (${HOUSE_NP[mahaP.house]}) मा बसेकाले त्यही जीवनक्षेत्र बारम्बार फर्किन सक्छ।`
+        : 'महादशा ग्रहको भाव नै लामो कक्षा हो।',
+      'यो स्क्रिप्ट होइन — ध्यानको नक्सा हो।'
+    ]
   }));
 
   const phases = Array.isArray(chart?.lifePhases) ? chart.lifePhases : [];
-  pages.push(page({
-    kicker: '📜  LIFE PHASES',
-    title: 'Childhood · early adulthood · now',
+  pages.push(pg({
+    kicker: 'जीवन चरण',
+    title: 'बाल्यकाल · युवावस्था · अहिले',
     paragraphs: phases.length
-      ? phases.flatMap((ph) => [
-          `${ph.title || ph.phase || ''} (${ph.ageRange || ''})`,
-          ...(Array.isArray(ph.paragraphs) ? ph.paragraphs.slice(0, 3) : [])
-        ])
+      ? phases.flatMap((ph) => [`${ph.title || ph.phase || ''} (${ph.ageRange || ''})`, ...(ph.paragraphs || []).slice(0, 2)])
       : [
-          `Childhood: Moon ${moon?.sign || ''} H${moon?.house || ''} — early safety and memory.`,
-          `Early adulthood: Lagna ${lagna} र 10th-house effort — identity testing through work and peers.`,
-          `Current phase: ${currentDashaLabel(d)}.`,
-          'Next major transition: जब mahadasha वा प्रमुख antardasha बदलिन्छ — त्यो graha को पृष्ठ फेरि पढ्नुहोस्।'
+          `बाल्यकाल: चन्द्र ${moon?.sign || ''} भाव ${moon?.house || ''} — सुरक्षा र स्मृति।`,
+          `युवावस्था: लग्न ${lagna} र दशम प्रयास — कामबाट पहिचान जाँच्ने समय।`,
+          `अहिले: ${plabel}। अर्को ठूलो संक्रमण दशा बदलिँदा।`
         ]
   }));
 
-  pages.push(page({
-    kicker: '🌟  STRENGTHS',
-    title: 'तपाईंका मुख्य strengths',
+  pages.push(pg({
+    kicker: 'बल',
+    title: 'तपाईंका मुख्य बल',
     bullets: [
-      `${strengthOf(mercury || sun || {})} — Mercury/Sun evidence: ${mercury ? `${mercury.sign} H${mercury.house}` : sun ? `${sun.sign} H${sun.house}` : lagna + ' lagna'}.`,
-      `Adaptability — ${lagna} Lagna (${SIGN_MEANINGS[lagna] || 'outer style'}).`,
-      `Emotional depth — Moon ${moon?.sign || ''} H${moon?.house || ''}.`,
-      saturn ? `Persistence — Saturn ${saturn.sign} H${saturn.house}. ${lineOf(saturn) || ''}` : 'Persistence — Saturn chapter.',
-      jupiter ? `Meaning-seeking — Jupiter ${jupiter.sign} H${jupiter.house}.` : 'Judgment — Jupiter chapter.'
+      `सञ्चार र सिकाइ — लग्न ${lagna} / बुध ${mercury ? `${mercury.sign} भाव ${mercury.house}` : ''}`,
+      `अनुकूलन क्षमता — बाहिरी लग्न शैली`,
+      `भावनात्मक गहिराइ — चन्द्र ${moon?.sign || ''} भाव ${moon?.house || ''}`,
+      saturn ? `लगन — शनि ${saturn.sign} भाव ${saturn.house}` : 'लगन — शनि अध्याय',
+      jupiter ? `अर्थ खोज्ने बुद्धि — गुरु ${jupiter.sign} भाव ${jupiter.house}` : 'विवेक — गुरु'
     ]
   }));
 
-  pages.push(page({
-    kicker: '⚠️  CHALLENGES',
-    title: 'तपाईंका मुख्य challenges',
-    paragraphs: ['डराउने भाषा होइन। Challenge → why → how to manage.'],
+  pages.push(pg({
+    kicker: 'चुनौती',
+    title: 'तपाईंका मुख्य चुनौती',
+    paragraphs: ['डरलाग्दो भाषा होइन। चुनौती → किन → कसरी सम्हाल्ने।'],
     bullets: [
-      `${challengeOf(moon || {})} — Moon H${moon?.house || '—'}. Manage: shorter evenings, fewer open loops.`,
-      `${challengeOf(saturn || {})} — Saturn H${saturn?.house || '—'}. Manage: one finished job over ten fantasies.`,
-      `${challengeOf(mars || {})} — Mars H${mars?.house || '—'}. Manage: clean effort, not scattered fights.`,
-      rahu ? `Restlessness — Rahu ${rahu.sign} H${rahu.house}. Manage: one unfamiliar skill, not ten tabs.` : 'Rahu: hunger for more — pick one frontier.',
-      'Over-identification with work or image — Sun/10th. Manage: a life that still exists after the title.'
+      'मनमा कुरा अड्किनु — छोटो साँझ, कम खुला लुप',
+      'पहिचान ढिलो आउनु — एउटा काम टुंग्याएर मात्र अर्को',
+      'करियर दबाब — सीमा र आराम पनि कर्तव्य हो',
+      rahu ? 'चञ्चलता — एउटा नयाँ सीप, दस ट्याब होइन' : 'अत्यधिक योजना — सानो कार्यान्वयन'
     ]
   }));
 
-  pages.push(page({
-    kicker: '🧘  UPAYA',
-    title: 'Personalized remedies',
+  pages.push(pg({
+    kicker: 'उपाय',
+    title: 'तपाईंका लागि तीन अभ्यास',
+    bullets: [
+      '१. अनुशासन — दैनिक एउटा नछुट्टिने काम वा शरीरको समय',
+      '२. वाणी — हप्तामा एकपटक “मैले के भनेँ” समीक्षा',
+      '३. शिल्प — ९० दिनको एउटा सीप',
+      'मन्त्र/कर्मकाण्ड ऐच्छिक हुन्। पहिले व्यवहार।'
+    ]
+  }));
+
+  pages.push(pg({
+    kicker: 'सारांश तालिका',
+    title: 'कुण्डली स्न्यापशट',
+    en: 'Astrological emphasis — not a success score',
+    paragraphs: ['यी पङ्क्तिहरू ज्योतिषीय जोड हुन्, वैज्ञानिक सम्भाव्यता होइनन्।'],
+    table: {
+      headers: ['क्षेत्र', 'तपाईंको मुख्य संकेत'],
+      rows: [
+        ['व्यक्तित्व', `बाहिर ${lagna}; भित्र ${chart.moonSign || moon?.sign || '—'}`],
+        ['करियर', saturn && Number(saturn.house) === 10 ? 'ढिलो तर टिक्ने वृद्धि' : 'दशम/शनि अनुसार जिम्मेवारी'],
+        ['धन', 'सीप र सञ्जालबाट चल्ने ढाँचा'],
+        ['प्रेम', 'भावनात्मक गहिराइ'],
+        ['विदेश', 'नवम/द्वादश/राहु–केतुका विषय'],
+        ['अहिलेको समय', plabel]
+      ]
+    }
+  }));
+
+  pages.push(pg({
+    kicker: 'तीन सूत्र',
+    title: 'तपाईंका मुख्य जीवन विषय',
+    bullets: [
+      `०१ सञ्चार र शिल्प — लग्न ${lagna}, बुध ${mercury ? `${mercury.sign} H${mercury.house}` : ''}`,
+      `०२ अनुशासन र करियर — शनि ${saturn ? `${saturn.sign} H${saturn.house}` : ''} र दशम ${hSign(chart, 10) || ''}`,
+      `०३ गहिरो भावना — चन्द्र ${moon?.sign || ''} भाव ${moon?.house || ''}`
+    ]
+  }));
+
+  pages.push(pg({
+    kicker: 'एक पृष्ठ',
+    title: 'तपाईंको कुण्डली — संक्षेपमा',
     paragraphs: [
-      'Mantra/ritual optional हो। पहिले व्यवहार।'
+      `लग्न ${lagna} · चन्द्र ${chart.moonSign || moon?.sign || '—'} · सूर्य ${chart.sunSign || sun?.sign || '—'}`,
+      `करियर: दशम ${hSign(chart, 10) || ''} · ${tenth.map((p) => p.name).join(', ') || SIGN_LORD[hSign(chart, 10)] || ''}`,
+      `धन: द्वितीय ${hSign(chart, 2) || ''} · एकादश ${hSign(chart, 11) || ''}`,
+      `प्रेम: सप्तम ${hSign(chart, 7) || ''} · शुक्र ${venus ? `${venus.sign} H${venus.house}` : '—'}`,
+      `अहिले: ${plabel}`,
+      'सुझाव: दशा ग्रहको भावमा सानो लगातार काम।'
+    ]
+  }));
+
+  pages.push(pg({
+    kicker: 'मिल्छ?',
+    title: 'के कुरा जीवनसँग मेल खान्छ?',
+    paragraphs: [
+      'यो प्रतिवेदनमा उल्लेखित ढाँचा तपाईंको वास्तविक जीवनसँग कति मिल्छन्? आफ्नो अनुभवसँग तुलना गर्नुहोस्।'
     ],
-    bullets: [
-      '1. Discipline — Saturn को घर: एउटा दैनिक block (काम वा शरीर) जुन skip हुँदैन।',
-      '2. Speech / communication awareness — Mercury/2nd: हप्तामा एकपटक “मैले के भनेँ” समीक्षा।',
-      '3. Study / skill development — Jupiter/5th/3rd: 90-दिनको एउटा शिल्प।',
-      saturn ? `Saturn note: ${lineOf(saturn) || 'patience is the remedy that looks boring and works.'}` : '',
-      moon ? `Moon note: recover before you perform.` : ''
-    ].filter(Boolean)
+    bullets: ['करियर यात्रा', 'पैसाको बानी', 'सम्बन्ध', 'निर्णय शैली', 'भावना', 'ठूला परिवर्तन']
   }));
 
-  pages.push(page({
-    kicker: '📊  SNAPSHOT',
-    title: 'Your Kundali snapshot',
+  pages.push(pg({
+    kicker: 'सन्देश',
+    title: 'तपाईंको यात्रा यहींबाट सुरु हुन्छ',
     paragraphs: [
-      'यी पट्टिहरू astrological emphasis हुन् — success probability वा वैज्ञानिक भविष्यवाणी होइनन्।'
-    ],
-    meters: [
-      { label: 'Personality', value: meterFromHouse(chart, [1], ['Sun', 'Moon']) },
-      { label: 'Career', value: meterFromHouse(chart, [10, 6], ['Saturn', 'Sun']) },
-      { label: 'Finance', value: meterFromHouse(chart, [2, 11], ['Jupiter', 'Venus', 'Mercury']) },
-      { label: 'Relationships', value: meterFromHouse(chart, [7, 5], ['Venus', 'Moon', 'Jupiter']) },
-      { label: 'Learning', value: meterFromHouse(chart, [5, 9, 4], ['Mercury', 'Jupiter']) }
+      'कुण्डलीले सम्भावनाका ढाँचा देखाउँछ; त्यसलाई कसरी प्रयोग गर्ने भन्ने तपाईंको निर्णयमा भर पर्छ।',
+      'Your chart. Your patterns. Your choices.'
     ]
   }));
 
-  pages.push(page({
-    kicker: '🎯  SYNTHESIS',
-    title: 'Your key life themes',
+  pages.push(pg({
+    kicker: 'विधि',
+    title: 'महत्त्वपूर्ण जानकारी',
     paragraphs: [
-      'तपाईंको chart मा तीन मुख्य themes बारम्बार देखिन्छन्।'
-    ],
-    bullets: [
-      `01 — Communication & craft — ${lagna} Lagna / Mercury ${mercury ? `${mercury.sign} H${mercury.house}` : ''}. Evidence: 2nd/3rd/10th occupancy र dasha ${currentDashaLabel(d)}.`,
-      `02 — Discipline & career — Saturn ${saturn ? `${saturn.sign} H${saturn.house}` : ''} र 10th house ${houseSign(chart, 10) || ''}.`,
-      `03 — Deep emotional processing — Moon ${moon?.sign || ''} H${moon?.house || ''}. Inner life is not the same as the outer Gemini-or-lagna costume.`
-    ]
-  }));
-
-  pages.push(page({
-    kicker: 'ONE PAGE',
-    title: 'तपाईंको Kundali — संक्षेपमा',
-    paragraphs: [
-      `Lagna: ${lagna}   ·   Moon: ${chart.moonSign || moon?.sign || '—'}   ·   Sun: ${chart.sunSign || sun?.sign || '—'}`,
-      `Personality: ${SIGN_MEANINGS[lagna] || ''} outside; ${SIGN_MEANINGS[moon?.sign] || ''} inside.`,
-      `Career: House 10 ${houseSign(chart, 10) || ''} · ${tenthOcc.map((p) => p.name).join(', ') || SIGN_LORD[houseSign(chart, 10)] || 'lord-led'}.`,
-      `Wealth: 2nd ${houseSign(chart, 2) || ''} · 11th ${houseSign(chart, 11) || ''}.`,
-      `Love: 7th ${h7sign || ''} · Venus ${venus ? `${venus.sign} H${venus.house}` : '—'}.`,
-      `Current period: ${currentDashaLabel(d)}.`,
-      `Key advice: ${maha && maha !== '—' ? maha + ' classroom मा रहनुहोस् — ' : ''}${HOUSE_LIFE[planetByName(chart, maha)?.house] || 'the house of the dasha lord'} मा सानो लगातार काम।`
-    ]
-  }));
-
-  pages.push(page({
-    kicker: 'REFLECTION',
-    title: 'What may resonate with you?',
-    paragraphs: [
-      'यो report मा उल्लेख गरिएका patterns तपाईंको वास्तविक जीवनसँग कति मेल खान्छन्?',
-      'आफ्नो अनुभवसँग तुलना गर्नुहोस्। मिल्यो भने त्यो पृष्ठ फेरि पढ्नुहोस्। मिलेन भने जन्म समय र ठाउँ जाँच गर्नुहोस् — chart गलत होइन, input संवेदनशील हुन सक्छ।'
-    ],
-    bullets: [
-      'तपाईंको career journey',
-      'पैसा सम्बन्धी pattern',
-      'relationship experiences',
-      'decision-making',
-      'emotional tendencies',
-      'major life changes'
-    ]
-  }));
-
-  pages.push(page({
-    kicker: 'CLOSING',
-    title: 'तपाईंको यात्रा यहींबाट सुरु हुन्छ।',
-    paragraphs: [
-      'कुण्डलीले सम्भावनाका pattern देखाउँछ; तपाईंले त्यसलाई कसरी प्रयोग गर्नुहुन्छ भन्ने कुरा तपाईंको निर्णयमा निर्भर हुन्छ।',
-      'Your chart. Your patterns. Your choices.',
-      'महत्त्वपूर्ण जानकारी: यो report तपाईंले उपलब्ध गराउनुभएको जन्ममिति, जन्मसमय र जन्मस्थानमा आधारित वैदिक ज्योतिषीय व्याख्या हो। ग्रहस्थितिको गणनाका लागि Swiss Ephemeris तथा Lahiri ayanamsa मा आधारित calculation methodology प्रयोग गरिएको छ।',
-      'ज्योतिषीय फलादेशलाई निश्चित वा १००% सुनिश्चित भविष्यवाणीका रूपमा लिनु हुँदैन। जन्म विवरणको शुद्धता, गणना पद्धति र व्याख्याको आधारमा केही परिणाम फरक पर्न सक्छन्।',
-      'यस report लाई आत्मचिन्तन तथा ज्योतिषीय मार्गदर्शनको रूपमा लिनुहोस्। चिकित्सा, कानुनी वा महत्वपूर्ण आर्थिक निर्णयका लागि सम्बन्धित योग्य पेशेवरको सल्लाह लिनुहोस्।'
+      'यो प्रतिवेदन तपाईंले उपलब्ध गराउनुभएको जन्ममिति, जन्मसमय र जन्मस्थानमा आधारित वैदिक ज्योतिषीय व्याख्या हो। ग्रहस्थितिका लागि Swiss Ephemeris तथा लाहिरी अयनांश प्रयोग गरिएको छ।',
+      'ज्योतिषीय फलादेशलाई निश्चित वा १०० प्रतिशत सुनिश्चित भविष्यवाणीका रूपमा लिनु हुँदैन। जन्म विवरणको शुद्धता, गणना पद्धति र व्याख्याअनुसार परिणाम फरक पर्न सक्छन्।',
+      'यसलाई आत्मचिन्तन तथा ज्योतिषीय मार्गदर्शनका रूपमा लिनुहोस्। चिकित्सा, कानुनी वा महत्त्वपूर्ण आर्थिक निर्णयका लागि सम्बन्धित योग्य पेशेवरको सल्लाह लिनुहोस्।'
     ]
   }));
 
@@ -648,6 +580,6 @@ function buildMahabhavishyaPages(chart) {
 
 module.exports = {
   buildMahabhavishyaPages,
-  planetByName,
+  planetByName: pBy,
   buildReportSections: (chart) => buildMahabhavishyaPages(chart).filter((p) => p.kind !== 'cover')
 };

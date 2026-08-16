@@ -1,5 +1,18 @@
+const path = require('path');
 const PDFDocument = require('pdfkit');
 const { buildMahabhavishyaPages } = require('./reportNarrative');
+
+const FONT_REG = path.join(__dirname, 'fonts', 'Hind-Regular.ttf');
+const FONT_BOLD = path.join(__dirname, 'fonts', 'Hind-Bold.ttf');
+
+function attachFonts(doc) {
+  doc.registerFont('Noto', FONT_REG);
+  doc.registerFont('Noto-Bold', FONT_BOLD);
+}
+
+function txt(doc, str, x, y, opts = {}) {
+  return doc.text(str, x, y, { features: [], ...opts });
+}
 
 const NAVY = '#0b1a33';
 const NAVY2 = '#12243f';
@@ -86,7 +99,7 @@ class Writer {
   }
 
   bottom() {
-    return this.doc.page.height - 64;
+    return this.doc.page.height - 80;
   }
 
   ensure(space = 52) {
@@ -99,18 +112,26 @@ class Writer {
 
   kicker(text) {
     this.ensure(28);
-    this.doc.font('Helvetica').fontSize(8).fillColor(GOLD).text(String(text || '').toUpperCase(), this.left, this.doc.y, {
-      width: this.width,
-      characterSpacing: 1.4
-    });
-    this.doc.moveDown(0.35);
+    this.doc.font('Noto').fontSize(9).fillColor(GOLD);
+    txt(this.doc, String(text || ''), this.left, this.doc.y, { width: this.width });
+    this.doc.moveDown(0.3);
   }
 
   h1(text) {
-    this.ensure(56);
-    this.doc.font('Times-Bold').fontSize(22).fillColor(NAVY).text(text, this.left, this.doc.y, { width: this.width });
+    this.ensure(52);
+    this.doc.font('Noto-Bold').fontSize(20).fillColor(NAVY);
+    txt(this.doc, String(text || ''), this.left, this.doc.y, { width: this.width });
     this.doc.moveTo(this.left, this.doc.y + 8).lineTo(this.left + 72, this.doc.y + 8).lineWidth(1.4).strokeColor(GOLD).stroke();
-    this.doc.moveDown(0.85);
+    this.doc.moveDown(0.7);
+  }
+
+  en(text) {
+    const t = String(text || '').trim();
+    if (!t) return;
+    this.ensure(20);
+    this.doc.font('Noto').fontSize(9).fillColor(MUTED);
+    txt(this.doc, t, this.left, this.doc.y, { width: this.width });
+    this.doc.moveDown(0.45);
   }
 
   p(text) {
@@ -120,12 +141,9 @@ class Writer {
       const s = line.trim();
       if (!s) return;
       this.ensure(36);
-      this.doc.font('Times-Roman').fontSize(11).fillColor(INK).text(s, this.left, this.doc.y, {
-        width: this.width,
-        align: 'justify',
-        lineGap: 2.6
-      });
-      this.doc.moveDown(0.42);
+      this.doc.font('Noto').fontSize(11).fillColor(INK);
+      txt(this.doc, s, this.left, this.doc.y, { width: this.width, align: 'left', lineGap: 3 });
+      this.doc.moveDown(0.4);
     });
   }
 
@@ -134,72 +152,63 @@ class Writer {
       const t = String(item || '').trim();
       if (!t) return;
       this.ensure(28);
-      this.doc.font('Times-Roman').fontSize(11).fillColor(INK).text(`•  ${t}`, this.left, this.doc.y, {
-        width: this.width,
-        lineGap: 2
-      });
-      this.doc.moveDown(0.28);
+      this.doc.font('Noto').fontSize(11).fillColor(INK);
+      txt(this.doc, `•  ${t}`, this.left, this.doc.y, { width: this.width, lineGap: 2 });
+      this.doc.moveDown(0.26);
     });
   }
 
   boxes(list) {
     const items = (list || []).filter((b) => b && b.text);
     if (!items.length) return;
-    this.ensure(88);
+    this.ensure(92);
     const gap = 10;
     const w = (this.width - gap * (items.length - 1)) / items.length;
     const y = this.doc.y;
     items.forEach((b, i) => {
       const x = this.left + i * (w + gap);
-      this.doc.roundedRect(x, y, w, 78, 6).fillAndStroke('#fffdf8', GOLD);
-      this.doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD).text(String(b.label || '').toUpperCase(), x + 8, y + 10, {
-        width: w - 16
-      });
-      this.doc.font('Times-Roman').fontSize(9).fillColor(NAVY).text(String(b.text), x + 8, y + 26, {
-        width: w - 16,
-        height: 46
-      });
+      this.doc.roundedRect(x, y, w, 82, 6).fillAndStroke('#fffdf8', GOLD);
+      this.doc.font('Noto-Bold').fontSize(8).fillColor(GOLD);
+      txt(this.doc, String(b.label || ''), x + 8, y + 10, { width: w - 16 });
+      this.doc.font('Noto').fontSize(9).fillColor(NAVY);
+      txt(this.doc, String(b.text), x + 8, y + 28, { width: w - 16, height: 48 });
     });
-    this.doc.y = y + 90;
+    this.doc.y = y + 94;
   }
 
   table(table) {
     if (!table?.rows?.length) return;
-    const cols = table.headers?.length || 4;
-    const widths = cols === 4 ? [46, 150, 90, this.width - 286] : Array(cols).fill(this.width / cols);
+    const cols = table.headers?.length || 2;
+    const widths = cols === 4 ? [40, 160, 90, this.width - 290] : cols === 2 ? [150, this.width - 150] : Array(cols).fill(this.width / cols);
     const drawRow = (cells, header) => {
-      this.ensure(22);
+      this.ensure(24);
       let x = this.left;
       const y = this.doc.y;
       cells.forEach((cell, i) => {
         const w = widths[i];
-        if (header) this.doc.rect(x, y, w, 18).fill(NAVY);
-        this.doc
-          .font(header ? 'Helvetica-Bold' : 'Times-Roman')
-          .fontSize(header ? 8 : 8.5)
-          .fillColor(header ? GOLD2 : INK)
-          .text(String(cell || ''), x + 4, y + 4, { width: w - 8, height: 14, ellipsis: true });
+        if (header) this.doc.rect(x, y, w, 20).fill(NAVY);
+        this.doc.font(header ? 'Noto-Bold' : 'Noto').fontSize(8).fillColor(header ? GOLD2 : INK);
+        txt(this.doc, String(cell || ''), x + 4, y + 5, { width: w - 8, height: 14, ellipsis: true, lineBreak: false });
         x += w;
       });
-      this.doc.y = y + 18;
+      this.doc.y = y + 20;
     };
     if (table.headers) drawRow(table.headers, true);
     table.rows.forEach((row) => drawRow(row, false));
-    this.doc.moveDown(0.6);
+    this.doc.moveDown(0.5);
   }
 
-  meters(list) {
-    (list || []).forEach((m) => {
-      this.ensure(28);
-      const y = this.doc.y;
-      this.doc.font('Times-Bold').fontSize(10).fillColor(NAVY).text(m.label, this.left, y, { width: 120 });
-      const bx = this.left + 128;
-      const bw = this.width - 128;
-      this.doc.roundedRect(bx, y + 2, bw, 10, 3).fill('#e6dfd2');
-      this.doc.roundedRect(bx, y + 2, Math.max(8, bw * Number(m.value || 0)), 10, 3).fill(GOLD);
-      this.doc.y = y + 22;
-    });
-    this.doc.moveDown(0.3);
+  basis(text) {
+    const t = String(text || '').trim();
+    if (!t) return;
+    this.ensure(40);
+    const y = this.doc.y;
+    this.doc.roundedRect(this.left, y, this.width, 36, 4).fillAndStroke('#f3eee4', '#ddd2bc');
+    this.doc.font('Noto-Bold').fontSize(7).fillColor(GOLD);
+    txt(this.doc, 'Chart basis', this.left + 8, y + 6, { width: this.width - 16 });
+    this.doc.font('Noto').fontSize(8).fillColor(MUTED);
+    txt(this.doc, t, this.left + 8, y + 18, { width: this.width - 16, height: 14, ellipsis: true });
+    this.doc.y = y + 46;
   }
 }
 
@@ -210,34 +219,21 @@ function writeCover(doc, chart, cover) {
   doc.restore();
 
   const cx = doc.page.width / 2;
-  doc.font('Helvetica').fontSize(11).fillColor(GOLD).text(cover.kicker || 'GRAHAPATH', 54, 72, {
-    width: doc.page.width - 108,
-    align: 'center',
-    characterSpacing: 4
-  });
-  doc.font('Times-Bold').fontSize(32).fillColor(IVORY).text(cover.title || 'तपाईंको महाभविष्यफल', 54, 108, {
-    width: doc.page.width - 108,
-    align: 'center'
-  });
-  doc.font('Times-Italic').fontSize(13).fillColor(GOLD2).text(cover.subtitle || 'Personalized Vedic Astrology Report', 54, 168, {
-    width: doc.page.width - 108,
-    align: 'center'
-  });
-  doc.font('Times-Bold').fontSize(26).fillColor(IVORY).text(cover.name || chart?.name || 'You', 54, 210, {
-    width: doc.page.width - 108,
-    align: 'center'
-  });
+  doc.font('Noto').fontSize(11).fillColor(GOLD);
+  txt(doc, cover.kicker || 'GRAHAPATH', 54, 72, { width: doc.page.width - 108, align: 'center' });
+  doc.font('Noto-Bold').fontSize(28).fillColor(IVORY);
+  txt(doc, cover.title || 'तपाईंको महाभविष्यफल', 54, 108, { width: doc.page.width - 108, align: 'center' });
+  doc.font('Noto').fontSize(13).fillColor(GOLD2);
+  txt(doc, cover.subtitle || 'Personalized Vedic Astrology Report', 54, 168, { width: doc.page.width - 108, align: 'center' });
+  doc.font('Noto-Bold').fontSize(24).fillColor(IVORY);
+  txt(doc, cover.name || chart?.name || 'You', 54, 210, { width: doc.page.width - 108, align: 'center' });
   const meta = [cover.date, cover.time, cover.place].filter(Boolean).join('\n');
-  doc.font('Times-Roman').fontSize(12).fillColor(GOLD2).text(meta, 54, 248, {
-    width: doc.page.width - 108,
-    align: 'center'
-  });
+  doc.font('Noto').fontSize(12).fillColor(GOLD2);
+  txt(doc, meta, 54, 248, { width: doc.page.width - 108, align: 'center' });
 
   drawKundaliWheel(doc, chart, cx, 455, 158, { dark: true });
-  doc.font('Helvetica').fontSize(9).fillColor(GOLD).text('३०+ पृष्ठको व्यक्तिगत ज्योतिषीय विश्लेषण', 54, 650, {
-    width: doc.page.width - 108,
-    align: 'center'
-  });
+  doc.font('Noto').fontSize(10).fillColor(GOLD);
+  txt(doc, 'व्यक्तिगत ज्योतिषीय विश्लेषण', 54, 650, { width: doc.page.width - 108, align: 'center' });
 }
 
 function writeContentPage(doc, chart, spec) {
@@ -247,6 +243,7 @@ function writeContentPage(doc, chart, spec) {
   const w = new Writer(doc);
   if (spec.kicker) w.kicker(spec.kicker);
   if (spec.title) w.h1(spec.title);
+  if (spec.en) w.en(spec.en);
   if (spec.showWheel) {
     w.ensure(240);
     drawKundaliWheel(doc, chart, doc.page.width / 2, doc.y + 120, 118, { dark: false });
@@ -256,24 +253,30 @@ function writeContentPage(doc, chart, spec) {
   if (spec.boxes?.length) w.boxes(spec.boxes);
   if (spec.bullets?.length) w.bullets(spec.bullets);
   if (spec.table) w.table(spec.table);
-  if (spec.meters?.length) w.meters(spec.meters);
+  if (spec.basis) w.basis(spec.basis);
 }
 
 function writeFooters(doc, chart) {
   const range = doc.bufferedPageRange();
+  const total = range.count;
   const label = String(chart?.name || 'GrahaPath');
-  for (let i = 0; i < range.count; i += 1) {
+  for (let i = 0; i < total; i += 1) {
     doc.switchToPage(range.start + i);
-    const y = doc.page.height - 42;
-    const width = doc.page.width - 108;
+    const y = 742;
     const cover = i === 0;
-    doc.font('Helvetica').fontSize(8).fillColor(cover ? GOLD : MUTED);
-    doc.text(cover ? 'GRAHAPATH  ·  MAHABHAVISHYAFAL' : `GrahaPath  ·  ${label}`, 54, y, {
-      width,
+    doc.font('Noto').fontSize(8).fillColor(cover ? GOLD : MUTED);
+    txt(doc, cover ? 'GRAHAPATH' : `GrahaPath  ·  ${label}`, 54, y, {
+      width: 360,
       align: 'left',
-      lineBreak: false
+      lineBreak: false,
+      height: 12
     });
-    doc.text(`${i + 1} / ${range.count}`, 54, y, { width, align: 'right', lineBreak: false });
+    txt(doc, `${i + 1} / ${total}`, 54, y, {
+      width: doc.page.width - 108,
+      align: 'right',
+      lineBreak: false,
+      height: 12
+    });
   }
 }
 
@@ -287,14 +290,16 @@ function buildChartReportPdf(chart) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
-      margins: { top: 52, bottom: 56, left: 54, right: 54 },
+      margins: { top: 52, bottom: 72, left: 54, right: 54 },
       bufferPages: true,
+      autoFirstPage: true,
       info: {
-        Title: `GrahaPath महाभविष्यफल — ${chart.name || 'Personalized report'}`,
+        Title: `GrahaPath Mahabhavishyafal — ${chart.name || 'Personalized report'}`,
         Author: 'GrahaPath',
         Subject: 'Personalized Vedic astrology report from calculated kundali'
       }
     });
+    attachFonts(doc);
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
