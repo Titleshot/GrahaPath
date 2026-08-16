@@ -12,7 +12,25 @@ function safeRequire(modulePath, fallbackFactory) {
   }
 }
 
-const chartRoutes = safeRequire('./routes/chartRoutes', () => express.Router());
+const chartRoutesLoad = (() => {
+  try {
+    return { router: require('./routes/chartRoutes'), error: null };
+  } catch (error) {
+    console.error('[GrahaPath] chartRoutes failed to load:', error?.message || error);
+    if (error?.stack) console.error(error.stack);
+    const router = express.Router();
+    const fail = (_req, res) => {
+      res.status(503).json({
+        error: 'ChartRoutesLoadFailed',
+        message: error?.message || 'Chart routes failed to load'
+      });
+    };
+    router.post('/generate-chart', fail);
+    router.get('/place-suggestions', fail);
+    return { router, error: error?.message || String(error) };
+  }
+})();
+const chartRoutes = chartRoutesLoad.router;
 const chatRoutes = safeRequire('./routes/chatRoutes', () => express.Router());
 const feedbackRoutes = safeRequire('./routes/feedbackRoutes', () => express.Router());
 const securityRoutes = safeRequire('./routes/securityRoutes', () => express.Router());
@@ -113,7 +131,9 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'grahapath-backend',
-    premiumApi: premiumRouterMounted(premiumRoutes)
+    premiumApi: premiumRouterMounted(premiumRoutes),
+    chartApi: premiumRouterMounted(chartRoutes),
+    chartRoutesError: chartRoutesLoad.error
   });
 });
 

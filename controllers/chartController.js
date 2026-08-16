@@ -21,7 +21,6 @@ const {
   buildDeviceCookie
 } = require('../services/sessionTokenService');
 const { applyClientChartAccess, snapshotNatalCore } = require('../services/chartClientRedaction');
-const { buildChartReportPdf, safeFilename } = require('../services/chartReport/chartReportPdfService');
 const { buildPanchangaForDate } = require('../services/currentAstronomyService');
 const { saveChartForEmail } = require('../services/premiumAccessService');
 const { assignChartToUser, normalizeAccessId, createOrUpdateUser } = require('../services/authUserService');
@@ -491,6 +490,7 @@ async function generateChart(req, res, next) {
 
 async function generateChartReport(req, res, next) {
   try {
+    const { buildChartReportPdf, safeFilename } = require('../services/chartReport/chartReportPdfService');
     let chart = req.body?.chart;
     const hasPlanets = chart && typeof chart === 'object' && Array.isArray(chart.planets) && chart.planets.length > 0;
     if (!hasPlanets) {
