@@ -2,7 +2,7 @@ const {
   HOUSE_MEANINGS,
   PLANET_MEANINGS,
   SIGN_MEANINGS
-} = require('../interpretationService');
+} = require('./interpretationService');
 
 const SIGN_LORD = {
   Aries: 'Mars',

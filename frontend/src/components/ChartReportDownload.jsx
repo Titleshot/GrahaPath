@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { apiFetch, withApiBase } from '../lib/apiBase';
 
-const REPORT_URL = withApiBase('/api/generate-chart-report');
+const REPORT_URL = import.meta.env.DEV ? withApiBase('/api/generate-chart-report') : '/api/chart-pdf';
 
 export default function ChartReportDownload({ chart, compact = false }) {
   const [busy, setBusy] = useState(false);
@@ -62,8 +62,7 @@ export default function ChartReportDownload({ chart, compact = false }) {
     <div className="rounded-3xl border border-gold/25 bg-black/30 p-5">
       <p className="text-xs uppercase tracking-[0.28em] text-gold/70">Full chart report</p>
       <p className="mt-2 text-sm leading-relaxed text-ivory/72">
-        Download a 20+ page PDF of this kundali — wheel picture, grahas, houses, dasha, and explanations.
-        Built from the calculated chart (no ChatGPT / Gemini call).
+        Download a 30+ page महाभविष्यफल of this kundali — personality, career, wealth, love, dasha, and guidance.
       </p>
       <button
         type="button"
@@ -71,7 +70,7 @@ export default function ChartReportDownload({ chart, compact = false }) {
         disabled={busy || !chart?.planets?.length}
         className="mt-4 rounded-xl border border-gold/45 bg-gold/15 px-4 py-2.5 text-sm font-semibold text-gold transition hover:bg-gold/22 disabled:opacity-50"
       >
-        {busy ? 'Preparing PDF…' : 'Download 20–25 page PDF'}
+        {busy ? 'Preparing PDF…' : 'Download महाभविष्यफल PDF'}
       </button>
       {error ? (
         <p className="mt-3 rounded-xl border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs text-red-100">{error}</p>
