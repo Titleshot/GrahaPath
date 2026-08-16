@@ -20,7 +20,7 @@ const {
   readDeviceTokenFromRequest,
   buildDeviceCookie
 } = require('../services/sessionTokenService');
-const { applyClientChartAccess } = require('../services/chartClientRedaction');
+const { applyClientChartAccess, snapshotNatalCore } = require('../services/chartClientRedaction');
 const { buildChartReportPdf, safeFilename } = require('../services/chartReport/chartReportPdfService');
 const { buildPanchangaForDate } = require('../services/currentAstronomyService');
 const { saveChartForEmail } = require('../services/premiumAccessService');
@@ -448,6 +448,7 @@ async function generateChart(req, res, next) {
 
     attachTimingCore(chart);
 
+    chart.natalCore = snapshotNatalCore(chart);
     if (!demoPremium) {
       applyClientChartAccess(chart);
     } else {

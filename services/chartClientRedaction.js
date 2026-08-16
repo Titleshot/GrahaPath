@@ -22,8 +22,54 @@ function scrubAstroBrainSummary(summary) {
 /**
  * @param {object} chart — mutable chart from generateBirthChart pipeline
  */
+function snapshotNatalCore(chart) {
+  const ab = chart.astroBrain && typeof chart.astroBrain === 'object' ? chart.astroBrain : {};
+  const div = ab.divisional && typeof ab.divisional === 'object' ? ab.divisional : {};
+  return {
+    planets: (chart.planets || []).map((p) => ({
+      name: p.name,
+      sign: p.sign,
+      house: p.house,
+      degree: p.degree,
+      absoluteDegree: p.absoluteDegree,
+      nakshatra: p.nakshatra,
+      nakshatraPada: p.nakshatraPada,
+      retrograde: p.retrograde === true
+    })),
+    yogas: (ab.yogas || []).slice(0, 12).map((y) => ({
+      name: y.name,
+      strength: y.strength,
+      interpretation: y.interpretation || ''
+    })),
+    aspects: (ab.aspects || []).slice(0, 18).map((a) => ({
+      planetA: a.planetA,
+      planetB: a.planetB,
+      aspectType: a.aspectType,
+      orb: a.orb,
+      strength: a.strength
+    })),
+    divisionalRows: Array.isArray(div.divisionalRows) ? div.divisionalRows : [],
+    vimshottariTimeline: (ab.vimshottariTimeline || []).slice(0, 12).map((seg) => ({
+      planet: seg.planet,
+      startDateApprox: seg.startDateApprox,
+      endDateApprox: seg.endDateApprox,
+      antardasha: (seg.antardasha || []).slice(0, 9).map((a) => ({
+        antarLord: a.antarLord,
+        startDateApprox: a.startDateApprox,
+        endDateApprox: a.endDateApprox
+      }))
+    })),
+    currentDasha: ab.currentDasha || null,
+    currentAntardasha: ab.currentAntardasha || null
+  };
+}
+
 function applyClientChartAccess(chart) {
   if (!chart || typeof chart !== 'object') return chart;
+
+  if (!chart.natalCore) {
+    chart.natalCore = snapshotNatalCore(chart);
+  }
 
   if (deepDataPublicEnabled()) {
     chart.access = { deepData: true, tier: 'full' };
@@ -107,5 +153,6 @@ function applyClientChartAccess(chart) {
 
 module.exports = {
   deepDataPublicEnabled,
+  snapshotNatalCore,
   applyClientChartAccess
 };

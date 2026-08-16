@@ -1,5 +1,7 @@
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { SIGN_NP } = require('./npLexicon');
+const { toReportChart } = require('./reportChartPayload');
 const { buildMahabhavishyaPages } = require('./reportNarrative');
 
 const FONT_REG = path.join(__dirname, 'fonts', 'Hind-Regular.ttf');
@@ -10,8 +12,33 @@ function attachFonts(doc) {
   doc.registerFont('Noto-Bold', FONT_BOLD);
 }
 
+function toPdfUtf16BE(str) {
+  const units = [];
+  for (const ch of String(str)) {
+    const cp = ch.codePointAt(0);
+    if (cp <= 0xffff) units.push(cp);
+    else {
+      const u = cp - 0x10000;
+      units.push(0xd800 + (u >> 10), 0xdc00 + (u & 0x3ff));
+    }
+  }
+  const buf = Buffer.alloc(2 + units.length * 2);
+  buf[0] = 0xfe;
+  buf[1] = 0xff;
+  units.forEach((u, i) => {
+    buf[2 + i * 2] = (u >> 8) & 0xff;
+    buf[3 + i * 2] = u & 0xff;
+  });
+  return buf.toString('hex').toUpperCase();
+}
+
 function txt(doc, str, x, y, opts = {}) {
-  return doc.text(str, x, y, { features: [], ...opts });
+  const s = String(str ?? '');
+  const mark = /[\u0900-\u097F]/.test(s) && typeof doc.addContent === 'function';
+  if (mark) doc.addContent(`/Span << /ActualText <${toPdfUtf16BE(s)}> >> BDC`);
+  const result = doc.text(s, x, y, { features: [], ...opts });
+  if (mark) doc.addContent('EMC');
+  return result;
 }
 
 const NAVY = '#0b1a33';
@@ -68,8 +95,10 @@ function drawKundaliWheel(doc, chart, cx, cy, outerR, { dark } = { dark: false }
   }
 
   doc.circle(cx, cy, innerR + 10).fillColor(dark ? '#07101f' : '#0b0b0b').fill();
-  doc.font('Helvetica').fontSize(7).fillColor(GOLD).text('LAGNA', cx - 24, cy - 12, { width: 48, align: 'center' });
-  doc.font('Times-Bold').fontSize(10).fillColor(GOLD2).text(String(chart?.ascendant || '—'), cx - 36, cy + 2, {
+  doc.font('Noto').fontSize(8).fillColor(GOLD);
+  txt(doc, 'लग्न', cx - 24, cy - 12, { width: 48, align: 'center' });
+  doc.font('Noto-Bold').fontSize(11).fillColor(GOLD2);
+  txt(doc, SIGN_NP[chart?.ascendant] || String(chart?.ascendant || '—'), cx - 36, cy + 2, {
     width: 72,
     align: 'center'
   });
@@ -161,37 +190,50 @@ class Writer {
   boxes(list) {
     const items = (list || []).filter((b) => b && b.text);
     if (!items.length) return;
-    this.ensure(92);
+    this.ensure(108);
     const gap = 10;
     const w = (this.width - gap * (items.length - 1)) / items.length;
     const y = this.doc.y;
     items.forEach((b, i) => {
       const x = this.left + i * (w + gap);
-      this.doc.roundedRect(x, y, w, 82, 6).fillAndStroke('#fffdf8', GOLD);
+      this.doc.roundedRect(x, y, w, 96, 6).fillAndStroke('#fffdf8', GOLD);
       this.doc.font('Noto-Bold').fontSize(8).fillColor(GOLD);
       txt(this.doc, String(b.label || ''), x + 8, y + 10, { width: w - 16 });
-      this.doc.font('Noto').fontSize(9).fillColor(NAVY);
-      txt(this.doc, String(b.text), x + 8, y + 28, { width: w - 16, height: 48 });
+      this.doc.font('Noto').fontSize(8).fillColor(NAVY);
+      txt(this.doc, String(b.text), x + 8, y + 26, { width: w - 16, height: 62 });
     });
-    this.doc.y = y + 94;
+    this.doc.y = y + 108;
   }
 
   table(table) {
     if (!table?.rows?.length) return;
     const cols = table.headers?.length || 2;
-    const widths = cols === 4 ? [40, 160, 90, this.width - 290] : cols === 2 ? [150, this.width - 150] : Array(cols).fill(this.width / cols);
+    const widths =
+      cols === 7
+        ? [52, 72, 50, 64, 92, 36, this.width - 366]
+        : cols === 6
+          ? [70, 78, 78, 78, 70, this.width - 374]
+          : cols === 5
+            ? [70, 90, 90, 90, this.width - 340]
+            : cols === 4
+              ? [40, 160, 90, this.width - 290]
+              : cols === 2
+                ? [150, this.width - 150]
+                : Array(cols).fill(this.width / cols);
+    const rowH = cols >= 6 ? 18 : 20;
+    const fontSize = cols >= 6 ? 7 : 8;
     const drawRow = (cells, header) => {
-      this.ensure(24);
+      this.ensure(rowH + 4);
       let x = this.left;
       const y = this.doc.y;
       cells.forEach((cell, i) => {
         const w = widths[i];
-        if (header) this.doc.rect(x, y, w, 20).fill(NAVY);
-        this.doc.font(header ? 'Noto-Bold' : 'Noto').fontSize(8).fillColor(header ? GOLD2 : INK);
-        txt(this.doc, String(cell || ''), x + 4, y + 5, { width: w - 8, height: 14, ellipsis: true, lineBreak: false });
+        if (header) this.doc.rect(x, y, w, rowH).fill(NAVY);
+        this.doc.font(header ? 'Noto-Bold' : 'Noto').fontSize(fontSize).fillColor(header ? GOLD2 : INK);
+        txt(this.doc, String(cell || ''), x + 3, y + 4, { width: w - 6, height: rowH - 6, ellipsis: true, lineBreak: false });
         x += w;
       });
-      this.doc.y = y + 20;
+      this.doc.y = y + rowH;
     };
     if (table.headers) drawRow(table.headers, true);
     table.rows.forEach((row) => drawRow(row, false));
@@ -203,12 +245,23 @@ class Writer {
     if (!t) return;
     this.ensure(40);
     const y = this.doc.y;
-    this.doc.roundedRect(this.left, y, this.width, 36, 4).fillAndStroke('#f3eee4', '#ddd2bc');
+    this.doc.roundedRect(this.left, y, this.width, 44, 4).fillAndStroke('#f3eee4', '#ddd2bc');
     this.doc.font('Noto-Bold').fontSize(7).fillColor(GOLD);
-    txt(this.doc, 'Chart basis', this.left + 8, y + 6, { width: this.width - 16 });
+    txt(this.doc, 'ज्योतिषीय आधार', this.left + 8, y + 6, { width: this.width - 16 });
     this.doc.font('Noto').fontSize(8).fillColor(MUTED);
-    txt(this.doc, t, this.left + 8, y + 18, { width: this.width - 16, height: 14, ellipsis: true });
-    this.doc.y = y + 46;
+    txt(this.doc, t, this.left + 8, y + 18, { width: this.width - 16, height: 22 });
+    this.doc.y = y + 52;
+  }
+
+  quote(text) {
+    const t = String(text || '').trim();
+    if (!t) return;
+    this.ensure(72);
+    const y = this.doc.y + 6;
+    this.doc.roundedRect(this.left, y, this.width, 58, 6).fillAndStroke(NAVY, GOLD);
+    this.doc.font('Noto').fontSize(11).fillColor(GOLD2);
+    txt(this.doc, t, this.left + 16, y + 12, { width: this.width - 32, height: 38 });
+    this.doc.y = y + 68;
   }
 }
 
@@ -224,7 +277,7 @@ function writeCover(doc, chart, cover) {
   doc.font('Noto-Bold').fontSize(28).fillColor(IVORY);
   txt(doc, cover.title || 'तपाईंको महाभविष्यफल', 54, 108, { width: doc.page.width - 108, align: 'center' });
   doc.font('Noto').fontSize(13).fillColor(GOLD2);
-  txt(doc, cover.subtitle || 'Personalized Vedic Astrology Report', 54, 168, { width: doc.page.width - 108, align: 'center' });
+  txt(doc, cover.subtitle || 'व्यक्तिगत वैदिक ज्योतिष प्रतिवेदन', 54, 168, { width: doc.page.width - 108, align: 'center' });
   doc.font('Noto-Bold').fontSize(24).fillColor(IVORY);
   txt(doc, cover.name || chart?.name || 'You', 54, 210, { width: doc.page.width - 108, align: 'center' });
   const meta = [cover.date, cover.time, cover.place].filter(Boolean).join('\n');
@@ -233,13 +286,14 @@ function writeCover(doc, chart, cover) {
 
   drawKundaliWheel(doc, chart, cx, 455, 158, { dark: true });
   doc.font('Noto').fontSize(10).fillColor(GOLD);
-  txt(doc, 'व्यक्तिगत ज्योतिषीय विश्लेषण', 54, 650, { width: doc.page.width - 108, align: 'center' });
+  txt(doc, 'व्यक्तिगत ज्योतिषीय विश्लेषण', 54, 638, { width: doc.page.width - 108, align: 'center' });
+  if (cover.natalLine) {
+    doc.font('Noto').fontSize(8).fillColor(GOLD2);
+    txt(doc, cover.natalLine, 54, 658, { width: doc.page.width - 108, align: 'center' });
+  }
 }
 
-function writeContentPage(doc, chart, spec) {
-  doc.addPage();
-  paintIvory(doc);
-  doc.y = 52;
+function writeSpec(doc, chart, spec) {
   const w = new Writer(doc);
   if (spec.kicker) w.kicker(spec.kicker);
   if (spec.title) w.h1(spec.title);
@@ -254,6 +308,17 @@ function writeContentPage(doc, chart, spec) {
   if (spec.bullets?.length) w.bullets(spec.bullets);
   if (spec.table) w.table(spec.table);
   if (spec.basis) w.basis(spec.basis);
+  if (spec.quote) w.quote(spec.quote);
+  doc.y += 10;
+}
+
+function writeBody(doc, chart, specs) {
+  specs.forEach((spec) => {
+    doc.addPage();
+    paintIvory(doc);
+    doc.y = 52;
+    writeSpec(doc, chart, spec);
+  });
 }
 
 function writeFooters(doc, chart) {
@@ -265,7 +330,8 @@ function writeFooters(doc, chart) {
     const y = 742;
     const cover = i === 0;
     doc.font('Noto').fontSize(8).fillColor(cover ? GOLD : MUTED);
-    txt(doc, cover ? 'GRAHAPATH' : `GrahaPath  ·  ${label}`, 54, y, {
+    const stamp = [chart?.ascendant, chart?.moonSign].filter(Boolean).join('/');
+    txt(doc, cover ? 'GRAHAPATH' : `GrahaPath  ·  ${label}${stamp ? `  ·  ${stamp}` : ''}`, 54, y, {
       width: 360,
       align: 'left',
       lineBreak: false,
@@ -305,14 +371,15 @@ function buildChartReportPdf(chart) {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const pages = buildMahabhavishyaPages(chart);
+    const natal = toReportChart(chart);
+    const pages = buildMahabhavishyaPages(natal);
     const cover = pages.find((p) => p.kind === 'cover') || pages[0];
-    writeCover(doc, chart, cover);
+    writeCover(doc, natal, cover);
 
     const rest = pages.filter((p) => p.kind !== 'cover');
-    rest.forEach((spec) => writeContentPage(doc, chart, spec));
+    writeBody(doc, natal, rest);
 
-    writeFooters(doc, chart);
+    writeFooters(doc, natal);
     doc.end();
   });
 }
