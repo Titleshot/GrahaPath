@@ -350,11 +350,16 @@ async function searchPlaceSuggestionsOpenMeteo(query, limit = 6) {
         .map((row) => ({
           displayName: formatOpenMeteoDisplayName(row),
           latitude: row.latitude,
-          longitude: row.longitude
+          longitude: row.longitude,
+          population: Number.isFinite(row.population) ? row.population : 0
         }))
         .filter((r) => r.displayName && Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
       if (mapped.length > 0) {
-        return mapped.slice(0, Math.max(1, limit));
+        // Open-Meteo returns results in its own internal order, not by relevance --
+        // without this, an obscure same-named hamlet can outrank the actual major
+        // city (e.g. searching a common city name returning tiny villages first).
+        mapped.sort((a, b) => b.population - a.population);
+        return mapped.slice(0, Math.max(1, limit)).map(({ population, ...rest }) => rest);
       }
     } catch (error) {
       console.warn(`[GrahaPath] Open-Meteo fallback failed (${variant}): ${error?.message || error}`);
