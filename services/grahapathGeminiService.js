@@ -372,6 +372,21 @@ function isGeminiQuotaError(err) {
   );
 }
 
+/** Google's own servers are temporarily overloaded -- distinct from OUR quota
+ * being exhausted, but just as transient and just as worth a retry. Without
+ * this, a "high demand" 503 fails on the very first attempt instead of
+ * retrying like a 429 already does. */
+function isGeminiOverloadError(err) {
+  const msg = String(err?.message || '');
+  return (
+    msg.includes('503') ||
+    msg.includes('Service Unavailable') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('overloaded') ||
+    msg.includes('high demand')
+  );
+}
+
 function isHardQuotaZeroError(err) {
   const msg = String(err?.message || '').toLowerCase();
   return isGeminiQuotaError(err) && msg.includes('limit: 0');
@@ -583,11 +598,14 @@ async function withGemini429Retry(operation, label, maxAttempts = 4) {
         // Fail fast when Google reports zero available quota; retries only multiply blocked calls.
         throw e;
       }
-      if (!isGeminiQuotaError(e) || attempt === max) {
+      const overloaded = isGeminiOverloadError(e);
+      if ((!isGeminiQuotaError(e) && !overloaded) || attempt === max) {
         throw e;
       }
       const waitMs = retryDelayMsFromError(e) + attempt * 1500;
-      console.warn(`[GrahaPath] Gemini ${label}: quota/rate limit — retry ${attempt}/${max - 1} after ${waitMs}ms`);
+      console.warn(
+        `[GrahaPath] Gemini ${label}: ${overloaded ? 'service overloaded' : 'quota/rate limit'} — retry ${attempt}/${max - 1} after ${waitMs}ms`
+      );
       await sleep(waitMs);
     }
   }
