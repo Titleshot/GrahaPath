@@ -20,6 +20,7 @@
     "regression:ashtakavarga": "node scripts/ashtakavarga-regression.js",
     "regression:career-timing": "node scripts/career-timing-regression.js",
     "validate:career-timing": "node scripts/validation/careerTimingValidationRunner.js",
+    "diagnose:career-timing": "node scripts/validation/careerTimingDiagnostics.js",
     "feedback:weekly": "node scripts/feedback-weekly-summary.js",
     "feedback:tuning": "node scripts/feedback-tuning-recommendations.js",
     "validate:brain-numeric": "node scripts/validate-brain-numeric.js"
