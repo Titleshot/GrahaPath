@@ -21,6 +21,9 @@
     "regression:career-timing": "node scripts/career-timing-regression.js",
     "validate:career-timing": "node scripts/validation/careerTimingValidationRunner.js",
     "diagnose:career-timing": "node scripts/validation/careerTimingDiagnostics.js",
+    "calibrate:career-timing": "node scripts/validation/calibration/runCalibrationExperiments.js",
+    "calibrate:career-timing:ranking": "node scripts/validation/calibration/priority3RankingComparison.js",
+    "calibrate:career-timing:holdout": "node scripts/validation/calibration/runHoldoutCheck.js",
     "feedback:weekly": "node scripts/feedback-weekly-summary.js",
     "feedback:tuning": "node scripts/feedback-tuning-recommendations.js",
     "validate:brain-numeric": "node scripts/validate-brain-numeric.js"
