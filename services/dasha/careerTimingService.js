@@ -27,7 +27,33 @@ const CAREER_SEGMENT_SCAN_MAX_AGE = 68;
 // (a technically "strong" score attached to an impossible age), which is worse
 // than low confidence: it is confidently wrong. 16 is a deliberately early/
 // permissive floor (some people do start working life in their late teens).
-const CAREER_MIN_ELIGIBLE_AGE = 16;
+const CAREER_MIN_ELIGIBLE_AGE = 18;
+
+/**
+ * The lordship/benefic/house conditions below are static natal-chart facts --
+ * they are identical for every occurrence of the same dasha-lord pair no
+ * matter how old the person is when it recurs. Without an age factor, a
+ * chart where (say) Mercury is both the 10th lord and treated as benefic
+ * scores every single Mercury-ruled period the same, and the scan simply
+ * picks whichever one falls earliest after the eligibility floor -- which is
+ * how a career "breakthrough" ended up pinned to age 15-17. This is a
+ * generic adult-career-stage curve (NOT tuned to any individual's biography):
+ * career activity is least plausible pre-adulthood, ramps through early
+ * career entry, is fully plausible through the core working-life band, and
+ * tapers gradually past typical retirement age. It multiplies the raw score
+ * BEFORE the 0-100 clip, so the exact same natal favorability now scores
+ * differently depending on how career-plausible the age actually is --
+ * breaking the "many unrelated ages all tie at 100" clustering.
+ */
+function careerAgePlausibilityWeight(age) {
+  if (age == null) return 1;
+  if (age < 18) return 0.3;
+  if (age < 22) return 0.55;
+  if (age < 25) return 0.78;
+  if (age <= 58) return 1;
+  if (age <= 65) return 0.85;
+  return 0.65;
+}
 
 const CAREER_EVENT_TYPES = ['breakthrough', 'expansion', 'transition', 'setback', 'restructuring', 'leadership'];
 
@@ -193,14 +219,20 @@ function scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, event
     if ((md === 'Rahu' && ad === 'Ketu') || (md === 'Ketu' && ad === 'Rahu')) score += 6;
     if (onGrowthAxis(md) && ad && BENEFICS.has(ad)) score -= 14;
   } else if (eventType === 'breakthrough') {
-    if (onGrowthAxis(md)) score += 24;
-    if (onGrowthAxis(ad)) score += 20;
-    if (onGrowthAxis(md) && onGrowthAxis(ad)) score += 8;
-    if (md && BENEFICS.has(md)) score += 8;
-    if (ad && BENEFICS.has(ad)) score += 10;
-    if (h10.includes('Sun') || h1.includes('Sun') || sun?.house === 10 || sun?.house === 1) score += 12;
-    if (h10.includes('Jupiter') || h11.includes('Jupiter')) score += 8;
-    if (h10.includes('Rahu') || h11.includes('Rahu')) score += 8;
+    // md-on-axis, ad-on-axis, and "both on axis" used to be three separate
+    // additive bonuses for what is largely the same underlying fact (this
+    // dasha pair sits on the 10th/11th lordship axis) -- that alone summed to
+    // 52 points before anything else was even checked. Collapsed into one
+    // graduated bonus so a single strong signal no longer does the work of
+    // three, leaving the age-plausibility weight below room to actually matter.
+    if (onGrowthAxis(md) && onGrowthAxis(ad)) score += 30;
+    else if (onGrowthAxis(md)) score += 20;
+    else if (onGrowthAxis(ad)) score += 14;
+    if (md && BENEFICS.has(md)) score += 6;
+    if (ad && BENEFICS.has(ad)) score += 8;
+    if (h10.includes('Sun') || h1.includes('Sun') || sun?.house === 10 || sun?.house === 1) score += 10;
+    if (h10.includes('Jupiter') || h11.includes('Jupiter')) score += 6;
+    if (h10.includes('Rahu') || h11.includes('Rahu')) score += 6;
     if (careerPoints != null && careerPoints >= 58) score += 6;
   } else if (eventType === 'expansion') {
     if (md === eleventhLord || md === 'Jupiter') score += 22;
@@ -225,7 +257,8 @@ function scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, event
     if (onGrowthAxis(md)) score += 10;
   }
 
-  return Math.max(0, Math.min(100, Math.round(score)));
+  const weighted = score * careerAgePlausibilityWeight(age);
+  return Math.max(0, Math.min(100, Math.round(weighted)));
 }
 
 /**
@@ -482,10 +515,12 @@ module.exports = {
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
+  careerAgePlausibilityWeight,
   buildTopCareerWindows,
   buildCareerTimingContext,
   buildCareerTimingDeterministicReply,
   buildCareerEventInterpretationContext,
   buildCareerEventInterpretationReply,
-  CAREER_EVENT_TYPES
+  CAREER_EVENT_TYPES,
+  CAREER_MIN_ELIGIBLE_AGE
 };

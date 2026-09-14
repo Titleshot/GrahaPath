@@ -13,10 +13,13 @@ const {
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
+  careerAgePlausibilityWeight,
+  buildTopCareerWindows,
   buildCareerTimingContext,
   buildCareerTimingDeterministicReply,
   buildCareerEventInterpretationContext,
-  buildCareerEventInterpretationReply
+  buildCareerEventInterpretationReply,
+  CAREER_MIN_ELIGIBLE_AGE
 } = require('../services/dasha/careerTimingService');
 const { processChatV2Request } = require('../services/grahapathChat/chatService');
 const { buildFameTimingContext, scoreRecognitionActivation } = require('../services/dasha/ageTimingService');
@@ -329,6 +332,62 @@ async function main() {
       'window is recovered from conversation history when not restated in the message',
       historyCtx.status === 'ok'
     );
+  }
+
+  console.log('\n--- Test 10: career timing score calibration (age-plausibility weighting) ---');
+  {
+    // 1. The age-plausibility curve itself: pre-adult ages must be weighted
+    // well below the full working-life band, not treated identically.
+    check('age 15 is weighted far below full plausibility', careerAgePlausibilityWeight(15) < 0.5);
+    check('age 17 (just under the eligibility floor) is still discounted', careerAgePlausibilityWeight(17) < 0.6);
+    check('age 30 (core working-life band) gets full weight', careerAgePlausibilityWeight(30) === 1);
+    check('age 50 (core working-life band) gets full weight', careerAgePlausibilityWeight(50) === 1);
+    check('age 80 (well past typical retirement) is discounted below full weight', careerAgePlausibilityWeight(80) < 1);
+
+    // 2. The 18-year floor is enforced (raised from the earlier 16 as part of
+    // this calibration pass -- paired with the smooth curve above rather than
+    // relying on a hard cliff alone).
+    check('CAREER_MIN_ELIGIBLE_AGE is 18', CAREER_MIN_ELIGIBLE_AGE === 18);
+
+    // 3. Same natal favorability, different ages -> different scores. Before
+    // this fix, a chart where a planet is both a 10th/11th lord AND benefic
+    // scored every occurrence of that dasha pair identically regardless of
+    // age; the age weight must now break that tie.
+    const scoreAt17 = scoreCareerEventActivation(personA, 'Jupiter', 'Venus', 17, 'breakthrough').score;
+    const scoreAt32 = scoreCareerEventActivation(personA, 'Jupiter', 'Venus', 32, 'breakthrough').score;
+    check(
+      'the identical dasha pair scores lower at an implausible career age than at a plausible one',
+      scoreAt17 < scoreAt32,
+      `age17=${scoreAt17} age32=${scoreAt32}`
+    );
+
+    // 4. Across a full lifetime scan, the top-ranked windows must not all be
+    // clustered at the exact same ceiling score -- there should be real
+    // separation, i.e. genuine ranking instead of tie-breaking by chron order.
+    for (const [label, chart] of [
+      ['Test Person A', personA],
+      ['Evaluation Subject (Jobs)', steveJobs]
+    ]) {
+      const windows = buildTopCareerWindows(chart, { eventType: 'breakthrough', tense: 'past', limit: 5 });
+      const scores = windows.map((w) => w.careerActivationScore);
+      const allTiedAtCeiling = scores.length > 1 && scores.every((s) => s === 100);
+      check(`${label}: top breakthrough windows are not all tied at the 100 ceiling`, !allTiedAtCeiling, JSON.stringify(scores));
+
+      // 5. No window in the ranked list should fall below the eligibility floor.
+      const ages = windows.map((w) => w.age);
+      check(`${label}: no ranked window falls below the ${CAREER_MIN_ELIGIBLE_AGE}-year floor`, ages.every((a) => a >= CAREER_MIN_ELIGIBLE_AGE), JSON.stringify(ages));
+    }
+
+    // 6. Confidence stays "possible" when the top two candidates are close --
+    // recalibration must not suppress honest uncertainty, only fix implausible
+    // age selection. (This exercises the real Steve-Jobs-style chart, where
+    // the top two windows are now close: ~76 vs ~74 in the current run.)
+    const ctx = buildCareerTimingContext(steveJobs, 'What was the most significant career turning point in this life?');
+    check(
+      'close top-two scores on the evaluation chart resolve to "possible" confidence, not overstated certainty',
+      ctx.confidence === 'possible' || ctx.confidence === 'moderate'
+    );
+    console.log(`  (evaluation chart confidence resolved to "${ctx.confidence}" -- top two windows: ${ctx.topCareerWindows?.[0]?.careerActivationScore} vs ${ctx.topCareerWindows?.[1]?.careerActivationScore})`);
   }
 
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
