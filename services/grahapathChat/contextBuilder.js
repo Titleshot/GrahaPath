@@ -19,6 +19,7 @@ const { buildFameTimingContext } = require('../dasha/ageTimingService');
 const {
   isCareerTimingQuery,
   isCareerEventInterpretationQuery,
+  isDirectYearOrAgeQuery,
   buildCareerTimingContext,
   buildCareerEventInterpretationContext
 } = require('../dasha/careerTimingService');
@@ -209,12 +210,16 @@ async function buildChatContext(
         ),
         ab: { sum: summaryForGemini(chart), dom: dominantPlanetsShort(chart) },
         // Checked in this order: a follow-up asking "what event happened in
-        // that window?" must win over the timing check, otherwise phrases like
-        // "most important event" get misread as a fresh timing request and the
-        // same ranked-window answer repeats instead of answering the follow-up.
-        careerEventInterpretation: isCareerEventInterpretationQuery(userMessage)
-          ? buildCareerEventInterpretationContext(chart, userMessage, conversationHistory)
-          : null,
+        // that window?" (mode B) OR a message that directly names one specific
+        // year/age ("2008 मा मेरो career कस्तो थियो?", mode C) must both win over
+        // the open-timing check below, otherwise phrases like "most important
+        // event" get misread as a fresh timing request, and a bare named year
+        // falls through to the LLM with no calculated data behind it at all --
+        // both modes share the same window-resolving context builder.
+        careerEventInterpretation:
+          isCareerEventInterpretationQuery(userMessage) || isDirectYearOrAgeQuery(userMessage)
+            ? buildCareerEventInterpretationContext(chart, userMessage, conversationHistory)
+            : null,
         // Only populated when the question actually asks for timing (a year, an
         // age, "when", "turning point"...) -- broad "how is my career" questions
         // get null here and fall through to the normal conversational path.

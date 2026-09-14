@@ -10,6 +10,7 @@ const { generateBirthChart } = require('../services/astrologyService');
 const {
   isCareerTimingQuery,
   isCareerEventInterpretationQuery,
+  isDirectYearOrAgeQuery,
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
@@ -88,6 +89,21 @@ async function main() {
     lon: -122.4194,
     zone: 'America/Los_Angeles',
     place: 'San Francisco, USA'
+  });
+
+  // Second evaluation fixture, public birth data used only as a test case
+  // (never inside careerTimingService.js itself) -- used to regression-test
+  // the DIRECT_YEAR_TIMING routing gap found via a targeted historical year.
+  const evalSubjectB = await buildChart('Evaluation Subject (B)', {
+    year: 1971,
+    month: 6,
+    day: 28,
+    hour: 7,
+    minute: 30,
+    lat: -25.7461,
+    lon: 28.1881,
+    zone: 'Africa/Johannesburg',
+    place: 'Pretoria, South Africa'
   });
 
   console.log('\n--- Test 1: career breakthrough timing question ---');
@@ -388,6 +404,76 @@ async function main() {
       ctx.confidence === 'possible' || ctx.confidence === 'moderate'
     );
     console.log(`  (evaluation chart confidence resolved to "${ctx.confidence}" -- top two windows: ${ctx.topCareerWindows?.[0]?.careerActivationScore} vs ${ctx.topCareerWindows?.[1]?.careerActivationScore})`);
+  }
+
+  console.log('\n--- Test 11: DIRECT_YEAR_TIMING (mode C) -- a bare named year/age must reach the deterministic path ---');
+  {
+    // A targeted historical year (2008) on evalSubjectB was found live to
+    // fall through to the generic LLM path even though the underlying dasha
+    // for that year scores setback=100 -- these regression-test the fix.
+
+    // English direct-year question
+    const enYear = 'What happened to my career in 2008?';
+    check('English direct-year question detected as mode C', isDirectYearOrAgeQuery(enYear) === true);
+    check('English direct-year question NOT misread as open timing (mode A)', isCareerTimingQuery(enYear) === false);
+    check('English direct-year question NOT misread as window-event (mode B)', isCareerEventInterpretationQuery(enYear) === false);
+
+    // Nepali direct-year question
+    const npYear = '2008 मा मेरो career कस्तो थियो?';
+    check('Nepali direct-year question detected as mode C', isDirectYearOrAgeQuery(npYear) === true);
+
+    // Direct age question
+    const ageQ = 'At age 37, what was happening in my career?';
+    check('direct age question detected as mode C', isDirectYearOrAgeQuery(ageQ) === true);
+
+    // "setback" wording
+    const setbackQ = 'Was 2008 a setback year for my career?';
+    check('"setback" direct-year wording detected as mode C', isDirectYearOrAgeQuery(setbackQ) === true);
+
+    // "breakthrough" wording
+    const breakthroughQ = 'Was 2008 a breakthrough year for my career?';
+    check('"breakthrough" direct-year wording detected as mode C', isDirectYearOrAgeQuery(breakthroughQ) === true);
+
+    // Generic career question that happens to contain a year but is not
+    // actually asking for timing -- must NOT trigger mode C.
+    const genericWithYear = 'I started my job in 2008, how is my career going overall?';
+    check(
+      'a year mentioned only as background (present-tense, no "was/happened/period") is NOT mode C',
+      isDirectYearOrAgeQuery(genericWithYear) === false
+    );
+
+    // End-to-end: the actual reported bug, on the real fixture where the
+    // dasha for 2008 was already confirmed (via the debug harness) to be
+    // Mars-Saturn / age 37 / setback=100, the strongest of all 6 categories.
+    for (const [label, msg] of [
+      ['English', enYear],
+      ['Nepali', npYear],
+      ['age-based', ageQ],
+      ['setback-worded', setbackQ]
+    ]) {
+      const result = await processChatV2Request({
+        chart: evalSubjectB,
+        message: msg,
+        userPlan: 'free',
+        conversationHistory: [],
+        surfaceMode: 'message',
+        premiumUnlocked: false,
+        mode: 'message'
+      });
+      check(`${label}: routes to career_event_interpretation (not plain career_question)`, result.intent === 'career_event_interpretation', `got intent="${result.intent}"`);
+      check(`${label}: answer reflects the calculated setback pattern, not generic "transition" hedging`, /setback/i.test(result.answer));
+      check(`${label}: answer names the actual 2008 dasha (Mars–Saturn)`, /Mars|Saturn/.test(result.answer));
+      check(`${label}: answer does not fabricate a real-world event`, !/Tesla|SpaceX|PayPal/i.test(result.answer));
+    }
+    console.log('  Sample answer (English):', (await processChatV2Request({
+      chart: evalSubjectB,
+      message: enYear,
+      userPlan: 'free',
+      conversationHistory: [],
+      surfaceMode: 'message',
+      premiumUnlocked: false,
+      mode: 'message'
+    })).answer);
   }
 
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);

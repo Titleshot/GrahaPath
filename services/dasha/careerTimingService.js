@@ -104,9 +104,38 @@ function isCareerTimingQuery(userMessage) {
   const t = String(userMessage || '').trim();
   if (!t) return false;
   if (isCareerEventInterpretationQuery(t)) return false;
+  if (isDirectYearOrAgeQuery(t)) return false;
   const timingMarkers =
     /(when\s+(was|did|is|will)|which\s+year|what\s+year|at\s+what\s+age|which\s+age|turning\s+point|biggest\s+(career\s+)?(setback|breakthrough|change|disruption|shift|opportunity)|most\s+(significant|important)\s+(period|year|time|phase)|कहिले|कुन\s*वर्ष|कुन\s*वर्षमा|कुन\s*उमेर|कुन\s*उमेरमा|सबैभन्दा\s*(ठूलो|महत्वपूर्ण))/i;
   return timingMarkers.test(t);
+}
+
+/**
+ * Mode C: DIRECT_YEAR_TIMING. Unlike isCareerTimingQuery (asks WHICH year/age
+ * -- open discovery) or isCareerEventInterpretationQuery (asks about an
+ * explicit RANGE using "event"/"happened" wording), this catches a message
+ * that simply NAMES one specific year or age and asks about that period --
+ * "2008 मा मेरो career कस्तो थियो?", "Was 2008 a setback year for my career?",
+ * "At age 37, what was happening in my career?" -- with none of the other
+ * two patterns' required wording. This was the exact gap that let the 2008
+ * question fall through to the generic LLM path even though the underlying
+ * dasha/score data for that year was already being calculated correctly.
+ */
+function isDirectYearOrAgeQuery(userMessage) {
+  const t = String(userMessage || '').trim();
+  if (!t) return false;
+  if (isCareerEventInterpretationQuery(t)) return false; // mode B already owns explicit ranges
+  const hasYear = /\b(19|20)\d{2}\b/.test(t);
+  const hasAge = /\bage\s+\d{1,3}\b|उमेर\s*\d{1,3}|\d{1,3}\s*वर्षको\s*उमेर|\d{1,3}\s*वर्षमा/i.test(t);
+  if (!hasYear && !hasAge) return false;
+  // Require an actual "tell me about that period" signal, not just a year
+  // mentioned in passing (e.g. "I started in 2008, how is my career going
+  // now?" is about NOW, the year is only background) -- past-tense wording,
+  // an explicit ask to explain/describe, or an explicit "period/time" word
+  // attached to the question all count; bare present-tense phrasing does not.
+  const interpretSignal =
+    /(थियो|भयो|was|happened|were|explain|describe|tell\s+me\s+about|व्याख्या|बताउ|बारे|period|अवधि|\bसमय\b)/i.test(t);
+  return interpretSignal;
 }
 
 /** Parse an explicit year range like "1982-1985" or "1982–85" from free text. */
@@ -118,6 +147,44 @@ function extractYearRangeFromText(text) {
   if (end < 100) end = Math.floor(start / 100) * 100 + end;
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return { start: Math.min(start, end), end: Math.max(start, end) };
+}
+
+/** Parse a single bare year ("2008") into a one-year window {start: 2008, end: 2008}. */
+function extractSingleYearFromText(text) {
+  const m = String(text || '').match(/\b((?:19|20)\d{2})\b/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  return { start: year, end: year };
+}
+
+/** Parse an explicit age reference ("age 37", "उमेर 37", "37 वर्षमा") from free text. */
+function extractAgeReferenceFromText(text) {
+  const t = String(text || '');
+  const m = t.match(/\bage\s+(\d{1,3})\b/i) || t.match(/उमेर\s*(\d{1,3})/) || t.match(/(\d{1,3})\s*वर्ष(?:को\s*उमेर(?:मा)?|मा)/);
+  if (!m) return null;
+  const age = Number(m[1]);
+  return Number.isFinite(age) ? age : null;
+}
+
+/**
+ * Resolves what specific period a message (or, failing that, conversation
+ * history) is asking about: an explicit range, a bare year, or an explicit
+ * age converted to that person's corresponding calendar year via their own
+ * birth date. Shared by both mode B (WINDOW_EVENT_INTERPRETATION) and mode C
+ * (DIRECT_YEAR_TIMING) -- they differ only in what wording triggers them, not
+ * in how the target period is resolved or scored.
+ */
+function resolveTargetWindow(userMessage, conversationHistory, birth) {
+  const range = extractYearRangeFromText(userMessage);
+  if (range) return range;
+  const singleYear = extractSingleYearFromText(userMessage);
+  if (singleYear) return singleYear;
+  const ageRef = extractAgeReferenceFromText(userMessage);
+  if (ageRef != null && birth?.isValid) {
+    const year = birth.plus({ years: ageRef }).year;
+    return { start: year, end: year };
+  }
+  return findReferencedWindowFromHistory(conversationHistory);
 }
 
 /** Fallback: if the current message doesn't restate the year, look for the most recent career-timing answer's year range in conversation history. */
@@ -446,7 +513,7 @@ function buildCareerTimingDeterministicReply(careerTiming, userMessage) {
 function buildCareerEventInterpretationContext(chart, userMessage, conversationHistory) {
   const chartCtx = chartForTiming(chart);
   const birth = birthDateTime(chartCtx);
-  const yearRange = extractYearRangeFromText(userMessage) || findReferencedWindowFromHistory(conversationHistory);
+  const yearRange = resolveTargetWindow(userMessage, conversationHistory, birth);
 
   if (!birth?.isValid || !yearRange) {
     return { status: 'window_not_identified' };
@@ -512,6 +579,7 @@ function buildCareerEventInterpretationReply(interpretation) {
 module.exports = {
   isCareerTimingQuery,
   isCareerEventInterpretationQuery,
+  isDirectYearOrAgeQuery,
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
