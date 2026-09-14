@@ -16,6 +16,7 @@ const {
   proseFallback
 } = require('./responseFormatter');
 const { buildDailyGrahaWeatherFromTransit } = require('../dailyGrahaWeatherService');
+const { buildCareerTimingDeterministicReply } = require('../dasha/careerTimingService');
 const { DateTime } = require('luxon');
 const {
   buildPanchangaForDate,
@@ -434,6 +435,17 @@ async function runMessage({
     const answer = buildFameTimingDeterministicReply(ctx.fameTiming, effectiveMessage);
     const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
     return { mode, intent, answer };
+  }
+
+  // Same guard, generalized: when a career_question is actually a timing
+  // question (contextBuilder only populates ctx.careerTiming in that case),
+  // answer deterministically from the ranked table instead of letting the
+  // model free-associate generic career prose. Plain "how is my career?"
+  // questions leave ctx.careerTiming null and fall through unchanged below.
+  if (intent === 'career_question' && ctx.careerTiming) {
+    const answer = buildCareerTimingDeterministicReply(ctx.careerTiming, effectiveMessage);
+    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
+    return { mode, intent: 'career_timing', answer };
   }
 
   const systemBase = buildSystemPrompt({

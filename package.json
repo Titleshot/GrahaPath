@@ -18,6 +18,7 @@
     "supabase:magic-links-table": "node scripts/ensure-chart-access-profiles-table.js",
     "regression:nightly": "node scripts/nightly-regression.js",
     "regression:ashtakavarga": "node scripts/ashtakavarga-regression.js",
+    "regression:career-timing": "node scripts/career-timing-regression.js",
     "feedback:weekly": "node scripts/feedback-weekly-summary.js",
     "feedback:tuning": "node scripts/feedback-tuning-recommendations.js",
     "validate:brain-numeric": "node scripts/validate-brain-numeric.js"

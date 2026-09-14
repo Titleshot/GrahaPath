@@ -1,0 +1,360 @@
+const {
+  birthDateTime,
+  chartForTiming,
+  houseLordMap,
+  planetsInHouse,
+  ageOnDate,
+  currentAgeYears,
+  iterAntardashaSegments,
+  lifeEventAgeBoosts,
+  applyBoostsToSegments,
+  formatAgeRangeLabel,
+  formatYearRange
+} = require('./timelineScanEngine');
+
+/**
+ * Phase 1 pilot: generalizes the fame_timing architecture (timeline scan ->
+ * domain scoring -> ranking -> confidence -> deterministic reply) to career
+ * timing questions. Relationship/finance/health can reuse the same
+ * timelineScanEngine + this file's pattern later with their own scoring rules.
+ */
+
+const CAREER_SEGMENT_SCAN_MAX_AGE = 68;
+// No one has a career breakthrough/setback/transition as a child -- without this
+// floor the raw dasha-lord scoring can rank early-childhood segments highest
+// (a technically "strong" score attached to an impossible age), which is worse
+// than low confidence: it is confidently wrong. 16 is a deliberately early/
+// permissive floor (some people do start working life in their late teens).
+const CAREER_MIN_ELIGIBLE_AGE = 16;
+
+const CAREER_EVENT_TYPES = ['breakthrough', 'expansion', 'transition', 'setback', 'restructuring', 'leadership'];
+
+const EVENT_TYPE_LABEL = {
+  breakthrough: 'career breakthrough / recognition',
+  expansion: 'career expansion',
+  transition: 'career transition',
+  setback: 'career setback / disruption',
+  restructuring: 'career restructuring',
+  leadership: 'leadership / status increase'
+};
+
+const MALEFICS = new Set(['Saturn', 'Rahu', 'Ketu', 'Mars']);
+const BENEFICS = new Set(['Jupiter', 'Venus', 'Mercury', 'Sun', 'Moon']);
+
+/**
+ * Does this career_question message actually ask for a specific timing answer
+ * (a year, an age, "when", "turning point"...) rather than a broad "how is my
+ * career" style question? Broad questions must NOT activate timing mode.
+ */
+function isCareerTimingQuery(userMessage) {
+  const t = String(userMessage || '').trim();
+  if (!t) return false;
+  const timingMarkers =
+    /(when\s+(was|did|is|will)|which\s+year|what\s+year|at\s+what\s+age|which\s+age|turning\s+point|biggest\s+(career\s+)?(setback|breakthrough|change|disruption|shift|opportunity)|most\s+(significant|important)\s+(period|year|time|phase)|कहिले|कुन\s*वर्ष|कुन\s*वर्षमा|कुन\s*उमेर|कुन\s*उमेरमा|सबैभन्दा\s*(ठूलो|महत्वपूर्ण))/i;
+  return timingMarkers.test(t);
+}
+
+/**
+ * Which flavor of career event is being asked about. Defaults to 'general'
+ * (polarity-agnostic "biggest turning point") when the question does not name
+ * a specific type -- breakthrough and setback are NOT assumed to be the same
+ * period, so 'general' resolves to whichever signal is actually stronger in
+ * the chart rather than guessing one direction.
+ */
+function detectCareerEventType(userMessage) {
+  const t = String(userMessage || '').toLowerCase();
+  if (/(setback|disrupt|failed|fired|lost\s+(the\s+|my\s+)?job|crisis|downfall|असफल|समस्या|संकट|गुम्यो|टुट्यो)/i.test(t)) {
+    return 'setback';
+  }
+  if (/(breakthrough|recognition|recognized|achieved|breakout|success(ful)?|उपलब्धि|सफलता|पहिचान)/i.test(t)) {
+    return 'breakthrough';
+  }
+  if (/(transition|shift|switch|change\s+(of\s+)?(career|profession|direction|path)|पेशा\s*परिवर्तन|बाटो\s*परिवर्तन|ठूलो\s*परिवर्तन)/i.test(t)) {
+    return 'transition';
+  }
+  if (/(expand|expansion|growth|grew|scale[ds]?\s+up|वृद्धि|विस्तार)/i.test(t)) {
+    return 'expansion';
+  }
+  if (/(restructur|reorgani[sz]|पुनर्संरचना)/i.test(t)) {
+    return 'restructuring';
+  }
+  if (/(leadership|promot|status|authority|पद\s*वृद्धि|नेतृत्व)/i.test(t)) {
+    return 'leadership';
+  }
+  return 'general';
+}
+
+/**
+ * Past ("when was") vs future ("when is my next") framing. Historical
+ * questions scan ages up to now; future questions scan ages from now onward.
+ * Defaults to 'past' since most turning-point/setback/breakthrough phrasing
+ * is retrospective.
+ */
+function detectCareerTiming_Tense(userMessage) {
+  const t = String(userMessage || '').toLowerCase();
+  const hasFutureMarker = /(next|upcoming|future|will\s+(be|come|happen)|is\s+going\s+to|coming\s+(year|period)|आउने|हुनेछ|भविष्य)/i.test(t);
+  const hasPastMarker = /(was|were|happened|used\s+to|भयो|थियो|भएको)/i.test(t);
+  if (hasFutureMarker && !hasPastMarker) return 'future';
+  return 'past';
+}
+
+function tenthLordInDusthana(lords, chart) {
+  const tenthLord = lords[10];
+  if (!tenthLord) return false;
+  const row = (chart?.planets || []).find((p) => p.name === tenthLord);
+  return row?.house === 6 || row?.house === 8 || row?.house === 12;
+}
+
+/** Raw 0-100 activation score for ONE specific (non-'general') career event type. */
+function scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, eventType) {
+  const lords = houseLordMap(chart);
+  const tenthLord = lords[10] || null;
+  const eleventhLord = lords[11] || null;
+  const sixthLord = lords[6] || null;
+  const eighthLord = lords[8] || null;
+  const twelfthLord = lords[12] || null;
+
+  const md = mahaDasha || null;
+  const ad = antarDasha || null;
+
+  const h1 = planetsInHouse(chart, 1);
+  const h6 = planetsInHouse(chart, 6);
+  const h10 = planetsInHouse(chart, 10);
+  const h11 = planetsInHouse(chart, 11);
+  const sun = (chart?.planets || []).find((p) => p.name === 'Sun');
+  const cw = chart?.careerWealth;
+  const careerPoints = cw?.meters?.careerPoints;
+
+  const onDisruptionAxis = (p) => p && (p === sixthLord || p === eighthLord || p === twelfthLord);
+  const onGrowthAxis = (p) => p && (p === tenthLord || p === eleventhLord);
+
+  let score = 24; // same neutral baseline used by fame scoring, for consistency across timing engines
+
+  if (eventType === 'setback') {
+    if (onDisruptionAxis(md)) score += 26;
+    if (onDisruptionAxis(ad)) score += 22;
+    if (md && MALEFICS.has(md) && ad && MALEFICS.has(ad)) score += 14;
+    if (md && MALEFICS.has(md) && !(ad && BENEFICS.has(ad))) score += 8;
+    if (h10.includes('Saturn') || h10.includes('Rahu') || h10.includes('Ketu')) score += 12;
+    if (tenthLordInDusthana(lords, chart)) score += 14;
+    if (md === 'Saturn' || ad === 'Saturn') score += 8;
+    if ((md === 'Rahu' && ad === 'Ketu') || (md === 'Ketu' && ad === 'Rahu')) score += 6;
+    if (onGrowthAxis(md) && ad && BENEFICS.has(ad)) score -= 14;
+  } else if (eventType === 'breakthrough') {
+    if (onGrowthAxis(md)) score += 24;
+    if (onGrowthAxis(ad)) score += 20;
+    if (onGrowthAxis(md) && onGrowthAxis(ad)) score += 8;
+    if (md && BENEFICS.has(md)) score += 8;
+    if (ad && BENEFICS.has(ad)) score += 10;
+    if (h10.includes('Sun') || h1.includes('Sun') || sun?.house === 10 || sun?.house === 1) score += 12;
+    if (h10.includes('Jupiter') || h11.includes('Jupiter')) score += 8;
+    if (h10.includes('Rahu') || h11.includes('Rahu')) score += 8;
+    if (careerPoints != null && careerPoints >= 58) score += 6;
+  } else if (eventType === 'expansion') {
+    if (md === eleventhLord || md === 'Jupiter') score += 22;
+    if (ad === eleventhLord || ad === 'Jupiter') score += 18;
+    if (h11.includes('Jupiter') || h11.includes('Venus')) score += 10;
+    if (md && BENEFICS.has(md) && ad && BENEFICS.has(ad)) score += 10;
+    if (careerPoints != null && careerPoints >= 55) score += 6;
+  } else if (eventType === 'transition') {
+    if (md === 'Rahu' || md === 'Ketu' || ad === 'Rahu' || ad === 'Ketu') score += 22;
+    if ((md === 'Rahu' && ad === 'Ketu') || (md === 'Ketu' && ad === 'Rahu')) score += 10;
+    if (md === 'Mercury' || ad === 'Mercury') score += 8;
+    if (md && MALEFICS.has(md) && ad && MALEFICS.has(ad)) score += 6;
+  } else if (eventType === 'restructuring') {
+    if (md === 'Saturn' || ad === 'Saturn') score += 24;
+    if (h10.includes('Saturn') || h6.includes('Saturn')) score += 12;
+    if (onDisruptionAxis(md)) score += 10;
+    if (md === 'Saturn' && ad === 'Rahu') score += 8;
+  } else if (eventType === 'leadership') {
+    if (h1.includes('Sun') || h10.includes('Sun') || sun?.house === 1 || sun?.house === 10) score += 22;
+    if (md === 'Sun' || ad === 'Sun') score += 18;
+    if (md === 'Mars' || ad === 'Mars') score += 10;
+    if (onGrowthAxis(md)) score += 10;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+/**
+ * Public scorer. For a specific eventType, returns { score, resolvedType }.
+ * For 'general' ("biggest turning point"), computes BOTH breakthrough and
+ * setback signals and resolves to whichever is stronger -- the same period
+ * is not assumed to mean the same thing for every question.
+ */
+function scoreCareerEventActivation(chart, mahaDasha, antarDasha, age, eventType = 'general') {
+  if (eventType !== 'general' && CAREER_EVENT_TYPES.includes(eventType)) {
+    return {
+      score: scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, eventType),
+      resolvedType: eventType
+    };
+  }
+  const growth = scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, 'breakthrough');
+  const disruption = scoreCareerEventTypeActivation(chart, mahaDasha, antarDasha, age, 'setback');
+  return growth >= disruption
+    ? { score: growth, resolvedType: 'breakthrough' }
+    : { score: disruption, resolvedType: 'setback' };
+}
+
+/**
+ * strong / moderate / possible using the existing evidenceWeighting vocabulary
+ * (see services/astroBrain/evidenceWeighting.js) -- not a new confidence scale.
+ * Requires both a high absolute score AND a clear gap over the runner-up,
+ * otherwise the chart is treated as not supporting one exact period.
+ */
+function confidenceFromCareerWindows(top) {
+  if (!top.length) return 'possible';
+  const best = top[0].careerActivationScore;
+  const second = top[1]?.careerActivationScore ?? 0;
+  const gap = best - second;
+  if (best >= 68 && gap >= 14) return 'strong';
+  if (best >= 50 && gap >= 6) return 'moderate';
+  return 'possible';
+}
+
+function buildTopCareerWindows(chart, options = {}) {
+  const limit = options.limit ?? 5;
+  const eventType = options.eventType || 'general';
+  const tense = options.tense || 'past';
+  const boosts = options.boosts ?? lifeEventAgeBoosts(chart);
+  const scoreFn = (c, md, ad, age) => scoreCareerEventActivation(c, md, ad, age, eventType).score;
+
+  let segments = applyBoostsToSegments(
+    iterAntardashaSegments(chart, scoreFn, CAREER_SEGMENT_SCAN_MAX_AGE),
+    boosts
+  ).filter((s) => s.age >= CAREER_MIN_ELIGIBLE_AGE);
+
+  const age = currentAgeYears(chart);
+  if (age != null) {
+    segments = tense === 'future' ? segments.filter((s) => s.age >= age - 0.5) : segments.filter((s) => s.age <= age + 0.5);
+  }
+
+  const ranked = [...segments].sort((a, b) => b.recognitionScore - a.recognitionScore);
+  const picked = [];
+  const used = new Set();
+  for (const row of ranked) {
+    const key = `${row.mahaDasha}|${row.antarDasha}|${row.antarStart}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    picked.push(row);
+    if (picked.length >= limit) break;
+  }
+
+  return picked.map((row, index) => {
+    const detail = scoreCareerEventActivation(chart, row.mahaDasha, row.antarDasha, row.age, eventType);
+    return {
+      rank: index + 1,
+      age: row.age,
+      ageRangeLabel: formatAgeRangeLabel(row.ageStart, row.ageEnd),
+      calendarYear: row.calendarYear,
+      calendarYears: formatYearRange(row),
+      calendarDate: row.calendarDate,
+      mahaDasha: row.mahaDasha,
+      antarDasha: row.antarDasha,
+      antarWindow: `${row.antarStart || '?'} – ${row.antarEnd || '?'}`,
+      careerActivationScore: row.recognitionScore,
+      resolvedEventType: detail.resolvedType,
+      lifeEventBoost: row.lifeEventBoost || 0
+    };
+  });
+}
+
+/**
+ * Precomputed career timing facts injected into chat context, mirroring
+ * buildFameTimingContext's shape (timingDataStatus, primary window, ranked
+ * list, rules/answerTemplate for the deterministic reply builder).
+ */
+function buildCareerTimingContext(chart, userMessage = '') {
+  const chartCtx = chartForTiming(chart);
+  const birth = birthDateTime(chartCtx);
+  const eventType = detectCareerEventType(userMessage);
+  const tense = detectCareerTiming_Tense(userMessage);
+  const boosts = lifeEventAgeBoosts(chartCtx);
+  const scoreFn = (c, md, ad, age) => scoreCareerEventActivation(c, md, ad, age, eventType).score;
+  const rawSegments = applyBoostsToSegments(
+    iterAntardashaSegments(chartCtx, scoreFn, CAREER_SEGMENT_SCAN_MAX_AGE),
+    boosts
+  ).filter((s) => s.age >= CAREER_MIN_ELIGIBLE_AGE);
+  const timingAvailable = rawSegments.length > 0 && birth?.isValid;
+
+  const topWindows = timingAvailable
+    ? buildTopCareerWindows(chartCtx, { eventType, tense, limit: 5, boosts })
+    : [];
+  const primary = topWindows[0] || null;
+  const confidence = confidenceFromCareerWindows(topWindows);
+
+  // Note: we deliberately do NOT merge the primary and runner-up ages into one
+  // wider span here. They are two distinct candidate periods, not a single
+  // continuous window of uncertainty -- inventing a merged range would be its
+  // own kind of false precision. Honesty about low confidence instead comes
+  // from (a) the primary window's own natural age band (already a range, from
+  // its antardasha start/end) and (b) surfacing the runner-up separately in
+  // the reply, letting the reader see there are two close candidates.
+  const displayAgeLabel = primary?.ageRangeLabel || (primary ? String(Math.floor(primary.age)) : null);
+
+  return {
+    timingDataStatus: timingAvailable ? 'ok' : 'unavailable',
+    timingDataNote: timingAvailable
+      ? null
+      : 'Vimshottari timeline could not be built from this chart payload (often missing timingCore or Moon data). Tell the user to regenerate the chart from birth details — do not claim there is no career timing in the chart.',
+    eventType,
+    tense,
+    birthYear: birth?.isValid ? birth.year : null,
+    confidence,
+    primaryCareerWindow: primary ? { ...primary, displayAgeLabel, confidence } : null,
+    topCareerWindows: topWindows,
+    rules: [
+      'Use only this precomputed careerTiming table for specific years/ages — never currentDashaOnly or free improvisation.',
+      'setback and breakthrough scores for the same period can differ; do not assume one implies the other.',
+      'If confidence is "possible", present displayAgeLabel as a bounded range and say the chart does not support one exact year.',
+      'Never invent a specific real-world event (company name, exact date) beyond what the dasha/house evidence supports.'
+    ],
+    answerTemplate:
+      'Lead with primaryCareerWindow.displayAgeLabel + calendarYears + mahaDasha–antarDasha + careerActivationScore + confidence. One paragraph, then optional 2nd window.'
+  };
+}
+
+function buildCareerTimingDeterministicReply(careerTiming, userMessage) {
+  const ct = careerTiming || {};
+  if (ct.timingDataStatus !== 'ok' || !ct.primaryCareerWindow) {
+    return 'Career timing table is unavailable for this chart payload. Please regenerate the chart from birth details and try again.';
+  }
+
+  const p = ct.primaryCareerWindow;
+  const label = EVENT_TYPE_LABEL[p.resolvedEventType] || EVENT_TYPE_LABEL[ct.eventType] || 'career shift';
+  const ageLabel = p.displayAgeLabel || p.ageRangeLabel || String(Math.floor(p.age));
+  const years = p.calendarYears || 'year unavailable';
+
+  const opening =
+    ct.tense === 'future'
+      ? `Strongest upcoming ${label} window from your chart timing: age ${ageLabel} (${years}), ${p.mahaDasha || '—'}–${p.antarDasha || '—'} dasha, activation score ${p.careerActivationScore}.`
+      : `Strongest ${label} window in your chart: age ${ageLabel} (${years}), ${p.mahaDasha || '—'}–${p.antarDasha || '—'} dasha, activation score ${p.careerActivationScore}.`;
+
+  const reasoning =
+    'This is based on your 10th/11th house lordship, dasha alignment, and planetary placements active during that period — not a guaranteed event.';
+
+  const uncertainty =
+    p.confidence === 'possible'
+      ? 'Note: the chart shows a stronger period around this range, but does not support pinpointing one exact year with high confidence.'
+      : '';
+
+  const second = ct.topCareerWindows?.[1];
+  const secondLine = second
+    ? `Next strongest window: age ${second.ageRangeLabel || second.age} (${second.calendarYears || 'year unavailable'}), ${second.mahaDasha || '—'}–${second.antarDasha || '—'}, score ${second.careerActivationScore}.`
+    : '';
+
+  const confidenceLine = `Confidence: ${p.confidence}.`;
+
+  return [opening, reasoning, uncertainty, secondLine, confidenceLine].filter(Boolean).join(' ');
+}
+
+module.exports = {
+  isCareerTimingQuery,
+  detectCareerEventType,
+  detectCareerTiming_Tense,
+  scoreCareerEventActivation,
+  buildTopCareerWindows,
+  buildCareerTimingContext,
+  buildCareerTimingDeterministicReply,
+  CAREER_EVENT_TYPES
+};

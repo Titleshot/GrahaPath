@@ -16,6 +16,7 @@ const {
 } = require('../geminiContextBuilder');
 const { buildDashaContext } = require('../dasha/dashaContextBuilder');
 const { buildFameTimingContext } = require('../dasha/ageTimingService');
+const { isCareerTimingQuery, buildCareerTimingContext } = require('../dasha/careerTimingService');
 
 const SIGNS = [
   'Aries',
@@ -197,7 +198,11 @@ async function buildChatContext(chart, intent, { dailyWeather, userPlan, premium
         sunMercSatJup: planetsCompactRows(
           planetsNamed(chart.planets, ['Sun', 'Mercury', 'Saturn', 'Jupiter'])
         ),
-        ab: { sum: summaryForGemini(chart), dom: dominantPlanetsShort(chart) }
+        ab: { sum: summaryForGemini(chart), dom: dominantPlanetsShort(chart) },
+        // Only populated when the question actually asks for timing (a year, an
+        // age, "when", "turning point"...) -- broad "how is my career" questions
+        // get null here and fall through to the normal conversational path.
+        careerTiming: isCareerTimingQuery(userMessage) ? buildCareerTimingContext(chart, userMessage) : null
       };
     case 'relationship_question':
       return {
