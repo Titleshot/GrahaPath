@@ -1,3 +1,5 @@
+const { DateTime } = require('luxon');
+const { calculateDashaAtDate } = require('./dashaCalculator');
 const {
   birthDateTime,
   chartForTiming,
@@ -42,16 +44,66 @@ const MALEFICS = new Set(['Saturn', 'Rahu', 'Ketu', 'Mars']);
 const BENEFICS = new Set(['Jupiter', 'Venus', 'Mercury', 'Sun', 'Moon']);
 
 /**
+ * Does this message ask to INTERPRET an already-identified career window/event
+ * ("what happened during 1982-1985?", "what was the event in that window?")
+ * rather than asking the system to find/re-find the strongest window? This is
+ * checked FIRST and takes priority over isCareerTimingQuery, because phrases
+ * like "most important event" (सबैभन्दा महत्वपूर्ण ... event) can otherwise be
+ * mistaken for a fresh timing request even when a window was already given --
+ * this is exactly the bug where a follow-up asking "what event was this?"
+ * re-triggered the same ranked-window answer instead of being treated as a
+ * different question.
+ */
+function isCareerEventInterpretationQuery(userMessage) {
+  const t = String(userMessage || '').trim();
+  if (!t) return false;
+  const mentionsEvent = /(event|घटना)/i.test(t);
+  const asksWhatHappened = /(what\s+happened|happened|भयो|\bwhat\s+(was|is)\b)/i.test(t);
+  if (!(mentionsEvent && asksWhatHappened)) return false;
+  const referencesAWindow =
+    /((?:19|20)\d{2}\s*[-–—]\s*(?:19|20)?\d{2}|\bwindow\b|\bperiod\b|अवधि|यो\s*(?:career\s*)?(?:window|period)|त्यो\s*(?:career\s*)?(?:window|period))/i.test(
+      t
+    );
+  return referencesAWindow;
+}
+
+/**
  * Does this career_question message actually ask for a specific timing answer
  * (a year, an age, "when", "turning point"...) rather than a broad "how is my
  * career" style question? Broad questions must NOT activate timing mode.
+ * Event-interpretation follow-ups are excluded here too (not just at the call
+ * site) so this function stays correct on its own if reused elsewhere.
  */
 function isCareerTimingQuery(userMessage) {
   const t = String(userMessage || '').trim();
   if (!t) return false;
+  if (isCareerEventInterpretationQuery(t)) return false;
   const timingMarkers =
     /(when\s+(was|did|is|will)|which\s+year|what\s+year|at\s+what\s+age|which\s+age|turning\s+point|biggest\s+(career\s+)?(setback|breakthrough|change|disruption|shift|opportunity)|most\s+(significant|important)\s+(period|year|time|phase)|कहिले|कुन\s*वर्ष|कुन\s*वर्षमा|कुन\s*उमेर|कुन\s*उमेरमा|सबैभन्दा\s*(ठूलो|महत्वपूर्ण))/i;
   return timingMarkers.test(t);
+}
+
+/** Parse an explicit year range like "1982-1985" or "1982–85" from free text. */
+function extractYearRangeFromText(text) {
+  const m = String(text || '').match(/((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|\d{2})/);
+  if (!m) return null;
+  const start = Number(m[1]);
+  let end = Number(m[2]);
+  if (end < 100) end = Math.floor(start / 100) * 100 + end;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return { start: Math.min(start, end), end: Math.max(start, end) };
+}
+
+/** Fallback: if the current message doesn't restate the year, look for the most recent career-timing answer's year range in conversation history. */
+function findReferencedWindowFromHistory(conversationHistory) {
+  const history = Array.isArray(conversationHistory) ? conversationHistory : [];
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const m = history[i];
+    if (m?.role !== 'assistant' || typeof m.content !== 'string') continue;
+    const range = extractYearRangeFromText(m.content);
+    if (range) return range;
+  }
+  return null;
 }
 
 /**
@@ -348,13 +400,92 @@ function buildCareerTimingDeterministicReply(careerTiming, userMessage) {
   return [opening, reasoning, uncertainty, secondLine, confidenceLine].filter(Boolean).join(' ');
 }
 
+/**
+ * "What event happened during that window?" is a DIFFERENT question from
+ * "what was my strongest window?" -- this does not re-scan/re-rank the
+ * lifetime timeline at all. It takes the window the user already named (or,
+ * failing that, the most recent one this conversation produced), reads the
+ * dasha actually active at that specific point, and ranks all 6 career event
+ * TYPES for that one dasha pair using the exact same scoreCareerEventActivation
+ * function already used for timing -- no new astrology calculation, just a
+ * different question asked of the same scoring engine.
+ */
+function buildCareerEventInterpretationContext(chart, userMessage, conversationHistory) {
+  const chartCtx = chartForTiming(chart);
+  const birth = birthDateTime(chartCtx);
+  const yearRange = extractYearRangeFromText(userMessage) || findReferencedWindowFromHistory(conversationHistory);
+
+  if (!birth?.isValid || !yearRange) {
+    return { status: 'window_not_identified' };
+  }
+
+  const midYear = Math.round((yearRange.start + yearRange.end) / 2);
+  const midDate = DateTime.fromObject(
+    { year: midYear, month: 7, day: 1 },
+    { zone: chartCtx?.timezone || birth.zone || 'UTC' }
+  );
+  const age = ageOnDate(birth, midDate);
+  const dasha = calculateDashaAtDate(chartCtx, midDate, { preferEngine: true });
+
+  if (!dasha?.mahaDasha) {
+    return { status: 'dasha_unavailable', yearRange };
+  }
+
+  const rankedEventTypes = CAREER_EVENT_TYPES.map((type) => ({
+    type,
+    score: scoreCareerEventTypeActivation(chartCtx, dasha.mahaDasha, dasha.antarDasha, age, type)
+  })).sort((a, b) => b.score - a.score);
+
+  return {
+    status: 'ok',
+    yearRange,
+    age,
+    mahaDasha: dasha.mahaDasha,
+    antarDasha: dasha.antarDasha,
+    rankedEventTypes
+  };
+}
+
+/**
+ * Explains what TYPE of career shift the chart indicates for an already-named
+ * window -- and explicitly refuses to name or confirm a real-world event.
+ * GrahaPath has no biographical/historical data source; pretending otherwise
+ * would be exactly the kind of fabricated precision this whole engine exists
+ * to avoid.
+ */
+function buildCareerEventInterpretationReply(interpretation) {
+  const ctx = interpretation || {};
+  if (ctx.status === 'window_not_identified') {
+    return 'I can only read a specific window if you name it — for example "what happened during the 1982–1985 window?" Please restate the year range or age range you mean.';
+  }
+  if (ctx.status === 'dasha_unavailable') {
+    return `I could not resolve the dasha active in ${ctx.yearRange.start}–${ctx.yearRange.end} from this chart payload. Please regenerate the chart and try again.`;
+  }
+
+  const [top, second] = ctx.rankedEventTypes;
+  const label = EVENT_TYPE_LABEL[top.type];
+  const secondLabel = second && second.score >= top.score - 8 ? EVENT_TYPE_LABEL[second.type] : null;
+
+  const chartRead = secondLabel
+    ? `The ${ctx.mahaDasha}–${ctx.antarDasha} dasha active in that period (around age ${Math.floor(ctx.age)}, ${ctx.yearRange.start}–${ctx.yearRange.end}) most closely matches a ${label} pattern, with secondary ${secondLabel} signals.`
+    : `The ${ctx.mahaDasha}–${ctx.antarDasha} dasha active in that period (around age ${Math.floor(ctx.age)}, ${ctx.yearRange.start}–${ctx.yearRange.end}) most closely matches a ${label} pattern.`;
+
+  const disclaimer =
+    'GrahaPath does not have access to real-world biographical or historical records, so it cannot name or confirm the specific real-world event (a company, an incident, an exact date) that happened in this window — only the type of career shift the planetary pattern indicates. If you know what actually happened, share it and we can discuss how it maps to this pattern.';
+
+  return `${chartRead} ${disclaimer}`;
+}
+
 module.exports = {
   isCareerTimingQuery,
+  isCareerEventInterpretationQuery,
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
   buildTopCareerWindows,
   buildCareerTimingContext,
   buildCareerTimingDeterministicReply,
+  buildCareerEventInterpretationContext,
+  buildCareerEventInterpretationReply,
   CAREER_EVENT_TYPES
 };

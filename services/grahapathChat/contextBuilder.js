@@ -16,7 +16,12 @@ const {
 } = require('../geminiContextBuilder');
 const { buildDashaContext } = require('../dasha/dashaContextBuilder');
 const { buildFameTimingContext } = require('../dasha/ageTimingService');
-const { isCareerTimingQuery, buildCareerTimingContext } = require('../dasha/careerTimingService');
+const {
+  isCareerTimingQuery,
+  isCareerEventInterpretationQuery,
+  buildCareerTimingContext,
+  buildCareerEventInterpretationContext
+} = require('../dasha/careerTimingService');
 
 const SIGNS = [
   'Aries',
@@ -118,7 +123,11 @@ function dominantDriverLabels(chart, cap = 3) {
 /**
  * Slim STRICT_USER_DATA for chat — never includes life-phase report schema.
  */
-async function buildChatContext(chart, intent, { dailyWeather, userPlan, premiumUnlocked, userMessage = '' } = {}) {
+async function buildChatContext(
+  chart,
+  intent,
+  { dailyWeather, userPlan, premiumUnlocked, userMessage = '', conversationHistory = [] } = {}
+) {
   if (!chart || typeof chart !== 'object') {
     return { error: 'invalid_chart' };
   }
@@ -199,6 +208,13 @@ async function buildChatContext(chart, intent, { dailyWeather, userPlan, premium
           planetsNamed(chart.planets, ['Sun', 'Mercury', 'Saturn', 'Jupiter'])
         ),
         ab: { sum: summaryForGemini(chart), dom: dominantPlanetsShort(chart) },
+        // Checked in this order: a follow-up asking "what event happened in
+        // that window?" must win over the timing check, otherwise phrases like
+        // "most important event" get misread as a fresh timing request and the
+        // same ranked-window answer repeats instead of answering the follow-up.
+        careerEventInterpretation: isCareerEventInterpretationQuery(userMessage)
+          ? buildCareerEventInterpretationContext(chart, userMessage, conversationHistory)
+          : null,
         // Only populated when the question actually asks for timing (a year, an
         // age, "when", "turning point"...) -- broad "how is my career" questions
         // get null here and fall through to the normal conversational path.

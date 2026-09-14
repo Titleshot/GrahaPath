@@ -16,7 +16,10 @@ const {
   proseFallback
 } = require('./responseFormatter');
 const { buildDailyGrahaWeatherFromTransit } = require('../dailyGrahaWeatherService');
-const { buildCareerTimingDeterministicReply } = require('../dasha/careerTimingService');
+const {
+  buildCareerTimingDeterministicReply,
+  buildCareerEventInterpretationReply
+} = require('../dasha/careerTimingService');
 const { DateTime } = require('luxon');
 const {
   buildPanchangaForDate,
@@ -421,7 +424,8 @@ async function runMessage({
     dailyWeather: dw,
     userPlan,
     premiumUnlocked,
-    userMessage: effectiveMessage
+    userMessage: effectiveMessage,
+    conversationHistory
   });
   if (ctx.error === 'invalid_chart') {
     const err = new Error('Invalid chart data');
@@ -435,6 +439,17 @@ async function runMessage({
     const answer = buildFameTimingDeterministicReply(ctx.fameTiming, effectiveMessage);
     const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
     return { mode, intent, answer };
+  }
+
+  // Checked BEFORE the timing guard: a follow-up asking "what event happened
+  // in that window?" must not fall into the timing guard below and re-answer
+  // with the same ranked-window table. This never claims to know the real
+  // event -- it ranks event TYPES for the already-identified window's dasha
+  // and is explicit that GrahaPath cannot verify real-world history.
+  if (intent === 'career_question' && ctx.careerEventInterpretation) {
+    const answer = buildCareerEventInterpretationReply(ctx.careerEventInterpretation);
+    const mode = surfaceMode === 'daily_transit' ? 'daily_transit' : 'message';
+    return { mode, intent: 'career_event_interpretation', answer };
   }
 
   // Same guard, generalized: when a career_question is actually a timing

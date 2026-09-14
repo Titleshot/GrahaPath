@@ -9,12 +9,16 @@ const { DateTime } = require('luxon');
 const { generateBirthChart } = require('../services/astrologyService');
 const {
   isCareerTimingQuery,
+  isCareerEventInterpretationQuery,
   detectCareerEventType,
   detectCareerTiming_Tense,
   scoreCareerEventActivation,
   buildCareerTimingContext,
-  buildCareerTimingDeterministicReply
+  buildCareerTimingDeterministicReply,
+  buildCareerEventInterpretationContext,
+  buildCareerEventInterpretationReply
 } = require('../services/dasha/careerTimingService');
+const { processChatV2Request } = require('../services/grahapathChat/chatService');
 const { buildFameTimingContext, scoreRecognitionActivation } = require('../services/dasha/ageTimingService');
 
 let pass = 0;
@@ -246,6 +250,84 @@ async function main() {
     );
     console.log(
       '  comparison, not a statistically valid accuracy claim -- see predictionQualityService notes in the report.'
+    );
+  }
+
+  console.log('\n--- Test 9: career-window follow-up must NOT re-trigger the same timing answer (regression) ---');
+  {
+    // Reproduces the exact reported bug: after the timing question identifies
+    // a window, a follow-up asking "what event happened in that window?" must
+    // be routed to a DIFFERENT answer, not the same ranked-window table again.
+    const timingMsg = 'When was my biggest career breakthrough?';
+    const followUpMsg =
+      'यो 1982–1985 को career window मा वास्तवमा के प्रमुख घटना भयो? एउटा मात्र सबैभन्दा महत्वपूर्ण career event बताउनुहोस्। वर्ष र घटना स्पष्ट रूपमा लेख्नुहोस्।';
+
+    check('follow-up is NOT classified as a fresh timing query', isCareerTimingQuery(followUpMsg) === false);
+    check('follow-up IS classified as an event-interpretation query', isCareerEventInterpretationQuery(followUpMsg) === true);
+    check('original timing question is NOT classified as event-interpretation', isCareerEventInterpretationQuery(timingMsg) === false);
+
+    const timingResult = await processChatV2Request({
+      chart: steveJobs,
+      message: timingMsg,
+      userPlan: 'free',
+      conversationHistory: [],
+      surfaceMode: 'message',
+      premiumUnlocked: false,
+      mode: 'message'
+    });
+    check('first question routes to career_timing intent', timingResult.intent === 'career_timing');
+
+    const followUpResult = await processChatV2Request({
+      chart: steveJobs,
+      message: followUpMsg,
+      userPlan: 'free',
+      conversationHistory: [
+        { role: 'user', content: timingMsg },
+        { role: 'assistant', content: timingResult.answer }
+      ],
+      surfaceMode: 'message',
+      premiumUnlocked: false,
+      mode: 'message'
+    });
+    check(
+      'follow-up routes to a DIFFERENT intent (career_event_interpretation), not career_timing again',
+      followUpResult.intent === 'career_event_interpretation'
+    );
+    check('follow-up answer differs from the original timing answer', followUpResult.answer !== timingResult.answer);
+    check(
+      'follow-up answer names a dasha for the 1982-1985 window (uses the window, does not re-derive one)',
+      /Venus|Sun|Moon|Mars|Mercury|Jupiter|Saturn|Rahu|Ketu/.test(followUpResult.answer)
+    );
+    check(
+      'follow-up answer explicitly disclaims knowledge of the real-world event',
+      /does not have access to real-world|cannot name or confirm/i.test(followUpResult.answer)
+    );
+    check(
+      'follow-up answer does NOT fabricate a specific real-world event (e.g. a company name)',
+      !/Apple|Macintosh|NeXT|Pixar/i.test(followUpResult.answer)
+    );
+    console.log('  Follow-up answer:', followUpResult.answer);
+
+    // Same check via the isolated function too (not just the full HTTP-less pipeline).
+    const isolatedCtx = buildCareerEventInterpretationContext(steveJobs, followUpMsg, []);
+    check('isolated interpretation context resolves the window from the message text', isolatedCtx.status === 'ok');
+    check('isolated interpretation ranks all 6 event types', isolatedCtx.rankedEventTypes?.length === 6);
+    const isolatedAnswer = buildCareerEventInterpretationReply(isolatedCtx);
+    check(
+      'isolated reply also carries the disclaimer',
+      /does not have access to real-world|cannot name or confirm/i.test(isolatedAnswer)
+    );
+
+    // Fallback path: a shorter follow-up that doesn't restate the year at all
+    // should still resolve the window from conversation history.
+    const shortFollowUp = 'What event happened during that window?';
+    const historyCtx = buildCareerEventInterpretationContext(steveJobs, shortFollowUp, [
+      { role: 'user', content: timingMsg },
+      { role: 'assistant', content: timingResult.answer }
+    ]);
+    check(
+      'window is recovered from conversation history when not restated in the message',
+      historyCtx.status === 'ok'
     );
   }
 
