@@ -4,3 +4,4 @@ npm-debug.log*
 *.log
 .vercel
 _archive-scaffold-backup/
+scripts/validation/results/

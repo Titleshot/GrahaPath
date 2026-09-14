@@ -476,6 +476,31 @@ async function main() {
     })).answer);
   }
 
+  console.log('\n--- Test 12: Phase 2 validation framework -- biography/event data cannot leak into prediction ---');
+  {
+    // The validation framework (scripts/validation/) builds charts from
+    // fixture birth data only and separately holds each fixture's documented
+    // events for AFTER-THE-FACT scoring. This proves that structurally: a
+    // chart built the same way the validation runner builds it carries no
+    // event/biography data the scoring engine could read (lifeEventAgeBoosts
+    // in timelineScanEngine.js reads chart.lifeEventVerification -- if that
+    // were ever populated from known events, it would leak ground truth into
+    // the score being measured).
+    const { buildChartFromFixture } = require('../scripts/validation/careerTimingValidationRunner');
+    const { CAREER_TIMING_VALIDATION_FIXTURES } = require('../scripts/validation/careerTimingFixtures');
+    for (const fixture of CAREER_TIMING_VALIDATION_FIXTURES) {
+      const chart = await buildChartFromFixture(fixture.name, fixture.birth);
+      check(
+        `${fixture.id}: chart carries no lifeEventVerification (no leakage path for known events)`,
+        chart.lifeEventVerification === undefined
+      );
+      check(
+        `${fixture.id}: chart object contains no verbatim text from any documented event label`,
+        !fixture.events.some((e) => JSON.stringify(chart).includes(e.label))
+      );
+    }
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail > 0) process.exit(1);
 }
