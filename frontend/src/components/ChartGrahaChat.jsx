@@ -4,7 +4,7 @@ import PremiumUnlockModal from './PremiumUnlockModal';
 import { readPremiumDemoUnlock, writePremiumDemoUnlock } from '../lib/chartAccess';
 import { apiFetch, withApiBase } from '../lib/apiBase';
 import { MAGIC_LINK_TOPUP_COPY, SUPPORT_EMAIL } from '../lib/supportContact';
-import ChartReportDownload from './ChartReportDownload';
+import { useLanguage } from '../lib/i18n.jsx';
 
 const API_CHAT_V2 = withApiBase('/api/chat-v2');
 
@@ -53,13 +53,13 @@ function writeStoredMessages(persistKey, messages) {
   }
 }
 
-function buildWelcomeMessage(chart, sessionChatMode) {
+function buildWelcomeMessage(chart, sessionChatMode, welcomeText) {
   if (sessionChatMode) {
     const lagna = chart?.ascendant || 'your';
     const moon = chart?.moonSign || 'chart';
     return `Your ${lagna}-${moon} chart is ready. Ask about career, relationships, dasha, or timing.`;
   }
-  return 'Ask your chart below — career, timing, relationships, houses, or dasha.';
+  return welcomeText;
 }
 
 /**
@@ -78,6 +78,7 @@ export default function ChartGrahaChat({
   sessionProfileId = '',
   onInsightsChange = null
 }) {
+  const { t } = useLanguage();
   const chartKey = chart?.utcDateTime || chart?.localDateTime || '';
   const persistKey = String(sessionProfileId || chartKey || '').trim();
 
@@ -92,7 +93,7 @@ export default function ChartGrahaChat({
   const [premiumDemoUnlocked, setPremiumDemoUnlocked] = useState(false);
   const [challengeState, setChallengeState] = useState(null);
   const [challengeToken, setChallengeToken] = useState('');
-  const bottomRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetIdRef = useRef(null);
@@ -207,13 +208,19 @@ export default function ChartGrahaChat({
       return;
     }
 
-    const welcome = [{ role: 'assistant', content: buildWelcomeMessage(chart, sessionChatMode) }];
+    const welcome = [{ role: 'assistant', content: buildWelcomeMessage(chart, sessionChatMode, t('chat.welcome')) }];
     setMessages(welcome);
     persistMessages(welcome);
   }, [chart, persistKey, sessionChatMode, initialInsights, persistMessages]);
 
+  // Scroll only the message list itself, not scrollIntoView -- that walks up
+  // through every scrollable ancestor including the page, and since this widget
+  // sits low on a long results page, it was dragging the whole window down
+  // every time a message arrived (reported as the page "auto scrolling by itself").
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
   useEffect(() => {
@@ -293,7 +300,14 @@ export default function ChartGrahaChat({
     setSending(true);
     setInput('');
 
-    const historyForApi = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
+    // Gemini requires the first turn in conversation history to be 'user' -- the
+    // synthetic welcome greeting (an 'assistant' message added before any real
+    // input) would otherwise be sent as the leading turn and get rejected.
+    const firstUserIdx = messages.findIndex((m) => m.role === 'user');
+    const historyForApi =
+      firstUserIdx === -1
+        ? []
+        : messages.slice(firstUserIdx).filter((m) => m.role === 'user' || m.role === 'assistant');
     const userMsg = { role: 'user', content: text };
     setMessagesPersisted((prev) => [...prev, userMsg]);
 
@@ -409,15 +423,14 @@ export default function ChartGrahaChat({
       id="gp-chat"
       className="scroll-mt-24 rounded-3xl border border-indigo-400/25 bg-gradient-to-b from-slate-950/85 via-[#0a0812] to-black/95 p-4 shadow-[0_0_0_1px_rgba(99,102,241,0.18),0_26px_70px_rgba(0,0,0,0.55)] sm:p-5"
     >
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-white/[0.06] pb-3">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-white/[0.06] pb-4">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-300/70 sm:tracking-[0.38em]">GrahaPath AI</p>
-          <h3 className="mt-1 font-serif text-lg text-cream sm:text-xl">Ask your chart</h3>
-          <p className="mt-1 text-[11px] text-ivory/45">GrahaPath AI can make mistakes. Verify important details.</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-300/70 sm:tracking-[0.38em]">{t('chat.title')}</p>
+          <h3 className="mt-1 font-serif text-lg text-cream sm:text-xl">{t('chat.subtitle')}</h3>
+          <p className="mt-2 text-[11px] leading-relaxed text-ivory/45">{t('chat.disclaimer')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <p className="text-[11px] text-ivory/45">{teaserMode ? 'Free demo teaser mode' : 'Live Chart Intelligence'}</p>
-          <ChartReportDownload chart={chart} compact />
+          <p className="text-[11px] text-ivory/45">{teaserMode ? t('chat.modeTeaser') : t('chat.modeLive')}</p>
           {showInsightsCounter ? (
             <div
               className={`inline-flex items-center gap-1 rounded-full border border-gold/35 bg-white/5 px-3 py-1 text-[11px] font-medium text-gold-100 shadow-sm backdrop-blur-md transition ${
@@ -432,13 +445,14 @@ export default function ChartGrahaChat({
               tabIndex={sessionChatMode ? undefined : 0}
             >
               <span aria-hidden>🌟</span>
-              <span className="text-[11px] leading-none">{`${typeof insightsLeft === 'number' ? insightsLeft : '…'} Insights Left`}</span>
+              <span className="text-[11px] leading-none">{`${typeof insightsLeft === 'number' ? insightsLeft : '…'} ${t('chat.insightsLeft')}`}</span>
             </div>
           ) : null}
         </div>
       </div>
 
       <div
+        ref={messagesContainerRef}
         className={`max-h-[min(420px,50vh)] space-y-3 overflow-y-auto overscroll-contain pr-1 sm:max-h-[min(480px,55vh)] ${
           teaserMode && !forceUnlocked && insightsLeft <= 0 ? 'blur-[1.2px] opacity-70' : ''
         }`}
@@ -461,7 +475,6 @@ export default function ChartGrahaChat({
         {sending ? (
           <p className="text-sm text-amber-200/80">GrahaPath AI is thinking… (reply can take up to a minute)</p>
         ) : null}
-        <div ref={bottomRef} />
       </div>
 
       <form onSubmit={handleSend} className="mt-5 flex min-w-0 flex-col gap-3">
@@ -488,7 +501,7 @@ export default function ChartGrahaChat({
                 handleSend(e);
               }
             }}
-            placeholder="Ask about career, relationships, dasha…"
+            placeholder={t('chat.placeholder')}
             disabled={sending || magicLinkInsightsExhausted || (teaserMode && !forceUnlocked && insightsLeft <= 0)}
             className="min-h-[72px] max-h-[160px] flex-1 resize-y overflow-y-auto rounded-2xl border border-blue-400/30 bg-black/55 px-4 py-3 text-sm leading-relaxed text-cream outline-none placeholder:text-ivory/35 focus:border-violet-400/55 disabled:opacity-50"
             aria-label="Chat message"
@@ -504,10 +517,10 @@ export default function ChartGrahaChat({
             }
             className="min-h-[44px] rounded-2xl border border-amber-400/45 bg-gradient-to-r from-amber-900/45 to-violet-900/40 px-6 py-2 text-sm font-medium text-gold transition hover:border-gold/60 disabled:opacity-40 sm:w-auto"
           >
-            {sending ? 'Sending…' : 'Send'}
+            {sending ? t('chat.sending') : t('chat.send')}
           </button>
         </div>
-        <p className="text-[11px] text-ivory/40">Enter to send · Shift+Enter for new line</p>
+        <p className="text-[11px] text-ivory/40">{t('chat.enterHint')}</p>
       </form>
 
       {magicLinkInsightsExhausted ? (

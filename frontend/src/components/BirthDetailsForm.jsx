@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiFetch, withApiBase } from '../lib/apiBase';
 import { fetchOpenMeteoPlaceSuggestions } from '../lib/openMeteoGeocode';
+import { useLanguage } from '../lib/i18n.jsx';
 
 const inputClass =
   'w-full rounded-2xl border border-gold-400/20 bg-black/40 px-4 py-3 text-sm text-ivory-100 outline-none transition placeholder:text-ivory-100/30 focus:border-gold-300/70 focus:ring-2 focus:ring-gold-400/20';
@@ -54,6 +55,40 @@ const GREG_MONTHS = [
   [12, 'Dec']
 ];
 
+const BS_MONTHS = [
+  [1, 'Baisakh'],
+  [2, 'Jestha'],
+  [3, 'Asar'],
+  [4, 'Shrawan'],
+  [5, 'Bhadra'],
+  [6, 'Aswin'],
+  [7, 'Kartik'],
+  [8, 'Mangsir'],
+  [9, 'Poush'],
+  [10, 'Magh'],
+  [11, 'Falgun'],
+  [12, 'Chaitra']
+];
+
+const BS_YEARS = Array.from({ length: 2082 - 1990 + 1 }, (_item, index) => String(2082 - index));
+const AD_YEARS = Array.from({ length: 2026 - 1900 + 1 }, (_item, index) => String(2026 - index));
+const DAY_OPTIONS = Array.from({ length: 31 }, (_item, index) => String(index + 1).padStart(2, '0'));
+
+const NEPAL_PLACE_CHIPS = [
+  { displayName: 'Kathmandu, Nepal', latitude: 27.7172, longitude: 85.324 },
+  { displayName: 'Lalitpur, Nepal', latitude: 27.6588, longitude: 85.3247 },
+  { displayName: 'Bhaktapur, Nepal', latitude: 27.671, longitude: 85.4298 },
+  { displayName: 'Pokhara, Nepal', latitude: 28.2096, longitude: 83.9856 },
+  { displayName: 'Bharatpur, Nepal', latitude: 27.6706, longitude: 84.4389 },
+  { displayName: 'Biratnagar, Nepal', latitude: 26.4525, longitude: 87.2718 },
+  { displayName: 'Birgunj, Nepal', latitude: 27.0104, longitude: 84.877 },
+  { displayName: 'Butwal, Nepal', latitude: 27.7006, longitude: 83.4482 },
+  { displayName: 'Dharan, Nepal', latitude: 26.8145, longitude: 87.2797 },
+  { displayName: 'Nepalgunj, Nepal', latitude: 28.05, longitude: 81.6167 }
+];
+
+const selectClass = `${inputClass} appearance-none`;
+
 function formatAdDisplay(value) {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
@@ -74,6 +109,22 @@ function formatSelectedTime(timeParts) {
   return `${timeParts.hour || 'HH'} : ${timeParts.minute || 'MM'} ${timeParts.meridiem || 'AM/PM'}`;
 }
 
+function parseAdDisplay(display) {
+  const match = /^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/.exec(String(display || '').trim());
+  if (!match) return { day: '', month: '', year: '' };
+  return {
+    day: String(match[1]).padStart(2, '0'),
+    month: String(match[2]).padStart(2, '0'),
+    year: match[3]
+  };
+}
+
+function toAdDisplay(day, month, year) {
+  if (!day || !month || !year) return '';
+  return `${String(day).padStart(2, '0')} / ${String(month).padStart(2, '0')} / ${year}`;
+}
+
+
 function BirthDetailsForm({
   formData,
   onChange,
@@ -87,6 +138,7 @@ function BirthDetailsForm({
   demoUsed,
   onRestorePremium
 }) {
+  const { t } = useLanguage();
   const [placeSuggestions, setPlaceSuggestions] = useState([]);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const [placeSuggestError, setPlaceSuggestError] = useState('');
@@ -94,6 +146,18 @@ function BirthDetailsForm({
   const placeAbortRef = useRef(null);
   const placeCacheRef = useRef(new Map());
   const timeParts = formData.timeParts || { hour: '', minute: '', meridiem: 'AM' };
+  const dateType = formData.dateType === 'BS' ? 'BS' : 'AD';
+  // Local state, not derived fresh from formData.dateDisplay every render: toAdDisplay
+  // returns '' until day/month/year are ALL set, so deriving straight from the parent
+  // string would wipe out a partial selection (pick Day, it reverts to blank) the
+  // instant you pick just one part.
+  const [adParts, setAdParts] = useState(() => parseAdDisplay(formData.dateDisplay));
+  useEffect(() => {
+    const parsed = parseAdDisplay(formData.dateDisplay);
+    if (parsed.day && parsed.month && parsed.year) {
+      setAdParts(parsed);
+    }
+  }, [formData.dateDisplay]);
   const selectedLocation = formData.location || null;
   const lifeEvents = formData.lifeEvents || [];
   const lifeEventsExpanded = Boolean(formData.lifeEventsExpanded);
@@ -109,14 +173,59 @@ function BirthDetailsForm({
     if (isSearchingPlaces) {
       return 'Searching places...';
     }
-    return 'Type your city (e.g. "Kathmandu, Nepal") and pick from the dropdown for accurate coordinates.';
-  }, [isSearchingPlaces, selectedLocation]);
+    return t('form.placeHelper');
+  }, [isSearchingPlaces, selectedLocation, t]);
 
   function handleAdDateChange(event) {
     onChange({
       target: {
         name: 'dateDisplay',
         value: formatAdDisplay(event.target.value)
+      }
+    });
+  }
+
+  function handleDateTypeChange(nextType) {
+    onChange({
+      target: {
+        name: 'dateType',
+        value: nextType
+      }
+    });
+  }
+
+  function handleAdPartChange(field, value) {
+    const next = { ...adParts, [field]: value };
+    setAdParts(next);
+    onChange({
+      target: {
+        name: 'dateDisplay',
+        value: toAdDisplay(next.day, next.month, next.year)
+      }
+    });
+  }
+
+  function handleBsPartChange(field, value) {
+    onChange({
+      target: {
+        name: `bsDate.${field}`,
+        value
+      }
+    });
+  }
+
+  function handleUnknownTime() {
+    const nextTimeParts = { hour: '12', minute: '00', meridiem: 'PM' };
+    onChange({
+      target: {
+        name: 'timeParts',
+        value: nextTimeParts
+      }
+    });
+    onChange({
+      target: {
+        name: 'timeDisplay',
+        value: formatSelectedTime(nextTimeParts)
       }
     });
   }
@@ -296,54 +405,187 @@ function BirthDetailsForm({
       transition={{ duration: 0.7, ease: 'easeOut' }}
     >
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-[0.22em] text-gold-300/80 sm:tracking-[0.35em]">Birth Details</p>
-        <h2 className="mt-3 font-serif text-2xl text-ivory-50 sm:text-3xl">Enter Your Birth Details</h2>
-        <p className="mt-3 text-sm leading-6 text-ivory-100/60">
-          GrahaPath calculates your planetary placements from your exact birth date, time, and
-          place.
-        </p>
+        <p className="text-xs uppercase tracking-[0.22em] text-gold-300/80 sm:tracking-[0.35em]">{t('form.eyebrow')}</p>
+        <h2 className="mt-3 font-serif text-2xl text-ivory-50 sm:text-3xl">{t('form.title')}</h2>
+        <p className="mt-3 text-sm leading-6 text-ivory-100/60">{t('form.subtitle')}</p>
       </div>
 
       <div className="grid gap-4 overflow-visible">
         <label className="space-y-2">
-          <span className={labelClass}>Name</span>
+          <span className={labelClass}>{t('form.name')}</span>
           <input
             className={inputClass}
             name="name"
             value={formData.name}
             onChange={onChange}
-            placeholder="Your name"
+            placeholder={t('form.namePlaceholder')}
             required
           />
         </label>
 
-        <label className="space-y-2">
-          <span className={labelClass}>Birth Date</span>
-          <input
-            className={inputClass}
-            name="dateDisplay"
-            inputMode="numeric"
-            value={formData.dateDisplay || ''}
-            onChange={handleAdDateChange}
-            placeholder="DD / MM / YYYY"
-            required
-          />
-          <p className={helperClass}>Use your English birth date.</p>
-        </label>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={labelClass}>{t('form.birthDate')}</span>
+            <div className="inline-flex overflow-hidden rounded-full border border-gold-400/30 bg-black/40">
+              {['AD', 'BS'].map((type) => {
+                const selected = dateType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleDateTypeChange(type)}
+                    className={`px-3 py-1.5 text-[11px] font-semibold tracking-[0.12em] ${
+                      selected ? 'bg-gold-300/20 text-gold-100' : 'text-ivory-100/55 hover:text-gold-100'
+                    }`}
+                  >
+                    {type === 'AD' ? t('form.dateType.ad') : t('form.dateType.bs')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {dateType === 'AD' ? (
+            // Styled to match the BS dropdowns below rather than the browser's
+            // own unstyled native date picker -- toggling AD/BS used to swap
+            // between two visually inconsistent controls; both now use the
+            // same three gold-dropdown pattern.
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                className={selectClass}
+                aria-label="Birth day"
+                value={adParts.day}
+                onChange={(event) => handleAdPartChange('day', event.target.value)}
+                required
+              >
+                <option value="">Day</option>
+                {DAY_OPTIONS.map((day) => (
+                  <option key={day} value={day}>
+                    {Number(day)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={selectClass}
+                aria-label="Birth month"
+                value={adParts.month}
+                onChange={(event) => handleAdPartChange('month', event.target.value)}
+                required
+              >
+                <option value="">Month</option>
+                {GREG_MONTHS.map(([num, label]) => (
+                  <option key={num} value={String(num).padStart(2, '0')}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={selectClass}
+                aria-label="Birth year"
+                value={adParts.year}
+                onChange={(event) => handleAdPartChange('year', event.target.value)}
+                required
+              >
+                <option value="">Year</option>
+                {AD_YEARS.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  className={selectClass}
+                  aria-label="BS day"
+                  value={formData.bsDate?.day ? String(formData.bsDate.day).padStart(2, '0') : ''}
+                  onChange={(event) =>
+                    handleBsPartChange('day', event.target.value ? String(Number(event.target.value)) : '')
+                  }
+                  required
+                >
+                  <option value="">Day</option>
+                  {DAY_OPTIONS.map((day) => (
+                    <option key={day} value={day}>
+                      {Number(day)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={selectClass}
+                  aria-label="BS month"
+                  value={String(formData.bsDate?.month || '')}
+                  onChange={(event) => handleBsPartChange('month', event.target.value)}
+                  required
+                >
+                  <option value="">Month</option>
+                  {BS_MONTHS.map(([num, label]) => (
+                    <option key={num} value={String(num)}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={selectClass}
+                  aria-label="BS year"
+                  value={String(formData.bsDate?.year || '')}
+                  onChange={(event) => handleBsPartChange('year', event.target.value)}
+                  required
+                >
+                  <option value="">Year</option>
+                  {BS_YEARS.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className={helperClass}>Bikram Sambat — we convert to English date for the chart.</p>
+            </>
+          )}
+        </div>
 
         <div className="grid gap-4">
           <div className="space-y-2">
-            <span className={labelClass}>Birth Time</span>
+            <span className={labelClass}>{t('form.birthTime')}</span>
             <TimePicker
               timeParts={timeParts}
               onChange={handleTimePartChange}
             />
-            <p className={helperClass}>Exact birth time is crucial for accurate Lagna and house placements.</p>
+            <button
+              type="button"
+              onClick={handleUnknownTime}
+              className="text-left text-xs text-gold-200/75 underline-offset-2 hover:text-gold-100 hover:underline"
+            >
+              {t('form.timeUnknown')}
+            </button>
+            <p className={helperClass}>{t('form.timeHelper')}</p>
           </div>
         </div>
 
         <label className="relative z-[120] block space-y-2 overflow-visible">
-          <span className={labelClass}>Birth Place</span>
+          <span className={labelClass}>{t('form.birthPlace')}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {NEPAL_PLACE_CHIPS.map((chip) => {
+              const active = selectedLocation?.displayName === chip.displayName;
+              return (
+                <button
+                  key={chip.displayName}
+                  type="button"
+                  onClick={() => chooseSuggestion(chip)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                    active
+                      ? 'border-gold-300/70 bg-gold-300/20 text-gold-50'
+                      : 'border-gold-400/20 bg-black/30 text-ivory-100/70 hover:border-gold-300/40 hover:text-gold-100'
+                  }`}
+                >
+                  {chip.displayName.replace(', Nepal', '')}
+                </button>
+              );
+            })}
+          </div>
           <div className="relative">
             <input
               className={inputClass}
@@ -354,21 +596,29 @@ function BirthDetailsForm({
               onBlur={() => {
                 setTimeout(() => setIsPlaceFocused(false), 120);
               }}
-              placeholder="City, Country"
+              placeholder={t('form.placePlaceholder')}
               required
               autoComplete="off"
             />
             {showSuggestions && (
-              <ul className="absolute left-0 top-full z-[9999] isolate mt-1.5 w-full max-h-60 overflow-y-auto rounded-2xl border border-gold-400/35 bg-slate-900 p-2 shadow-2xl">
-                {placeSuggestions.map((suggestion) => (
-                  <li key={`${suggestion.displayName}-${suggestion.latitude}-${suggestion.longitude}`}>
+              // Was a flat bg-slate-900 box -- a plain Tailwind grey that had
+              // nothing to do with the site's violet/gold cosmic palette, so
+              // it looked like a foreign browser-default dropdown pasted onto
+              // the page. Now built from the same gradient + gold-border
+              // language as every other panel (glass-card, form card, etc.).
+              <ul className="absolute left-0 top-full z-[9999] isolate mt-2 w-full max-h-60 overflow-y-auto rounded-2xl border border-gold-400/30 bg-gradient-to-b from-[#191527] to-[#0a0813] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                {placeSuggestions.map((suggestion, index) => (
+                  <li
+                    key={`${suggestion.displayName}-${suggestion.latitude}-${suggestion.longitude}`}
+                    className={index > 0 ? 'border-t border-gold-400/10' : ''}
+                  >
                     <button
                       type="button"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         chooseSuggestion(suggestion);
                       }}
-                      className="mb-1 w-full rounded-xl border border-transparent px-3 py-2 text-left text-xs text-ivory-100/80 transition last:mb-0 hover:border-gold-300/25 hover:bg-gold-300/10 hover:text-gold-100"
+                      className="w-full rounded-xl px-3 py-2.5 text-left text-xs text-ivory-100/80 transition hover:bg-gold-300/12 hover:text-gold-100"
                     >
                       {suggestion.displayName}
                     </button>
@@ -381,9 +631,7 @@ function BirthDetailsForm({
           {placeSuggestError ? (
             <p className="text-xs leading-relaxed text-amber-200/90">{placeSuggestError}</p>
           ) : null}
-          <p className="text-xs leading-5 text-gold-200/55">
-            Timezone is auto-calculated from selected coordinates.
-          </p>
+          <p className="text-xs leading-5 text-gold-200/55">{t('form.timezoneNote')}</p>
         </label>
 
         {showLifeEvents && (
@@ -537,20 +785,20 @@ function BirthDetailsForm({
         disabled={isLoading}
         className="relative z-0 mt-6 w-full rounded-2xl border border-gold-300/50 bg-gold-gradient px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-black shadow-glow transition sm:tracking-[0.25em] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? 'Calculating...' : 'Calculate My Chart'}
+        {isLoading ? 'Calculating...' : t('form.submit')}
       </motion.button>
-      
+
       {/* Unlock access helper - always visible */}
       <div className="mt-6 rounded-2xl border border-gold/20 bg-black/30 p-4 text-center">
         <p className="text-sm text-gold/80 mb-2">
-          {demoUsed ? 'Already paid and unlocked before?' : 'Already paid before?'}
+          {demoUsed ? 'Already paid and unlocked before?' : t('form.alreadyPaid')}
         </p>
         <button
           type="button"
           onClick={onRestorePremium}
           className="mt-2 rounded-full border border-gold/30 bg-black/30 px-4 py-2 text-sm font-medium text-gold transition hover:border-gold/40 hover:bg-black/50"
         >
-          Unlock my access
+          {t('nav.unlock')}
         </button>
       </div>
     </motion.form>

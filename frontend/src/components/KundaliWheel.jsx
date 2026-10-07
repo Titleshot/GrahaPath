@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { getRashiParts } from '../data/vedicNames';
 import { hasDeepChartData } from '../lib/chartAccess';
+import { getPlanetColor } from '../data/planetColors';
+import { useLanguage } from '../lib/i18n.jsx';
 import PlanetWheelModal from './PlanetWheelModal';
 
 const HOUSE_LABEL_RADIUS = 128;
@@ -37,6 +39,7 @@ export default function KundaliWheel({
   forceDeepData = false,
   mode = 'paid'
 }) {
+  const { t } = useLanguage();
   const planets = chart?.planets || [];
   const ascendantParts = getRashiParts(chart.ascendant);
   const isFreeMode = mode === 'free';
@@ -70,7 +73,7 @@ export default function KundaliWheel({
     >
       <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
         <div className="rounded-full border border-gold-400/30 px-4 py-2 text-sm text-gold-100">
-          Ascendant: <span className="text-gold-300">{chart.ascendant}</span>
+          {t('wheel.ascendant')}: <span className="text-gold-300">{chart.ascendant}</span>
         </div>
       </div>
 
@@ -145,6 +148,10 @@ export default function KundaliWheel({
             return housePlanets.map((planet, planetIndex) => {
               const position = planetPosition(house, planetIndex, housePlanets.length);
               const isSelected = selectedForHighlight?.name === planet.name;
+              // Each graha keeps its traditional gemstone colour (see
+              // data/planetColors.js) instead of every planet sharing one
+              // gold dot -- Mars reads red, Mercury green, Saturn blue, etc.
+              const color = getPlanetColor(planet.name);
 
               return (
                 <g
@@ -161,20 +168,24 @@ export default function KundaliWheel({
                     }
                   }}
                 >
+                  {isSelected && (
+                    <circle cx={position.x} cy={position.y} r={16} fill={color.glow} opacity="0.9" />
+                  )}
                   <circle
                     cx={position.x}
                     cy={position.y}
                     r={isSelected ? 12 : 10}
-                    fill={isSelected ? '#d4af37' : '#111111'}
-                    stroke="#f7d774"
-                    strokeWidth="0.9"
-                    opacity={isSelected ? 0.98 : 0.86}
+                    fill={isSelected ? color.fill : '#141118'}
+                    stroke={color.fill}
+                    strokeWidth="1.1"
+                    opacity={isSelected ? 1 : 0.92}
                   />
                   <text
                     x={position.x}
                     y={position.y + 3}
                     textAnchor="middle"
-                    className={isSelected ? 'fill-black text-[10px] font-bold' : 'fill-gold-200 text-[10px] font-bold'}
+                    className="text-[10px] font-bold"
+                    fill={isSelected ? color.text : color.fill}
                   >
                     {planet.symbol}
                   </text>

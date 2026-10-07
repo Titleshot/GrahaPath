@@ -35,7 +35,7 @@ export default function AuthLoginGate({ onLoginSuccess }) {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
+    <main className="relative min-h-screen overflow-x-clip bg-void text-ivory">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.16),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(212,175,55,0.09),transparent_28%)]" />
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[560px] items-center px-4 py-8">
         <section className="w-full rounded-3xl border border-gold/25 bg-onyx/80 p-6 shadow-2xl shadow-black/50">

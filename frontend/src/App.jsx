@@ -12,13 +12,13 @@ import InviteAccessPanel from './components/InviteAccessPanel';
 import AuthLoginGate from './components/AuthLoginGate';
 import MagicLinkConsentGate from './components/MagicLinkConsentGate';
 import { getClientFingerprint } from './lib/clientFingerprint';
+import { useLanguage } from './lib/i18n.jsx';
 import { API_BASE, apiFetch, withApiBase } from './lib/apiBase';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { 
   generateChartFingerprint, 
   hasChartUsedDemo, 
   markChartAsUsedDemo, 
-  getStoredChartData,
   storeChartData 
 } from './lib/chartFingerprint';
 import {
@@ -117,6 +117,7 @@ function normalizeBirthTime(displayTime) {
 }
 
 export default function App() {
+  const { lang, setLang, t } = useLanguage();
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(!AUTH_LOGIN_ENABLED);
   const [routePath, setRoutePath] = useState(() =>
@@ -129,9 +130,9 @@ export default function App() {
     date: '',
     dateDisplay: '',
     bsDate: {
-      year: '2053',
-      month: '12',
-      day: '19'
+      year: '',
+      month: '',
+      day: ''
     },
     timeParts: {
       hour: '04',
@@ -156,7 +157,7 @@ export default function App() {
   const [adminAssignAccessId, setAdminAssignAccessId] = useState('');
   const [adminAssignPassword, setAdminAssignPassword] = useState('');
   const [adminShareMode, setAdminShareMode] = useState('credentials');
-  const [adminInsightsLimit, setAdminInsightsLimit] = useState('55');
+  const [adminInsightsLimit, setAdminInsightsLimit] = useState('5');
   const [adminMagicLink, setAdminMagicLink] = useState('');
   const [tokenSessionMode, setTokenSessionMode] = useState(false);
   const [chartProfileId, setChartProfileId] = useState('');
@@ -434,6 +435,29 @@ export default function App() {
     let attempts = 0;
     let timeoutId;
 
+    // The results block keeps growing for a moment after mount (animations, fonts,
+    // images), so a single smooth scroll lands short/long on phones. Re-align a couple
+    // of times as the layout settles, unless the person has started scrolling.
+    let userScrolled = false;
+    const markUserScroll = () => {
+      userScrolled = true;
+    };
+    window.addEventListener('touchstart', markUserScroll, { passive: true });
+    window.addEventListener('wheel', markUserScroll, { passive: true });
+    window.addEventListener('keydown', markUserScroll);
+    const settleTimers = [];
+    const realign = (anchor) => {
+      [700, 1400, 2400].forEach((delay) => {
+        settleTimers.push(
+          window.setTimeout(() => {
+            if (cancelled || userScrolled || !anchor.isConnected) return;
+            const offset = anchor.getBoundingClientRect().top - 12;
+            if (Math.abs(offset) > 12) window.scrollTo({ top: window.scrollY + offset, behavior: 'auto' });
+          }, delay)
+        );
+      });
+    };
+
     const scrollToChartStart = () => {
       if (cancelled) return;
       const anchor = document.getElementById('chart-calculated-start');
@@ -442,6 +466,7 @@ export default function App() {
           behavior: reduced ? 'auto' : 'smooth',
           block: 'start'
         });
+        realign(anchor);
         return;
       }
       attempts += 1;
@@ -460,6 +485,10 @@ export default function App() {
     return () => {
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
+      settleTimers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener('touchstart', markUserScroll);
+      window.removeEventListener('wheel', markUserScroll);
+      window.removeEventListener('keydown', markUserScroll);
     };
   }, [chart]);
 
@@ -603,7 +632,7 @@ export default function App() {
       const endpoint = useMagicLinkFlow ? ADMIN_GENERATE_TOKEN_URL : API_URL;
       if (useMagicLinkFlow) {
         payload.clientName = String(formData.name || '').trim();
-        const limit = Math.max(1, Math.trunc(Number(adminInsightsLimit) || 55));
+        const limit = Math.max(1, Math.trunc(Number(adminInsightsLimit) || 5));
         payload.insightsLimit = limit;
       }
       const response = await apiFetch(endpoint, {
@@ -640,7 +669,7 @@ export default function App() {
         if (data?.profile?.id) {
           setChartProfileId(String(data.profile.id));
         }
-        const linkInsights = Math.max(1, Math.trunc(Number(payload.insightsLimit) || 55));
+        const linkInsights = Math.max(1, Math.trunc(Number(payload.insightsLimit) || 5));
         applyInsightsBalance(linkInsights);
         setPaidUnlocked(true);
         setTokenSessionMode(false);
@@ -667,15 +696,10 @@ export default function App() {
       setDemoUsed(hasUsedDemo);
 
       if (!hasUsedDemo) {
-        // First time demo - store chart data
         storeChartData(fingerprint, data);
-      } else {
-        // Demo already used - restore previous data if available
-        const storedData = getStoredChartData(fingerprint);
-        if (storedData) {
-          data = storedData;
-        }
       }
+      // Always keep the freshly calculated kundali. Restoring localStorage
+      // made the wheel/PDF ignore a new generate for the same fingerprint.
 
       setChart(data);
       trackEvent('chart_generated', {
@@ -697,7 +721,7 @@ export default function App() {
         /failed to fetch|networkerror|load failed|ecconnrefused|network request failed/i.test(raw)
           ? import.meta.env.DEV
             ? ' Start the API from the GrahaPath repo root (npm run dev). Open the site with the frontend dev server; leave VITE_API_BASE_URL unset so /api is proxied.'
-            : ' Usually: Vercel must build with VITE_API_BASE_URL set to your API (e.g. https://grahapath-api.onrender.com), and Render must list this site in FRONTEND_ORIGIN — then redeploy. Cold start can also cause a short delay; retry once.'
+            : ''
           : '';
       setError(raw + netHint);
     } finally {
@@ -1039,7 +1063,7 @@ export default function App() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
+    <main className="relative min-h-screen overflow-x-clip bg-void text-ivory">
       {showProdApiMisconfig ? (
         <div
           role="alert"
@@ -1055,6 +1079,10 @@ export default function App() {
         </div>
       ) : null}
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(212,175,55,0.1),transparent_28%)]" />
+      {/* index.css already ships a fully-built twinkling starfield (with keyframe
+          animations) that nothing was ever rendering -- this is the one line
+          needed to turn it on. */}
+      <div className="starfield pointer-events-none" aria-hidden="true" />
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1180px] flex-col px-4 py-6 sm:px-6 sm:py-8">
         <motion.header
           initial={{ opacity: 0, y: -18 }}
@@ -1062,16 +1090,37 @@ export default function App() {
           className="mb-8 flex flex-col gap-6 border-b border-gold/20 pb-8 lg:flex-row lg:items-end lg:justify-between"
         >
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.25em] text-gold/70 sm:tracking-[0.55em]">GrahaPath</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs uppercase tracking-[0.25em] text-gold/70 sm:tracking-[0.55em]">GrahaPath</p>
+              <div
+                className="inline-flex overflow-hidden rounded-full border border-gold-400/30 bg-black/40 text-[11px] font-semibold tracking-[0.08em]"
+                role="group"
+                aria-label="Language"
+              >
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  className={`px-3 py-1 transition ${lang === 'en' ? 'bg-gold-300/25 text-gold-100' : 'text-ivory-100/55 hover:text-gold-100'}`}
+                  aria-pressed={lang === 'en'}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang('ne')}
+                  className={`px-3 py-1 transition ${lang === 'ne' ? 'bg-gold-300/25 text-gold-100' : 'text-ivory-100/55 hover:text-gold-100'}`}
+                  aria-pressed={lang === 'ne'}
+                >
+                  ने
+                </button>
+              </div>
+            </div>
             <h1 className="mt-3 font-serif text-2xl text-gold sm:text-4xl lg:text-[3.1rem]">
-              Your Kundali. Explained Clearly.
+              {t('brand.tagline')}
             </h1>
           </div>
           <div className="flex flex-col gap-3">
-            <p className="max-w-xl text-sm leading-relaxed text-ivory/70">
-              GrahaPath decodes your planetary alignment to reveal clear life patterns—validating your past,
-              guiding your future, and offering personalized remedies.
-            </p>
+            <p className="max-w-xl text-sm leading-relaxed text-ivory/70">{t('brand.subtitle')}</p>
             <div className="flex flex-wrap items-center gap-3 text-sm text-gold/80">
               <a
                 href="/about"
@@ -1081,14 +1130,14 @@ export default function App() {
                 }}
                 className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
               >
-                Explore the experience
+                {t('nav.explore')}
               </a>
               {!AUTH_LOGIN_ENABLED && !clientMagicLinkView ? (
                 <button
                   onClick={() => setShowPaymentPreview(true)}
                   className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
                 >
-                  Unlock my access
+                  {t('nav.unlock')}
                 </button>
               ) : null}
             </div>
@@ -1187,7 +1236,7 @@ export default function App() {
                           <input
                             value={adminInsightsLimit}
                             onChange={(e) => setAdminInsightsLimit(e.target.value)}
-                            placeholder="55"
+                            placeholder="5"
                             className="mt-1 w-full rounded-xl border border-emerald-200/30 bg-black/35 px-3 py-2 text-xs text-cream outline-none"
                           />
                         </label>
@@ -1238,7 +1287,7 @@ export default function App() {
           {hasMeaningfulRightPanel ? (
             <div
               ref={resultsRef}
-              className="min-w-0 scroll-mt-4 overflow-x-hidden overflow-y-visible rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5"
+              className="min-w-0 scroll-mt-4 overflow-x-clip overflow-y-visible rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5"
             >
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -1403,14 +1452,7 @@ export default function App() {
                         <span className="font-mono text-xs">VITE_API_BASE_URL</span> unset so <span className="font-mono text-xs">/api</span>{' '}
                         is proxied.
                       </p>
-                    ) : (
-                      <p className="text-sm leading-relaxed text-ivory/75">
-                        If the error includes <span className="font-mono text-xs">Failed to fetch</span>, the browser
-                        never reached the chart API — use Vercel{' '}
-                        <span className="font-mono text-xs">VITE_API_BASE_URL</span> and Render{' '}
-                        <span className="font-mono text-xs">FRONTEND_ORIGIN</span> as described in the line above.
-                      </p>
-                    )}
+                    ) : null}
                   </motion.div>
                 ) : (
                   <motion.div
@@ -1425,8 +1467,8 @@ export default function App() {
                         Your Kundali. Explained Clearly.
                       </h2>
                       <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-ivory/65">
-                        Enter your birth details for precise calculations, then walk through past validation before
-                        future direction and remedies.
+                        Enter birth date, time, and place. We show your kundali, natal extract, and a
+                        short reading first — unlock more when you are ready.
                       </p>
                       <div className="mx-auto mt-6 grid max-w-md gap-3 text-left text-sm text-ivory/72">
                         {[
@@ -1451,7 +1493,7 @@ export default function App() {
           ) : (
             <div
               ref={resultsRef}
-              className="mx-auto min-h-[420px] w-full max-w-[900px] min-w-0 overflow-x-hidden scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-6"
+              className="mx-auto min-h-[420px] w-full max-w-[900px] min-w-0 overflow-x-clip scroll-mt-4 rounded-[2rem] border border-gold/20 bg-onyx/70 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-6"
             >
               <motion.div
                 key="empty"
@@ -1498,8 +1540,8 @@ export default function App() {
                     Your Kundali. Explained Clearly.
                   </h2>
                   <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-ivory/65">
-                    Enter your birth details for precise calculations, then walk through past validation before
-                    future direction and remedies.
+                    Enter birth date, time, and place. We show your kundali, natal extract, and a
+                    short reading first — unlock more when you are ready.
                   </p>
 
                   <div className="mx-auto mt-6 grid max-w-md gap-3 text-left text-sm text-ivory/72">

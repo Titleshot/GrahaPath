@@ -1,6 +1,13 @@
 const { buildChartReportPdf, safeFilename } = require('./_lib/chartReportPdfService');
 
 function readJsonBody(req) {
+  if (Buffer.isBuffer(req.body)) {
+    const raw = req.body.toString('utf8');
+    return raw ? JSON.parse(raw) : {};
+  }
+  if (typeof req.body === 'string') {
+    return req.body ? JSON.parse(req.body) : {};
+  }
   if (req.body && typeof req.body === 'object') return req.body;
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -39,6 +46,7 @@ module.exports = async (req, res) => {
     const filename = `GrahaPath-Report-${safeFilename(chart.name)}.pdf`;
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', String(pdf.length));
     res.end(pdf);

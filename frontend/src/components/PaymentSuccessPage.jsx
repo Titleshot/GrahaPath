@@ -134,7 +134,7 @@ export default function PaymentSuccessPage({ onNavigate, restorePremiumNow, save
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-void text-ivory">
+    <main className="relative min-h-screen overflow-x-clip bg-void text-ivory">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(212,175,55,0.1),transparent_28%)]" />
       <div className="relative z-10 mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-12 sm:px-6">
         <motion.div

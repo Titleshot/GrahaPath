@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getNakshatraDisplay, getRashiDisplay } from '../data/vedicNames';
+import { getPlanetColor } from '../data/planetColors';
 import DeepDataEphemerisLock from './DeepDataEphemerisLock';
 
 function InsightRow({ label, value }) {
@@ -51,6 +52,7 @@ export default function PlanetWheelModal({ planet, onClose, ephemerisUnlocked = 
 
   const interp = planet?.interpretation;
   const houseText = planet?.house ? HOUSE_HINT[planet.house] : null;
+  const color = getPlanetColor(planet?.name);
 
   return createPortal(
     <AnimatePresence>
@@ -87,8 +89,12 @@ export default function PlanetWheelModal({ planet, onClose, ephemerisUnlocked = 
                 <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.35em] text-violet-300/70">Placement</p>
-                  <h2 id="planet-modal-title" className="mt-2 flex items-center gap-2 font-serif text-[1.75rem] leading-tight text-gold sm:text-3xl">
-                    <span className="text-3xl leading-none" aria-hidden>
+                  <h2 id="planet-modal-title" className="mt-2 flex items-center gap-2.5 font-serif text-[1.75rem] leading-tight text-gold sm:text-3xl">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none shadow-[0_0_18px_var(--planet-glow)]"
+                      style={{ backgroundColor: color.fill, color: color.text, '--planet-glow': color.glow }}
+                      aria-hidden
+                    >
                       {planet.symbol}
                     </span>
                     {planet.name}

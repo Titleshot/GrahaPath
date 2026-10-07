@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { getNakshatraDisplay, getRashiDisplay } from '../data/vedicNames';
 import { hasDeepChartData } from '../lib/chartAccess';
+import { getZodiacElementColor, getPlanetColor } from '../data/planetColors';
+import { useLanguage } from '../lib/i18n.jsx';
 
 function moonNakshatra(chart) {
   return chart?.planets?.find((planet) => planet.name === 'Moon')?.nakshatra;
@@ -28,10 +30,26 @@ function signFromAbsoluteDegree(degree) {
   return ZODIAC_SIGNS[Math.floor(norm / 30)] || null;
 }
 
-function ChartFact({ label, value }) {
+// accent (from getZodiacElementColor) ties Lagna/Moon-rashi/Sun-rashi cards
+// to the sign's classical element (fire/earth/air/water) instead of every
+// fact card sharing the same flat gold border -- omit it (e.g. for Moon
+// Nakshatra, which isn't a rashi) to keep the original gold styling.
+function ChartFact({ label, value, accent }) {
   return (
-    <div className="rounded-2xl border border-gold-300/10 bg-black/25 px-3 py-2">
-      <span className="block text-[10px] uppercase tracking-[0.22em] text-gold-300/55">{label}</span>
+    <div
+      className="rounded-2xl border px-3 py-2"
+      style={
+        accent
+          ? { borderColor: `${accent.accent}55`, background: `linear-gradient(135deg, ${accent.soft}, rgba(0,0,0,0.25))` }
+          : { borderColor: 'rgba(247, 201, 95, 0.1)', background: 'rgba(0,0,0,0.25)' }
+      }
+    >
+      <span
+        className="block text-[10px] uppercase tracking-[0.22em]"
+        style={{ color: accent ? accent.accent : 'rgba(247, 201, 95, 0.55)' }}
+      >
+        {label}
+      </span>
       <span className="mt-1 block text-cream/78">{value}</span>
     </div>
   );
@@ -102,6 +120,7 @@ function ChartBirthDate({ chart }) {
  */
 export default function ChartIdentityStrip({ chart, forceDeepData = false, anchorId = 'chart-calculated-start' }) {
   if (!chart) return null;
+  const { t } = useLanguage();
   const [showSystemComparison, setShowSystemComparison] = useState(false);
   const [showCalculationDebug, setShowCalculationDebug] = useState(false);
 
@@ -109,6 +128,10 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
   const vimParts = deepOk ? vimshottariSnapshotParts(chart) : null;
   const vimshottariLine =
     vimParts && [vimParts.maha, vimParts.antar, vimParts.praty].filter(Boolean).join(' → ');
+  // Colour the dasha box by whichever graha currently rules the mahādasha --
+  // a visitor in a Saturn period sees a blue-tinted box, Venus a rose one,
+  // etc., instead of every timing panel looking identical.
+  const mahaColor = vimParts?.maha ? getPlanetColor(vimParts.maha) : null;
 
   const ayanamsaDegree = Number(chart?.ayanamsaDegree);
   const siderealAscAbs = Number(chart?.ascendantAbsoluteDegree);
@@ -132,12 +155,12 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
   return (
     <header
       id={anchorId}
-      className="rounded-3xl border border-gold/20 bg-gradient-to-br from-black/50 to-black/25 p-5 shadow-lg shadow-black/20"
+      className="scroll-mt-3 rounded-3xl border border-gold/20 bg-gradient-to-br from-black/50 to-black/25 p-5 shadow-lg shadow-black/20"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-[0.42em] text-emerald-300/90">
-            Chart calculated
+            {t('results.chartCalculated')}
           </p>
           <h2 className="mt-1.5 break-words font-serif text-2xl text-gold sm:text-3xl">{chart.name}</h2>
           <p className="mt-2 text-sm leading-relaxed text-ivory/68">
@@ -156,8 +179,16 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       </div>
 
       {vimshottariLine && (
-        <div className="mt-4 rounded-2xl border border-gold/18 bg-black/40 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-gold/60">Vimśottari · now</p>
+        <div
+          className="mt-4 rounded-2xl border bg-black/40 px-4 py-3"
+          style={mahaColor ? { borderColor: `${mahaColor.fill}66` } : undefined}
+        >
+          <p
+            className="text-[10px] uppercase tracking-[0.28em]"
+            style={{ color: mahaColor ? mahaColor.fill : '#d9a441' }}
+          >
+            {t('results.vimshottariNow')}
+          </p>
           <p className="mt-1.5 font-mono text-[13px] leading-snug text-cream/92">{vimshottariLine}</p>
           <p className="mt-1.5 text-[10px] leading-relaxed text-ivory/42">
             Mahādasha → antardaśā → pratyantar (from Moon nakṣatra and balance at birth).
@@ -177,7 +208,7 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       {chart.accuracy && (
         <div className="mt-4 rounded-2xl border border-gold-300/15 bg-gold-300/6 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-[0.2em] text-gold-200/75">
-            Precision · {chart.accuracy.confidenceLevel}
+            {t('results.precision')} · {chart.accuracy.confidenceLevel}
           </p>
           <p className="mt-1 text-xs text-cream/78">
             {chart.accuracy.analysisMode === 'full'
@@ -193,11 +224,23 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       <ChartBirthDate chart={chart} />
 
       <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
-        <ChartFact label="Lagna" value={getRashiDisplay(chart.ascendant)} />
-        <ChartFact label="Moon Rashi" value={getRashiDisplay(chart.moonSign)} />
-        <ChartFact label="Sun Rashi" value={getRashiDisplay(chart.sunSign)} />
         <ChartFact
-          label="Moon Nakshatra"
+          label={t('results.lagna')}
+          value={getRashiDisplay(chart.ascendant)}
+          accent={getZodiacElementColor(chart.ascendant)}
+        />
+        <ChartFact
+          label={t('results.moonRashi')}
+          value={getRashiDisplay(chart.moonSign)}
+          accent={getZodiacElementColor(chart.moonSign)}
+        />
+        <ChartFact
+          label={t('results.sunRashi')}
+          value={getRashiDisplay(chart.sunSign)}
+          accent={getZodiacElementColor(chart.sunSign)}
+        />
+        <ChartFact
+          label={t('results.moonNakshatra')}
           value={getNakshatraDisplay(moonNakshatra(chart))}
         />
       </div>
@@ -248,7 +291,7 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       </div>
 
       <div className="mt-4 rounded-2xl border border-emerald-300/18 bg-emerald-500/5 px-3 py-3">
-        <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-200/75">Why this is personalized</p>
+        <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-200/75">{t('results.whyPersonalized')}</p>
         <div className="mt-2 grid gap-1 text-[11px] text-emerald-100/80 sm:grid-cols-2">
           <p>✓ exact coordinates + timezone context</p>
           <p>✓ Lahiri sidereal calculation pipeline</p>
@@ -260,7 +303,7 @@ export default function ChartIdentityStrip({ chart, forceDeepData = false, ancho
       <div className="mt-4 rounded-2xl border border-blue-300/20 bg-blue-500/5 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-blue-200/80">Calculation Debug</p>
+            <p className="text-[10px] uppercase tracking-[0.24em] text-blue-200/80">{t('results.calcDebug')}</p>
             <p className="mt-1 text-[11px] text-ivory/52">Transparent calculation inputs and engine settings.</p>
           </div>
           <button

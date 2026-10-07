@@ -4,9 +4,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        void: '#030303',
-        obsidian: '#050505',
-        onyx: '#0c0a07',
+        void: '#06040f',
+        obsidian: '#08061a',
+        onyx: '#0d0a1f',
         ivory: '#f8edc5',
         cream: '#fff6d8',
         gold: {
@@ -24,6 +24,11 @@ export default {
         'gold-gradient': 'linear-gradient(135deg, #fff1b8 0%, #d9a441 48%, #8a6118 100%)'
       },
       fontFamily: {
+        // font-serif is what every heading in the app actually uses (45
+        // call sites) -- Cinzel is the engraved display face the target
+        // design uses for headings; Cormorant stays available as font-display
+        // for any softer/italic secondary text.
+        serif: ['Cinzel', 'Georgia', 'serif'],
         display: ['Cormorant Garamond', 'Georgia', 'serif'],
         sans: ['Inter', 'ui-sans-serif', 'system-ui']
       },
