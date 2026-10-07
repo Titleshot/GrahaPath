@@ -488,6 +488,63 @@ async function generateChart(req, res, next) {
   }
 }
 
+function milanPerson(chart) {
+  const moon = (chart.planets || []).find((p) => p.name === 'Moon') || {};
+  return {
+    name: chart.name || '',
+    lagna: chart.ascendant || '',
+    moonSign: chart.moonSign || moon.sign || '',
+    nakshatra: moon.nakshatra || '',
+    pada: moon.nakshatraPada || null,
+    birthDateAD: chart.birthDateAD || '',
+    place: chart.place || ''
+  };
+}
+
+/** POST /kundali-milan -- Ashtakoota (36 guna) + Manglik comparison for two people. */
+async function generateKundaliMilan(req, res, next) {
+  try {
+    const { matchCharts } = require('../services/kundaliMilanService');
+    const groomInput = req.body?.groom;
+    const brideInput = req.body?.bride;
+    if (!groomInput || typeof groomInput !== 'object' || !brideInput || typeof brideInput !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid milan request.',
+        details: ['Provide both groom and bride birth details.']
+      });
+    }
+
+    let groomChart;
+    let brideChart;
+    try {
+      groomChart = await buildChartFromRequest({ ...groomInput });
+    } catch (error) {
+      error.milanSide = 'groom';
+      throw error;
+    }
+    try {
+      brideChart = await buildChartFromRequest({ ...brideInput });
+    } catch (error) {
+      error.milanSide = 'bride';
+      throw error;
+    }
+
+    const result = matchCharts(groomChart, brideChart);
+    return res.json({
+      ...result,
+      groom: milanPerson(groomChart),
+      bride: milanPerson(brideChart)
+    });
+  } catch (error) {
+    if (error?.milanSide && Array.isArray(error.details)) {
+      error.details = error.details.map((d) => `${error.milanSide}: ${d}`);
+    } else if (error?.milanSide && error.message) {
+      error.message = `${error.milanSide}: ${error.message}`;
+    }
+    return handleChartError(error, res, next);
+  }
+}
+
 async function generateChartReport(req, res, next) {
   try {
     const { buildChartReportPdf, safeFilename } = require('../services/chartReport/chartReportPdfService');
@@ -593,6 +650,7 @@ module.exports = {
   debugChart,
   generateChart,
   generateChartReport,
+  generateKundaliMilan,
   placeSuggestions,
   validateLifePhases,
   dailyWeather,
