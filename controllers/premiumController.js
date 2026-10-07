@@ -13,9 +13,35 @@ const {
   resolvePlanFromKofiPayload,
   getKofiConfig
 } = require('../services/kofiService');
+const {
+  isFonepayConfigured,
+  generateFonepayIntentQr,
+  getFonepayPaymentStatus
+} = require('../services/fonepayService');
+const {
+  createFonepayIntent,
+  getFonepayIntent,
+  markFonepayIntentRedeemed
+} = require('../services/fonepayIntentService');
+const crypto = require('crypto');
 
 function insightsForPlan(plan) {
   return String(plan || '').toLowerCase() === 'quick' ? 12 : 50;
+}
+
+/** NPR price per plan -- set via env so a real number is a deliberate choice,
+ * never a guessed default silently charging the wrong amount. */
+function fonepayAmountForPlan(plan) {
+  const key = String(plan || '').toLowerCase() === 'quick'
+    ? 'FONEPAY_PRICE_QUICK'
+    : 'FONEPAY_PRICE_FULL';
+  const amount = Number.parseFloat(String(process.env[key] || '').trim());
+  if (!Number.isFinite(amount) || amount <= 0) {
+    const error = new Error(`${key} is not configured with a valid NPR amount`);
+    error.code = 'PRICE_NOT_CONFIGURED';
+    throw error;
+  }
+  return amount;
 }
 
 async function activatePremium(req, res) {
@@ -144,6 +170,143 @@ async function kofiWebhook(req, res) {
   }
 }
 
+/** GET /premium/payment-options -- lets the UI show Fonepay only when it can really work. */
+function getPaymentOptions(_req, res) {
+  let fonepay = { enabled: false };
+  if (isFonepayConfigured()) {
+    try {
+      fonepay = {
+        enabled: true,
+        currency: 'NPR',
+        prices: { quick: fonepayAmountForPlan('quick'), full: fonepayAmountForPlan('full') }
+      };
+    } catch {
+      // price env missing/invalid: keep Fonepay hidden rather than show a wrong amount
+    }
+  }
+  return res.json({ fonepay });
+}
+
+async function createFonepayCheckout(req, res) {
+  try {
+    if (!isFonepayConfigured()) {
+      return res.status(503).json({ error: 'PaymentsNotConfigured', message: 'Fonepay is not configured.' });
+    }
+
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const plan = String(body.plan || 'full').toLowerCase() === 'quick' ? 'quick' : 'full';
+    if (!email) {
+      return res.status(400).json({ error: 'InvalidRequest', message: 'Email is required.' });
+    }
+
+    let amount;
+    try {
+      amount = fonepayAmountForPlan(plan);
+    } catch (error) {
+      return res.status(503).json({ error: 'PriceNotConfigured', message: error.message });
+    }
+
+    const referenceLabel = `GRAHAPATH${Date.now()}${crypto.randomBytes(3).toString('hex')}`;
+    await createFonepayIntent({ referenceLabel, email, plan, amount });
+
+    const qr = await generateFonepayIntentQr({ amount, billId: referenceLabel, referenceLabel });
+
+    return res.json({
+      ok: true,
+      provider: 'fonepay',
+      qrString: qr.qrString,
+      referenceLabel,
+      amount,
+      plan
+    });
+  } catch (error) {
+    return res.status(502).json({
+      error: 'FonepayCheckoutFailed',
+      message: error.message || 'Could not start Fonepay checkout.'
+    });
+  }
+}
+
+/** referenceLabels currently being redeemed in this process, so two overlapping status polls
+ * can't both pass the "not redeemed yet" check and record the same payment twice. */
+const fonepayRedeeming = new Set();
+
+async function checkFonepayStatus(req, res) {
+  let lockedReference = '';
+  try {
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const referenceLabel = String(body.referenceLabel || '').trim();
+    if (!email || !referenceLabel) {
+      return res.status(400).json({ error: 'InvalidRequest', message: 'email and referenceLabel are required.' });
+    }
+
+    // A referenceLabel only proves *a* payment succeeded -- Fonepay has no idea
+    // which of our emails it belongs to. Without this check, anyone who learns
+    // any valid referenceLabel could submit a different email here and get that
+    // other account marked premium for free.
+    const intent = await getFonepayIntent(referenceLabel);
+    if (!intent || intent.email !== email) {
+      return res.json({ status: 'invalid', message: 'Unknown payment reference.' });
+    }
+    if (intent.redeemedAt) {
+      return res.json({ status: 'success', message: 'Already confirmed.' });
+    }
+
+    if (fonepayRedeeming.has(referenceLabel)) {
+      return res.json({ status: 'pending', message: 'Payment is being confirmed.' });
+    }
+
+    fonepayRedeeming.add(referenceLabel);
+    lockedReference = referenceLabel;
+    const result = await getFonepayPaymentStatus(referenceLabel);
+
+    if (result.paymentStatus === 'success') {
+      const requestedAmount = Number.parseFloat(result.requestedAmount);
+      const paidAmount = Number.parseFloat(result.totalTransactionAmount);
+
+      // Defense in depth: never grant access for less than requested, even if
+      // Fonepay reports "success" -- the amount is meant to be locked in the QR,
+      // but the money path never trusts that blindly.
+      const requiredAmount = Math.max(
+        Number.isFinite(requestedAmount) ? requestedAmount : 0,
+        Number.isFinite(intent.amount) ? intent.amount : 0
+      );
+      if (!Number.isFinite(paidAmount) || requiredAmount <= 0 || paidAmount < requiredAmount) {
+        return res.json({ status: 'underpaid', message: 'Paid amount did not match the requested amount.' });
+      }
+
+      const premium = await upsertPremiumAccess({
+        email,
+        chartId: null,
+        chartFingerprint: null,
+        plan: intent.plan,
+        remainingInsights: insightsForPlan(intent.plan)
+      });
+      await recordPaymentForEmail({
+        email,
+        orderId: referenceLabel,
+        amount: paidAmount,
+        plan: intent.plan,
+        status: 'paid'
+      });
+      await markFonepayIntentRedeemed(referenceLabel);
+
+      return res.json({ status: 'success', message: result.paymentMessage, premium });
+    }
+
+    return res.json({ status: result.paymentStatus, message: result.paymentMessage });
+  } catch (error) {
+    return res.status(502).json({
+      error: 'FonepayStatusFailed',
+      message: error.message || 'Could not check payment status.'
+    });
+  } finally {
+    if (lockedReference) fonepayRedeeming.delete(lockedReference);
+  }
+}
+
 async function restorePremium(req, res) {
   const email = req.body?.email;
   const chartFingerprint = typeof req.body?.chartFingerprint === 'string' ? req.body.chartFingerprint.trim() : '';
@@ -179,5 +342,8 @@ module.exports = {
   activatePremium,
   createCheckoutSession,
   kofiWebhook,
+  createFonepayCheckout,
+  checkFonepayStatus,
+  getPaymentOptions,
   restorePremium
 };

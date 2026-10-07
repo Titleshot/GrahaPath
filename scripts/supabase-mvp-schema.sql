@@ -64,3 +64,15 @@ create table if not exists public.access_allowlist (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Records which email a Fonepay referenceLabel was generated for, so the
+-- status check can't be replayed with a different email to claim someone
+-- else's (or one's own prior) payment for a second free account.
+create table if not exists public.fonepay_intents (
+  reference_label text primary key,
+  email text not null,
+  plan text not null default 'full',
+  amount numeric(10, 2) not null,
+  redeemed_at timestamptz null,
+  created_at timestamptz not null default now()
+);
