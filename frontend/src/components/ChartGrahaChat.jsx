@@ -78,7 +78,7 @@ export default function ChartGrahaChat({
   sessionProfileId = '',
   onInsightsChange = null
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const chartKey = chart?.utcDateTime || chart?.localDateTime || '';
   const persistKey = String(sessionProfileId || chartKey || '').trim();
 
@@ -321,6 +321,7 @@ export default function ChartGrahaChat({
         premiumEmail: premiumEmail || undefined,
         conversationHistory: historyForApi,
         surfaceMode: mode === 'daily_transit' ? 'daily_transit' : 'message',
+        uiLanguage: lang,
         challengeToken: challengeToken || undefined
       };
 

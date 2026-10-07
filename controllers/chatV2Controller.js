@@ -293,6 +293,7 @@ function grahaPathChatV2(req, res, next) {
       });
     }
 
+    const uiLanguage = req.body?.uiLanguage === 'ne' ? 'ne' : 'en';
     const message = req.body?.message;
     const surfaceMode =
       req.body?.surfaceMode === 'daily_transit' ||
@@ -391,7 +392,7 @@ function grahaPathChatV2(req, res, next) {
 
     const cacheKey = buildCacheKey(
       chart,
-      `v2::${surfaceMode}::${cleanMessage}::${userPlan}::${demoPremium ? 'p' : 'f'}`
+      `v2::${surfaceMode}::${uiLanguage}::${cleanMessage}::${userPlan}::${demoPremium ? 'p' : 'f'}`
     );
     if (!bypassCache) {
       const cached = readCachedReply(cacheKey);
@@ -428,6 +429,7 @@ function grahaPathChatV2(req, res, next) {
         userPlan: isMagicLink ? 'full' : userPlan,
         conversationHistory,
         surfaceMode,
+        uiLanguage,
         premiumUnlocked: isMagicLink ? true : demoPremium,
         mode: 'message'
       })

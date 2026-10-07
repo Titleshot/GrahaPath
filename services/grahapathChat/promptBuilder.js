@@ -52,7 +52,21 @@ function repetitionHintsFromHistory(messages) {
 /**
  * Full system prompt for chat-v2 (no life-phase JSON protocol).
  */
-function buildSystemPrompt({ intent, userPlan, premiumUnlocked, conversationHistory }) {
+function languageRule(uiLanguage) {
+  if (uiLanguage === 'ne') {
+    return (
+      'LANGUAGE (mandatory): The user has the app set to Nepali. Write the whole reply in Nepali using Devanagari script (नेपाली), ' +
+      'even when the question is typed in Roman/English letters (e.g. "career kasto cha mero" is Nepali). ' +
+      'Keep common astrology terms natural (लग्न, दशा, भाव, चन्द्र, शनि); do not translate planet or sign names awkwardly. ' +
+      'Only answer in English if the user clearly writes a full English sentence AND asks for English.'
+    );
+  }
+  return (
+    'LANGUAGE: Mirror the user. English question gets English; Nepali (Devanagari) or Roman Nepali (e.g. "mero career kasto cha") gets Nepali in Devanagari.'
+  );
+}
+
+function buildSystemPrompt({ intent, userPlan, premiumUnlocked, conversationHistory, uiLanguage }) {
   const plan = normalizePlan(userPlan);
   const rep = repetitionHintsFromHistory(conversationHistory);
 
@@ -182,7 +196,7 @@ Responses should feel: DEEPER, LAYERED, EXPANDED, MORE CONVERSATIONAL.
     lengthBlock = 'Length: full access — allow depth; structured sections mainly for deep_analysis intent.';
   }
 
-  const parts = [base, demoPsychology, intentBlock, lengthBlock, rep].filter(Boolean);
+  const parts = [base, demoPsychology, intentBlock, lengthBlock, rep, languageRule(uiLanguage)].filter(Boolean);
   return `${parts.join('\n\n')}\n\nTODAY_CONTEXT:\n${JSON.stringify(todayContext())}\n\nCHART_CONTEXT_JSON:\n`;
 }
 

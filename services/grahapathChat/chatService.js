@@ -399,7 +399,8 @@ async function runMessage({
   userPlan,
   premiumUnlocked,
   conversationHistory,
-  surfaceMode
+  surfaceMode,
+  uiLanguage
 }) {
   if (isTomorrowPanchangaRequest(message)) {
     const tomorrow = DateTime.now().setZone('Asia/Kathmandu').plus({ days: 1 }).toISODate();
@@ -467,7 +468,8 @@ async function runMessage({
     intent,
     userPlan,
     premiumUnlocked,
-    conversationHistory
+    conversationHistory,
+    uiLanguage
   });
   const systemText = systemBase + JSON.stringify(ctx);
   const { maxTokens, temperature } = tokenAndTemperatureForIntent(intent, userPlan);
@@ -563,6 +565,7 @@ async function processChatV2Request({
   userPlan,
   conversationHistory,
   surfaceMode = 'message',
+  uiLanguage = 'en',
   premiumUnlocked = false,
   mode = 'message'
 }) {
@@ -587,7 +590,8 @@ async function processChatV2Request({
     userPlan: plan,
     premiumUnlocked,
     conversationHistory: conversationHistory || [],
-    surfaceMode
+    surfaceMode,
+    uiLanguage
   });
 }
 
