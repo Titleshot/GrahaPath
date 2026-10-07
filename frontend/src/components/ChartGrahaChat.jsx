@@ -479,6 +479,23 @@ export default function ChartGrahaChat({
       </div>
 
       <form onSubmit={handleSend} className="mt-5 flex min-w-0 flex-col gap-3">
+        {!input.trim() && !sending && messages.length <= 2 ? (
+          <div className="flex flex-wrap gap-2" aria-label="Suggested questions">
+            {['career', 'marriage', 'money', 'health', 'year', 'love'].map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setInput(t(`chat.suggest.${key}`));
+                  window.requestAnimationFrame(() => document.querySelector('#gp-chat textarea')?.focus());
+                }}
+                className="min-h-[40px] rounded-full border border-gold/35 bg-white/5 px-3.5 py-2 text-xs text-gold transition hover:bg-gold/10"
+              >
+                {t(`chat.suggest.${key}`)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {challengeState?.required ? (
           <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3 text-xs text-amber-100">
             <p className="font-semibold">Quick security check required</p>

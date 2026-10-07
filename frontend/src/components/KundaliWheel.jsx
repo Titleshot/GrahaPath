@@ -92,6 +92,7 @@ export default function KundaliWheel({
             </radialGradient>
           </defs>
 
+          <circle cx={CENTER} cy={CENTER} r="140" fill="#0d0a1f" />
           <circle cx={CENTER} cy={CENTER} r="140" fill="url(#wheelGlow)" stroke="#d4af37" strokeWidth="1.4" />
           <circle cx={CENTER} cy={CENTER} r="102" fill="none" stroke="#8f6f22" strokeWidth="0.7" opacity="0.55" />
           <circle cx={CENTER} cy={CENTER} r="54" fill="none" stroke="#8f6f22" strokeWidth="0.6" opacity="0.35" />

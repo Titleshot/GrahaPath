@@ -13,6 +13,17 @@ const translations = {
     'brand.subtitle':
       'GrahaPath decodes your planetary alignment to reveal clear life patterns—validating your past, guiding your future, and offering personalized remedies.',
     'nav.explore': 'Explore the experience',
+    'nav.milan': 'Kundali Milan',
+    'qnav.chart': 'Chart',
+    'qnav.wheel': 'Wheel',
+    'qnav.ask': 'Ask AI',
+    'qnav.milan': 'Milan',
+    'chat.suggest.career': 'How is my career?',
+    'chat.suggest.marriage': 'When may I marry?',
+    'chat.suggest.money': 'How are my finances?',
+    'chat.suggest.health': 'What about my health?',
+    'chat.suggest.year': 'How is this year for me?',
+    'chat.suggest.love': 'How are my relationships?',
     'nav.unlock': 'Unlock my access',
 
     'form.eyebrow': 'Birth Details',
@@ -60,13 +71,40 @@ const translations = {
     'chat.insightsLeft': 'Insights Left',
     'chat.sending': 'Sending…',
     'chat.enterHint': 'Enter to send · Shift+Enter for new line',
-    'chat.welcome': 'Ask your chart below — career, timing, relationships, houses, or dasha.'
+    'chat.welcome': 'Ask your chart below — career, timing, relationships, houses, or dasha.',
+
+    'fonepay.creating': 'Preparing your payment…',
+    'fonepay.scanTitle': 'Scan with any bank or wallet app',
+    'fonepay.step1': 'Open your mobile banking or wallet app.',
+    'fonepay.step2': 'Choose Scan QR and scan the code above.',
+    'fonepay.step3': 'Confirm the payment. This page unlocks by itself.',
+    'fonepay.waiting': 'Waiting for your payment…',
+    'fonepay.paid': 'Payment received. Unlocking your access…',
+    'fonepay.cancel': 'Cancel',
+    'fonepay.back': 'Go back',
+    'fonepay.expired': 'This QR expired. Please go back and try again.',
+    'fonepay.underpaid': 'The paid amount was less than required. Please contact support with your reference.',
+    'fonepay.createFailed': 'Could not start Fonepay payment. Please try again.',
+    'fonepay.qrFailed': 'Could not show the QR. Please try again.',
+    'pay.fonepayButton': 'Pay with Fonepay',
+    'pay.cardButton': 'Pay by card (Ko-fi, USD)'
   },
   ne: {
     'brand.tagline': 'तपाईंको कुण्डली। स्पष्ट व्याख्या।',
     'brand.subtitle':
       'ग्रहपथले तपाईंको ग्रह-स्थिति विश्लेषण गरेर जीवनको ढाँचा देखाउँछ — तपाईंको विगत प्रमाणित गर्दै, भविष्यको मार्गदर्शन गर्दै, र व्यक्तिगत उपाय सुझाउँदै।',
     'nav.explore': 'अनुभव हेर्नुहोस्',
+    'nav.milan': 'कुण्डली मिलान',
+    'qnav.chart': 'कुण्डली',
+    'qnav.wheel': 'चक्र',
+    'qnav.ask': 'सोध्नुहोस्',
+    'qnav.milan': 'मिलान',
+    'chat.suggest.career': 'मेरो करियर कस्तो छ?',
+    'chat.suggest.marriage': 'मेरो बिहे कहिले होला?',
+    'chat.suggest.money': 'मेरो आर्थिक अवस्था कस्तो छ?',
+    'chat.suggest.health': 'मेरो स्वास्थ्य कस्तो छ?',
+    'chat.suggest.year': 'यो वर्ष मेरो लागि कस्तो छ?',
+    'chat.suggest.love': 'मेरो सम्बन्ध कस्तो छ?',
     'nav.unlock': 'पहुँच अनलक गर्नुहोस्',
 
     'form.eyebrow': 'जन्म विवरण',
@@ -114,7 +152,23 @@ const translations = {
     'chat.insightsLeft': 'इन्साइट बाँकी',
     'chat.sending': 'पठाउँदै…',
     'chat.enterHint': 'पठाउन Enter · नयाँ लाइनका लागि Shift+Enter',
-    'chat.welcome': 'तल आफ्नो कुण्डलीलाई सोध्नुहोस् — करियर, समय, सम्बन्ध, भाव वा दशा बारे।'
+    'chat.welcome': 'तल आफ्नो कुण्डलीलाई सोध्नुहोस् — करियर, समय, सम्बन्ध, भाव वा दशा बारे।',
+
+    'fonepay.creating': 'भुक्तानी तयार गर्दै…',
+    'fonepay.scanTitle': 'कुनै पनि बैंक वा वालेट एपले स्क्यान गर्नुहोस्',
+    'fonepay.step1': 'आफ्नो मोबाइल बैंकिङ वा वालेट एप खोल्नुहोस्।',
+    'fonepay.step2': 'Scan QR छानेर माथिको कोड स्क्यान गर्नुहोस्।',
+    'fonepay.step3': 'भुक्तानी पुष्टि गर्नुहोस्। यो पेज आफैं खुल्छ।',
+    'fonepay.waiting': 'तपाईंको भुक्तानीको प्रतीक्षा गर्दै…',
+    'fonepay.paid': 'भुक्तानी प्राप्त भयो। पहुँच खोल्दै…',
+    'fonepay.cancel': 'रद्द गर्नुहोस्',
+    'fonepay.back': 'पछाडि जानुहोस्',
+    'fonepay.expired': 'यो QR को समय सकियो। कृपया पछाडि गएर फेरि प्रयास गर्नुहोस्।',
+    'fonepay.underpaid': 'तिरिएको रकम आवश्यक रकमभन्दा कम भयो। कृपया रेफरेन्स सहित सहायतामा सम्पर्क गर्नुहोस्।',
+    'fonepay.createFailed': 'फोनपे भुक्तानी सुरु गर्न सकिएन। कृपया फेरि प्रयास गर्नुहोस्।',
+    'fonepay.qrFailed': 'QR देखाउन सकिएन। कृपया फेरि प्रयास गर्नुहोस्।',
+    'pay.fonepayButton': 'फोनपेबाट भुक्तानी गर्नुहोस्',
+    'pay.cardButton': 'कार्डबाट भुक्तानी (Ko-fi, USD)'
   }
 };
 

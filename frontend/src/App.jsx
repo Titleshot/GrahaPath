@@ -8,6 +8,7 @@ import PaymentPreviewModal from './components/PaymentPreviewModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
 import LegalPage from './components/LegalPage';
 import AboutPage from './components/AboutPage';
+import KundaliMilanPage from './components/KundaliMilanPage';
 import InviteAccessPanel from './components/InviteAccessPanel';
 import AuthLoginGate from './components/AuthLoginGate';
 import MagicLinkConsentGate from './components/MagicLinkConsentGate';
@@ -118,6 +119,17 @@ function normalizeBirthTime(displayTime) {
 
 export default function App() {
   const { lang, setLang, t } = useLanguage();
+  const [theme, setTheme] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+  );
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      window.localStorage.setItem('gp_theme', theme);
+    } catch {
+      // ignore storage failures (private browsing etc.)
+    }
+  }, [theme]);
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(!AUTH_LOGIN_ENABLED);
   const [routePath, setRoutePath] = useState(() =>
@@ -1013,6 +1025,9 @@ export default function App() {
   if (routePath === '/about') {
     return <AboutPage onBack={handleBack} onNavigate={navigateTo} />;
   }
+  if (routePath === '/milan') {
+    return <KundaliMilanPage onBack={handleBack} />;
+  }
   if (routePath === '/payment-success') {
     return (
       <PaymentSuccessPage
@@ -1114,6 +1129,15 @@ export default function App() {
                   ने
                 </button>
               </div>
+              <button
+                type="button"
+                className="gp-theme-toggle"
+                onClick={() => setTheme((cur) => (cur === 'light' ? 'dark' : 'light'))}
+                aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+                title={theme === 'light' ? 'Dark theme' : 'Light theme'}
+              >
+                {theme === 'light' ? '🌙' : '☀️'}
+              </button>
             </div>
             <h1 className="mt-3 font-serif text-2xl text-gold sm:text-4xl lg:text-[3.1rem]">
               {t('brand.tagline')}
@@ -1131,6 +1155,16 @@ export default function App() {
                 className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
               >
                 {t('nav.explore')}
+              </a>
+              <a
+                href="/milan"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo('/milan');
+                }}
+                className="rounded-full border border-gold/20 bg-black/30 px-4 py-2 transition hover:border-gold/40 hover:bg-black/50"
+              >
+                {t('nav.milan')}
               </a>
               {!AUTH_LOGIN_ENABLED && !clientMagicLinkView ? (
                 <button
@@ -1656,7 +1690,37 @@ export default function App() {
           suggestedRestoreEmail={pendingKofiRestore?.email || ''}
         />
       ) : null}
-      <footer className="relative z-10 mx-auto mt-4 w-full max-w-[1400px] px-4 pb-8 text-center text-xs text-ivory/55 sm:px-6 lg:px-10">
+      {chart ? (
+        <nav
+          className="gp-quick-nav fixed inset-x-0 bottom-0 z-[90] flex items-stretch justify-around border-t border-gold/30 bg-black/90 px-2 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 backdrop-blur-md md:hidden"
+          aria-label="Quick navigation"
+        >
+          {[
+            { id: 'chart-calculated-start', label: t('qnav.chart'), icon: '☉' },
+            { id: 'gp-wheel', label: t('qnav.wheel'), icon: '◎' },
+            { id: 'gp-chat', label: t('qnav.ask'), icon: '✦' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="flex min-h-[48px] min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] text-gold transition active:bg-gold/10"
+            >
+              <span aria-hidden="true" className="text-base leading-none">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => navigateTo('/milan')}
+            className="flex min-h-[48px] min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] text-gold transition active:bg-gold/10"
+          >
+            <span aria-hidden="true" className="text-base leading-none">♡</span>
+            {t('qnav.milan')}
+          </button>
+        </nav>
+      ) : null}
+      <footer className={`relative z-10 mx-auto mt-4 w-full max-w-[1400px] px-4 text-center text-xs text-ivory/55 sm:px-6 lg:px-10 ${chart ? 'pb-24 md:pb-8' : 'pb-8'}`}>
         <a
           className="hover:text-gold"
           href="/about"

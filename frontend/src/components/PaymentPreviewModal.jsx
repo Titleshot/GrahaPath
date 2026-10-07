@@ -1,7 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import FonepayPanel from './FonepayPanel';
+import { apiFetch, withApiBase } from '../lib/apiBase';
+import { useLanguage } from '../lib/i18n.jsx';
 
 const LAST_PREMIUM_EMAIL_KEY = 'grahapath:last-premium-email';
+const PAYMENT_OPTIONS_URL = withApiBase('/api/premium/payment-options');
 
 export default function PaymentPreviewModal({
   open,
@@ -30,6 +34,31 @@ export default function PaymentPreviewModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [legalDocType, setLegalDocType] = useState(null);
+  const { t } = useLanguage();
+  const [fonepay, setFonepay] = useState({ enabled: false });
+  const [fonepayActive, setFonepayActive] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFonepayActive(false);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(PAYMENT_OPTIONS_URL, { method: 'GET' });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && data?.fonepay?.enabled) setFonepay(data.fonepay);
+      } catch {
+        // payment options are optional: fall back to card checkout only
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const fonepayPrice = fonepay.enabled ? fonepay.prices?.[selectedTier] : null;
 
   useEffect(() => {
     if (open) {
@@ -237,13 +266,44 @@ export default function PaymentPreviewModal({
                 </a>.
               </span>
             </label>
+            {fonepay.enabled && !fonepayActive ? (
+              <button
+                type="button"
+                disabled={!legalAccepted || !email.trim() || isSaving}
+                onClick={() => setFonepayActive(true)}
+                className="mt-4 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-gold/70 bg-gold px-4 py-2 text-sm font-semibold text-black transition hover:bg-gold-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t('pay.fonepayButton')}
+                {fonepayPrice ? ` · NPR ${Number(fonepayPrice).toLocaleString('en-IN')}` : ''}
+              </button>
+            ) : null}
+            {fonepayActive ? (
+              <FonepayPanel
+                email={email.trim().toLowerCase()}
+                plan={selectedTier}
+                onCancel={() => setFonepayActive(false)}
+                onPaid={async () => {
+                  try {
+                    const result = await onRestorePremium?.(email.trim().toLowerCase());
+                    setStatusMessage(result?.message || 'Access unlocked successfully.');
+                  } catch (error) {
+                    setErrorMessage(error.message || 'Payment received, but unlocking failed. Use "Unlock my access" below.');
+                    setFonepayActive(false);
+                  }
+                }}
+              />
+            ) : null}
             <button
               type="button"
               disabled={!legalAccepted || !email.trim() || isSaving}
               onClick={handleCheckoutSubmit}
-              className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-gold/70 bg-gold px-4 py-2 text-sm font-semibold text-black transition hover:bg-gold-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                fonepay.enabled
+                  ? 'border-gold/50 bg-transparent text-gold hover:bg-gold/10'
+                  : 'border-gold/70 bg-gold text-black hover:bg-gold-300'
+              }${fonepayActive ? ' hidden' : ''}`}
             >
-              {isSaving ? 'Opening secure checkout...' : 'Continue to Secure Checkout'}
+              {isSaving ? 'Opening secure checkout...' : fonepay.enabled ? t('pay.cardButton') : 'Continue to Secure Checkout'}
             </button>
             <div className="mt-4 rounded-2xl border border-gold/20 bg-black/35 p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-gold/70">Unlock my access</p>
